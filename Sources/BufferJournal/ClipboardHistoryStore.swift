@@ -4,13 +4,16 @@ import Foundation
 @MainActor
 final class ClipboardHistoryStore: ObservableObject {
     @Published private(set) var entries: [ClipboardEntry] = []
+    @Published private(set) var currentClipboardFingerprint: String?
 
-    private let maxEntries = 80
+    private let maxEntries = 20
+    private let maxEntryAge: TimeInterval = 24 * 60 * 60
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let rootURL: URL
     private let imagesURL: URL
     private let historyURL: URL
+    private var imageCache: [UUID: NSImage] = [:]
 
     init() {
         let supportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -51,12 +54,20 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     func image(for entry: ClipboardEntry) -> NSImage? {
+        if let cachedImage = imageCache[entry.id] {
+            return cachedImage
+        }
+
         guard let url = imageURL(for: entry) else { return nil }
-        return NSImage(contentsOf: url)
+        let image = NSImage(contentsOf: url)
+        imageCache[entry.id] = image
+        return image
     }
 
     func clear() {
         entries.removeAll()
+        currentClipboardFingerprint = nil
+        imageCache.removeAll()
         try? FileManager.default.removeItem(at: imagesURL)
         createDirectoriesIfNeeded()
         save()
@@ -64,20 +75,24 @@ final class ClipboardHistoryStore: ObservableObject {
 
     func remove(_ entry: ClipboardEntry) {
         entries.removeAll { $0.id == entry.id }
+        if currentClipboardFingerprint == entry.fingerprint {
+            currentClipboardFingerprint = nil
+        }
+        imageCache[entry.id] = nil
         removeImageFiles(for: [entry])
         save()
+    }
+
+    func markCurrent(_ entry: ClipboardEntry) {
+        currentClipboardFingerprint = entry.fingerprint
     }
 
     private func add(_ entry: ClipboardEntry) {
         entries.removeAll { $0.fingerprint == entry.fingerprint }
         entries.insert(entry, at: 0)
+        markCurrent(entry)
 
-        if entries.count > maxEntries {
-            let removed = entries.dropFirst(maxEntries)
-            entries = Array(entries.prefix(maxEntries))
-            removeImageFiles(for: Array(removed))
-        }
-
+        pruneEntries()
         save()
     }
 
@@ -86,6 +101,8 @@ final class ClipboardHistoryStore: ObservableObject {
 
         do {
             entries = try decoder.decode([ClipboardEntry].self, from: data)
+            pruneEntries()
+            save()
         } catch {
             NSLog("BufferJournal: failed to load history: \(error.localizedDescription)")
         }
@@ -113,6 +130,26 @@ final class ClipboardHistoryStore: ObservableObject {
             guard let url = imageURL(for: entry) else { continue }
             try? FileManager.default.removeItem(at: url)
         }
+    }
+
+    private func pruneEntries() {
+        let cutoff = Date().addingTimeInterval(-maxEntryAge)
+        let retainedEntries = Array(entries.filter { $0.createdAt >= cutoff }.prefix(maxEntries))
+        let retainedIDs = Set(retainedEntries.map(\.id))
+        let removedEntries = entries.filter { !retainedIDs.contains($0.id) }
+        guard !removedEntries.isEmpty else { return }
+
+        entries = retainedEntries
+        if
+            let currentClipboardFingerprint,
+            !retainedEntries.contains(where: { $0.fingerprint == currentClipboardFingerprint })
+        {
+            self.currentClipboardFingerprint = nil
+        }
+        for entry in removedEntries {
+            imageCache[entry.id] = nil
+        }
+        removeImageFiles(for: removedEntries)
     }
 }
 
