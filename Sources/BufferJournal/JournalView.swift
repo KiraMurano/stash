@@ -3,8 +3,8 @@ import SwiftUI
 
 struct JournalView: View {
     private enum Layout {
-        static let width: CGFloat = 430
-        static let height: CGFloat = 470
+        static let width: CGFloat = 380
+        static let height: CGFloat = 400
         static let minWidth: CGFloat = 360
         static let minHeight: CGFloat = 360
         static let cornerRadius: CGFloat = 24
@@ -43,35 +43,39 @@ struct JournalView: View {
             WindowDragHandle()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            VStack(spacing: 0) {
-                header
-
-                if entries.isEmpty {
-                    emptyState
-                } else {
-                    entriesList
-                }
+            if entries.isEmpty {
+                emptyState
+            } else {
+                entriesList
             }
 
+            header
+                .frame(maxHeight: .infinity, alignment: .top)
+                .zIndex(5)
+
             if isClearConfirmationShown || entryPendingDeletion != nil {
-                DeleteConfirmationOverlay(
-                    title: isClearConfirmationShown ? "Clear history?" : "Delete clip?",
-                    message: isClearConfirmationShown ? "All saved clips will be removed." : "This clip will be removed.",
-                    actionTitle: isClearConfirmationShown ? "Clear" : "Delete",
-                    onCancel: {
-                        isClearConfirmationShown = false
-                        entryPendingDeletion = nil
-                    },
-                    onConfirm: {
-                        if isClearConfirmationShown {
-                            store.clear()
+                ZStack {
+                    GlassBackdrop(cornerRadius: Layout.cornerRadius, palette: palette)
+
+                    DeleteConfirmationOverlay(
+                        title: isClearConfirmationShown ? "Clear history?" : "Delete clip?",
+                        message: isClearConfirmationShown ? "All saved clips will be removed." : "This clip will be removed.",
+                        actionTitle: isClearConfirmationShown ? "Clear" : "Delete",
+                        onCancel: {
                             isClearConfirmationShown = false
-                        } else if let entryPendingDeletion {
-                            store.remove(entryPendingDeletion)
-                            self.entryPendingDeletion = nil
+                            entryPendingDeletion = nil
+                        },
+                        onConfirm: {
+                            if isClearConfirmationShown {
+                                store.clear()
+                                isClearConfirmationShown = false
+                            } else if let entryPendingDeletion {
+                                store.remove(entryPendingDeletion)
+                                self.entryPendingDeletion = nil
+                            }
                         }
-                    }
-                )
+                    )
+                }
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 .zIndex(20)
             }
@@ -159,14 +163,9 @@ struct JournalView: View {
         .frame(height: Layout.headerHeight)
         .background {
             ZStack {
-                palette.headerBackground
+                NativeGlassEffectView(style: .regular, cornerRadius: 0)
                 WindowDragHandle()
             }
-        }
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(palette.separator)
-                .frame(height: 1)
         }
     }
 
@@ -175,7 +174,7 @@ struct JournalView: View {
             ZStack(alignment: .top) {
                 WindowDragHandle()
                     .frame(maxWidth: .infinity)
-                    .frame(minHeight: Layout.minHeight - Layout.headerHeight)
+                    .frame(minHeight: Layout.minHeight)
 
                 VStack(spacing: Layout.rowSpacing) {
                     ForEach(entries) { entry in
@@ -201,10 +200,11 @@ struct JournalView: View {
                     }
                 }
                 .padding(.horizontal, Layout.contentInset)
-                .padding(.top, Layout.contentInset)
-                .padding(.bottom, Layout.contentInset)
+                .padding(.top, Layout.headerHeight + Layout.rowSpacing)
+                .padding(.bottom, Layout.rowSpacing)
             }
         }
+        .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onMoveCommand { direction in
             moveSelection(direction)
@@ -274,11 +274,18 @@ private struct HeaderIconButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(palette.iconOpacity(isHovered ? 0.82 : 0.52))
+                .foregroundStyle(iconColor)
                 .frame(width: 30, height: 30)
-                .background(isHovered ? palette.controlHoverBackground : Color.clear, in: Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var iconColor: Color {
+        if systemName == "trash", isHovered {
+            return .red.opacity(0.86)
+        }
+
+        return palette.iconOpacity(isHovered ? 0.82 : 0.52)
     }
 }
 
@@ -304,7 +311,7 @@ private struct ClipboardEntryRow: View {
         ZStack {
             content
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.vertical, 8)
         }
         .frame(minHeight: rowHeight)
         .background {
@@ -312,8 +319,8 @@ private struct ClipboardEntryRow: View {
         }
         .overlay(alignment: .topLeading) {
             if isCurrent {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 10, weight: .semibold))
+                Image(systemName: "clipboard")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(palette.iconOpacity(0.48))
                     .frame(width: 22, height: 22)
                     .padding(.top, 8)
@@ -325,7 +332,7 @@ private struct ClipboardEntryRow: View {
             Button(action: onDelete) {
                 Image(systemName: "trash")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(palette.iconOpacity(isDeleteHovered ? 0.78 : 0.46))
+                    .foregroundStyle(isDeleteHovered ? Color.red.opacity(0.86) : palette.iconOpacity(0.46))
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
@@ -408,7 +415,7 @@ private struct ClipboardEntryRow: View {
         case .text:
             62
         case .image:
-            142
+            134
         }
     }
 
@@ -440,7 +447,7 @@ private struct CardBackground: View {
             .fill(palette.cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? palette.borderSelected : palette.border, lineWidth: isSelected ? 1.5 : 1)
+                    .stroke(isSelected ? palette.borderSelected : palette.border, lineWidth: 1)
             )
     }
 }
@@ -466,9 +473,6 @@ private struct ImagePreviewOverlay: View {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 82)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onTapGesture(perform: onClose)
 
@@ -513,8 +517,21 @@ private struct ImagePreviewOverlay: View {
                 }
             }
         }
-        .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct GlassBackdrop: View {
+    let cornerRadius: CGFloat
+    let palette: ThemePalette
+
+    var body: some View {
+        ZStack {
+            NativeGlassEffectView(style: .regular, cornerRadius: cornerRadius)
+            palette.backdropTint
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
     }
 }
 
@@ -635,7 +652,7 @@ private struct ThemePalette {
     }
 
     var headerBackground: Color {
-        isDark ? Color(red: 0.105, green: 0.105, blue: 0.110) : Color.white.opacity(0.84)
+        isDark ? Color.black.opacity(0.12) : Color.white.opacity(0.18)
     }
 
     var cardBackground: Color {
@@ -648,6 +665,10 @@ private struct ThemePalette {
 
     var modalBackground: Color {
         isDark ? Color(red: 0.145, green: 0.145, blue: 0.150) : Color.white
+    }
+
+    var backdropTint: Color {
+        isDark ? Color.black.opacity(0.10) : Color.white.opacity(0.08)
     }
 
     var controlHoverBackground: Color {
@@ -710,5 +731,73 @@ private struct WindowDragHandle: NSViewRepresentable {
         override func mouseDown(with event: NSEvent) {
             window?.performDrag(with: event)
         }
+    }
+}
+
+private struct ScrollBarAppearanceSetter: NSViewRepresentable {
+    let colorScheme: ColorScheme
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.postsFrameChangedNotifications = false
+        DispatchQueue.main.async {
+            applyAppearance(from: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            applyAppearance(from: nsView)
+        }
+    }
+
+    private func applyAppearance(from view: NSView) {
+        guard let scrollView = scrollView(containing: view) else {
+            return
+        }
+
+        let scrollerAppearanceName: NSAppearance.Name = colorScheme == .dark ? .darkAqua : .aqua
+        let scrollerAppearance = NSAppearance(named: scrollerAppearanceName)
+        let knobStyle: NSScroller.KnobStyle = colorScheme == .dark ? .dark : .light
+        scrollView.scrollerStyle = .overlay
+        scrollView.verticalScroller?.appearance = scrollerAppearance
+        scrollView.horizontalScroller?.appearance = scrollerAppearance
+        scrollView.verticalScroller?.knobStyle = knobStyle
+        scrollView.horizontalScroller?.knobStyle = knobStyle
+    }
+
+    private func scrollView(containing view: NSView) -> NSScrollView? {
+        if let scrollView = view.enclosingScrollView {
+            return scrollView
+        }
+
+        var ancestor = view.superview
+        while let current = ancestor {
+            if let scrollView = firstScrollView(in: current) {
+                return scrollView
+            }
+            ancestor = current.superview
+        }
+
+        if let contentView = view.window?.contentView {
+            return firstScrollView(in: contentView)
+        }
+
+        return nil
+    }
+
+    private func firstScrollView(in view: NSView) -> NSScrollView? {
+        if let scrollView = view as? NSScrollView {
+            return scrollView
+        }
+
+        for subview in view.subviews {
+            if let scrollView = firstScrollView(in: subview) {
+                return scrollView
+            }
+        }
+
+        return nil
     }
 }

@@ -5,7 +5,8 @@ import SwiftUI
 @MainActor
 final class JournalPanelController {
     private enum Constants {
-        static let size = NSSize(width: 430, height: 470)
+        static let size = NSSize(width: 380, height: 400)
+        static let previousDefaultSize = NSSize(width: 430, height: 470)
         static let cornerRadius: CGFloat = 28
         static let savedOriginXKey = "JournalPanelOriginX"
         static let savedOriginYKey = "JournalPanelOriginY"
@@ -87,6 +88,7 @@ final class JournalPanelController {
         hostingView.layer?.cornerRadius = Constants.cornerRadius
         hostingView.layer?.cornerCurve = CALayerCornerCurve.continuous
         hostingView.layer?.masksToBounds = true
+        hostingView.layer?.borderColor = nil
         hostingView.layer?.borderWidth = 0
 
         let panel = JournalPanel(
@@ -177,9 +179,17 @@ final class JournalPanelController {
             return nil
         }
 
+        let width = defaults.double(forKey: Constants.savedWidthKey)
+        let height = defaults.double(forKey: Constants.savedHeightKey)
+
+        if abs(width - Constants.previousDefaultSize.width) < 1,
+           abs(height - Constants.previousDefaultSize.height) < 1 {
+            return Constants.size
+        }
+
         return NSSize(
-            width: max(defaults.double(forKey: Constants.savedWidthKey), Constants.minSize.width),
-            height: max(defaults.double(forKey: Constants.savedHeightKey), Constants.minSize.height)
+            width: max(width, Constants.minSize.width),
+            height: max(height, Constants.minSize.height)
         )
     }
 
