@@ -12,17 +12,20 @@ final class ClipboardWriter {
         self.monitor = monitor
     }
 
-    func paste(_ entry: ClipboardEntry, into targetApplication: NSRunningApplication?) {
+    func copy(_ entry: ClipboardEntry) {
         writeToPasteboard(entry)
         monitor.markPasteboardWasChangedByApp()
+        store.markCurrent(entry)
+    }
+
+    func paste(_ entry: ClipboardEntry) {
+        copy(entry)
 
         if !isAccessibilityTrusted {
             requestAccessibilityIfNeeded()
         }
 
-        targetApplication?.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.07) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             Self.sendCommandV()
         }
     }

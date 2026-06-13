@@ -9,16 +9,20 @@ final class JournalPanelController {
         static let cornerRadius: CGFloat = 28
         static let savedOriginXKey = "JournalPanelOriginX"
         static let savedOriginYKey = "JournalPanelOriginY"
+        static let savedWidthKey = "JournalPanelWidth"
+        static let savedHeightKey = "JournalPanelHeight"
+        static let minSize = NSSize(width: 360, height: 360)
     }
 
     private let store: ClipboardHistoryStore
     private let writer: ClipboardWriter
+    private let settings: AppSettings
     private var panel: NSPanel?
-    private var targetApplication: NSRunningApplication?
 
-    init(store: ClipboardHistoryStore, writer: ClipboardWriter) {
+    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings) {
         self.store = store
         self.writer = writer
+        self.settings = settings
     }
 
     func toggle() {
@@ -30,7 +34,6 @@ final class JournalPanelController {
     }
 
     func show() {
-        rememberTargetApplication()
         let panel = makePanelIfNeeded()
         positionIfNeeded(panel)
         panel.alphaValue = 0
@@ -70,13 +73,9 @@ final class JournalPanelController {
 
         let contentView = JournalView(
             store: store,
-            writer: writer,
+            settings: settings,
             onSelect: { [weak self] entry in
-                guard let self else { return }
-                let targetApplication = self.targetApplication
-                self.close {
-                    self.writer.paste(entry, into: targetApplication)
-                }
+                self?.handleSelection(entry)
             },
             onClose: { [weak self] in
                 self?.close()
@@ -86,12 +85,13 @@ final class JournalPanelController {
         let hostingView = FirstMouseHostingView(rootView: contentView)
         hostingView.wantsLayer = true
         hostingView.layer?.cornerRadius = Constants.cornerRadius
-        hostingView.layer?.cornerCurve = .continuous
+        hostingView.layer?.cornerCurve = CALayerCornerCurve.continuous
         hostingView.layer?.masksToBounds = true
+        hostingView.layer?.borderWidth = 0
 
         let panel = JournalPanel(
-            contentRect: NSRect(origin: .zero, size: Constants.size),
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            contentRect: NSRect(origin: .zero, size: savedSize ?? Constants.size),
+            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -100,15 +100,32 @@ final class JournalPanelController {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         panel.hidesOnDeactivate = false
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = false
+        panel.hasShadow = true
+        panel.minSize = Constants.minSize
 
         self.panel = panel
         return panel
+    }
+
+    private func handleSelection(_ entry: ClipboardEntry) {
+        let performSelection: @MainActor @Sendable () -> Void = { [writer, settings] in
+            if settings.pasteOnSelection {
+                writer.paste(entry)
+            } else {
+                writer.copy(entry)
+            }
+        }
+
+        if settings.closeAfterSelection {
+            close(completion: performSelection)
+        } else {
+            performSelection()
+        }
     }
 
     private func positionIfNeeded(_ panel: NSPanel) {
@@ -129,17 +146,6 @@ final class JournalPanelController {
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
-    private func rememberTargetApplication() {
-        guard
-            let frontmostApplication = NSWorkspace.shared.frontmostApplication,
-            frontmostApplication.bundleIdentifier != Bundle.main.bundleIdentifier
-        else {
-            return
-        }
-
-        targetApplication = frontmostApplication
-    }
-
     private var savedOrigin: NSPoint? {
         let defaults = UserDefaults.standard
         guard
@@ -158,6 +164,23 @@ final class JournalPanelController {
     private func savePosition(_ panel: NSPanel) {
         UserDefaults.standard.set(panel.frame.origin.x, forKey: Constants.savedOriginXKey)
         UserDefaults.standard.set(panel.frame.origin.y, forKey: Constants.savedOriginYKey)
+        UserDefaults.standard.set(panel.frame.width, forKey: Constants.savedWidthKey)
+        UserDefaults.standard.set(panel.frame.height, forKey: Constants.savedHeightKey)
+    }
+
+    private var savedSize: NSSize? {
+        let defaults = UserDefaults.standard
+        guard
+            defaults.object(forKey: Constants.savedWidthKey) != nil,
+            defaults.object(forKey: Constants.savedHeightKey) != nil
+        else {
+            return nil
+        }
+
+        return NSSize(
+            width: max(defaults.double(forKey: Constants.savedWidthKey), Constants.minSize.width),
+            height: max(defaults.double(forKey: Constants.savedHeightKey), Constants.minSize.height)
+        )
     }
 
     private func validOrigin(_ origin: NSPoint, for panel: NSPanel) -> NSPoint {
