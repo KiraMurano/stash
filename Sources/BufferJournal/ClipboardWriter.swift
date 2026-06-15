@@ -50,6 +50,9 @@ final class ClipboardWriter {
         case .image:
             guard let image = store.image(for: entry) else { return }
             pasteboard.writeObjects([image])
+        case .file:
+            guard let fileURL = store.fileURL(for: entry) else { return }
+            pasteboard.writeObjects([fileURL as NSURL])
         }
     }
 

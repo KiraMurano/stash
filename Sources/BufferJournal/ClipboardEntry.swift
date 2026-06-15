@@ -5,27 +5,36 @@ import Foundation
 enum ClipboardPayload: Codable, Equatable {
     case text(String)
     case image(filename: String)
+    case file(storedFilename: String, originalName: String, byteCount: Int64)
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case value
+        case originalName
+        case byteCount
     }
 
     private enum Kind: String, Codable {
         case text
         case image
+        case file
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(Kind.self, forKey: .kind)
-        let value = try container.decode(String.self, forKey: .value)
 
         switch kind {
         case .text:
-            self = .text(value)
+            self = .text(try container.decode(String.self, forKey: .value))
         case .image:
-            self = .image(filename: value)
+            self = .image(filename: try container.decode(String.self, forKey: .value))
+        case .file:
+            self = .file(
+                storedFilename: try container.decode(String.self, forKey: .value),
+                originalName: try container.decode(String.self, forKey: .originalName),
+                byteCount: try container.decode(Int64.self, forKey: .byteCount)
+            )
         }
     }
 
@@ -39,6 +48,11 @@ enum ClipboardPayload: Codable, Equatable {
         case let .image(filename):
             try container.encode(Kind.image, forKey: .kind)
             try container.encode(filename, forKey: .value)
+        case let .file(storedFilename, originalName, byteCount):
+            try container.encode(Kind.file, forKey: .kind)
+            try container.encode(storedFilename, forKey: .value)
+            try container.encode(originalName, forKey: .originalName)
+            try container.encode(byteCount, forKey: .byteCount)
         }
     }
 }
@@ -58,6 +72,8 @@ struct ClipboardEntry: Codable, Identifiable, Equatable {
             return singleLine.isEmpty ? "Empty text" : singleLine
         case .image:
             return "Image"
+        case let .file(_, originalName, _):
+            return originalName
         }
     }
 
@@ -68,7 +84,24 @@ struct ClipboardEntry: Codable, Identifiable, Equatable {
             return "\(count) \(count == 1 ? "character" : "characters")"
         case .image:
             return DateFormatter.entryTime.string(from: createdAt)
+        case let .file(_, _, byteCount):
+            return Self.formattedFileSize(byteCount)
         }
+    }
+
+    var isText: Bool {
+        if case .text = payload { return true }
+        return false
+    }
+
+    var isImage: Bool {
+        if case .image = payload { return true }
+        return false
+    }
+
+    var isFile: Bool {
+        if case .file = payload { return true }
+        return false
     }
 }
 
@@ -91,8 +124,27 @@ extension ClipboardEntry {
         )
     }
 
+    static func file(storedFilename: String, originalName: String, byteCount: Int64, data: Data) -> ClipboardEntry {
+        ClipboardEntry(
+            id: UUID(),
+            payload: .file(
+                storedFilename: storedFilename,
+                originalName: originalName,
+                byteCount: byteCount
+            ),
+            createdAt: Date(),
+            fingerprint: "file:\(Self.sha256(data))"
+        )
+    }
+
     private static func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func formattedFileSize(_ byteCount: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: byteCount)
     }
 }
 
