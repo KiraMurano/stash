@@ -8,9 +8,38 @@ struct JournalView: View {
         static let minWidth: CGFloat = 360
         static let minHeight: CGFloat = 360
         static let cornerRadius: CGFloat = 24
-        static let headerHeight: CGFloat = 68
+        static let headerTopPadding: CGFloat = 14
+        static let headerTitleBlockHeight: CGFloat = 32
+        static let tabSectionSpacing: CGFloat = 10
+        static let tabButtonHeight: CGFloat = 28
         static let contentInset: CGFloat = 16
         static let rowSpacing: CGFloat = 8
+
+        static var tabBarHeight: CGFloat {
+            tabSectionSpacing + tabButtonHeight + tabSectionSpacing
+        }
+
+        static var topChromeHeight: CGFloat {
+            headerTopPadding + headerTitleBlockHeight + tabBarHeight
+        }
+    }
+
+    private enum EntryFilter: CaseIterable, Identifiable {
+        case all
+        case text
+        case media
+        case files
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .all: "Все"
+            case .text: "Текст"
+            case .media: "Медиа"
+            case .files: "Файлы"
+            }
+        }
     }
 
     @ObservedObject var store: ClipboardHistoryStore
@@ -28,9 +57,20 @@ struct JournalView: View {
     @State private var isHeaderCloseHovered = false
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
+    @State private var selectedFilter: EntryFilter = .all
+    @State private var tabBarIntrinsicWidth: CGFloat = 0
 
-    private var entries: [ClipboardEntry] {
-        store.entries
+    private var filteredEntries: [ClipboardEntry] {
+        switch selectedFilter {
+        case .all:
+            store.entries
+        case .text:
+            store.entries.filter(\.isText)
+        case .media:
+            store.entries.filter(\.isImage)
+        case .files:
+            store.entries.filter(\.isFile)
+        }
     }
 
     private var palette: ThemePalette {
@@ -39,11 +79,12 @@ struct JournalView: View {
 
     var body: some View {
         ZStack {
-            palette.windowBackground
+            NativeGlassEffectView(style: .regular, cornerRadius: Layout.cornerRadius)
+            palette.windowTint
             WindowDragHandle()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if entries.isEmpty {
+            if filteredEntries.isEmpty {
                 emptyState
             } else {
                 entriesList
@@ -111,8 +152,13 @@ struct JournalView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
-        .onChange(of: entries) { entries in
+        .onChange(of: filteredEntries) { entries in
             if let selectedID, !entries.contains(where: { $0.id == selectedID }) {
+                self.selectedID = nil
+            }
+        }
+        .onChange(of: selectedFilter) { _ in
+            if let selectedID, !filteredEntries.contains(where: { $0.id == selectedID }) {
                 self.selectedID = nil
             }
         }
@@ -124,49 +170,107 @@ struct JournalView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Buffer Journal")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(palette.textPrimary)
-                    .overlay(WindowDragHandle())
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Buffer Journal")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(palette.textPrimary)
+                        .overlay(WindowDragHandle())
 
-                Text("\(entries.count)/20")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(palette.textTertiary)
-                    .overlay(WindowDragHandle())
-            }
-
-            Spacer()
-
-            HeaderIconButton(
-                systemName: "trash",
-                isHovered: isHeaderTrashHovered,
-                palette: palette,
-                action: {
-                    isClearConfirmationShown = true
+                    Text("\(store.entries.count)/20")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(palette.textTertiary)
+                        .overlay(WindowDragHandle())
                 }
-            )
-            .onHover { isHeaderTrashHovered = $0 }
-            .help("Clear history")
 
-            HeaderIconButton(
-                systemName: "xmark",
-                isHovered: isHeaderCloseHovered,
-                palette: palette,
-                action: onClose
-            )
-            .onHover { isHeaderCloseHovered = $0 }
-            .help("Close")
+                Spacer()
+
+                HeaderIconButton(
+                    systemName: "trash",
+                    isHovered: isHeaderTrashHovered,
+                    palette: palette,
+                    action: {
+                        isClearConfirmationShown = true
+                    }
+                )
+                .onHover { isHeaderTrashHovered = $0 }
+                .help("Clear history")
+
+                HeaderIconButton(
+                    systemName: "xmark",
+                    isHovered: isHeaderCloseHovered,
+                    palette: palette,
+                    action: onClose
+                )
+                .onHover { isHeaderCloseHovered = $0 }
+                .help("Close")
+            }
+            .padding(.horizontal, Layout.contentInset)
+            .padding(.top, Layout.headerTopPadding)
+
+            filterTabs
+                .padding(.top, Layout.tabSectionSpacing)
+                .padding(.bottom, Layout.tabSectionSpacing)
         }
-        .padding(.horizontal, Layout.contentInset)
-        .frame(height: Layout.headerHeight)
         .background {
             ZStack {
                 NativeGlassEffectView(style: .regular, cornerRadius: 0)
                 WindowDragHandle()
             }
         }
+    }
+
+    private var filterTabs: some View {
+        GeometryReader { geometry in
+            let shouldStretch = tabBarIntrinsicWidth > 0 && tabBarIntrinsicWidth <= geometry.size.width
+
+            Group {
+                if shouldStretch {
+                    tabButtonsRow(expanded: true)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        tabButtonsRow(expanded: false)
+                    }
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+            .background(
+                tabButtonsRow(expanded: false)
+                    .fixedSize()
+                    .hidden()
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: TabBarWidthPreferenceKey.self,
+                                value: proxy.size.width
+                            )
+                        }
+                    )
+            )
+        }
+        .frame(height: Layout.tabButtonHeight)
+        .onPreferenceChange(TabBarWidthPreferenceKey.self) { width in
+            tabBarIntrinsicWidth = width
+        }
+    }
+
+    private func tabButtonsRow(expanded: Bool) -> some View {
+        HStack(spacing: 6) {
+            ForEach(EntryFilter.allCases) { filter in
+                FilterTabButton(
+                    title: filter.title,
+                    isSelected: selectedFilter == filter,
+                    isExpanded: expanded,
+                    palette: palette
+                ) {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        selectedFilter = filter
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, Layout.contentInset)
     }
 
     private var entriesList: some View {
@@ -177,10 +281,11 @@ struct JournalView: View {
                     .frame(minHeight: Layout.minHeight)
 
                 VStack(spacing: Layout.rowSpacing) {
-                    ForEach(entries) { entry in
+                    ForEach(filteredEntries) { entry in
                         ClipboardEntryRow(
                             entry: entry,
                             image: store.image(for: entry),
+                            fileIcon: store.fileIcon(for: entry),
                             isSelected: selectedID == entry.id,
                             isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
                             onPreviewImage: {
@@ -200,7 +305,7 @@ struct JournalView: View {
                     }
                 }
                 .padding(.horizontal, Layout.contentInset)
-                .padding(.top, Layout.headerHeight + Layout.rowSpacing)
+                .padding(.top, Layout.topChromeHeight + Layout.rowSpacing)
                 .padding(.bottom, Layout.rowSpacing)
             }
         }
@@ -210,7 +315,7 @@ struct JournalView: View {
             moveSelection(direction)
         }
         .onSubmit {
-            if let entry = entries.first(where: { $0.id == selectedID }) {
+            if let entry = filteredEntries.first(where: { $0.id == selectedID }) {
                 select(entry)
             }
         }
@@ -219,13 +324,30 @@ struct JournalView: View {
     private var emptyState: some View {
         VStack {
             Spacer()
-            Text("No saved clips")
+            Text(emptyStateMessage)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(palette.textSecondary)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(WindowDragHandle())
+    }
+
+    private var emptyStateMessage: String {
+        if store.entries.isEmpty {
+            return "No saved clips"
+        }
+
+        switch selectedFilter {
+        case .all:
+            return "No saved clips"
+        case .text:
+            return "Нет текста"
+        case .media:
+            return "Нет медиа"
+        case .files:
+            return "Нет файлов"
+        }
     }
 
     private func select(_ entry: ClipboardEntry) {
@@ -250,17 +372,63 @@ struct JournalView: View {
     }
 
     private func moveSelection(_ direction: MoveCommandDirection) {
-        guard !entries.isEmpty else { return }
-        let currentIndex = entries.firstIndex { $0.id == selectedID } ?? 0
+        guard !filteredEntries.isEmpty else { return }
+        let currentIndex = filteredEntries.firstIndex { $0.id == selectedID } ?? 0
 
         switch direction {
         case .down:
-            selectedID = entries[min(currentIndex + 1, entries.count - 1)].id
+            selectedID = filteredEntries[min(currentIndex + 1, filteredEntries.count - 1)].id
         case .up:
-            selectedID = entries[max(currentIndex - 1, 0)].id
+            selectedID = filteredEntries[max(currentIndex - 1, 0)].id
         default:
             break
         }
+    }
+}
+
+private struct TabBarWidthPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct FilterTabButton: View {
+    let title: String
+    let isSelected: Bool
+    let isExpanded: Bool
+    let palette: ThemePalette
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? palette.textPrimary : palette.textSecondary)
+                .lineLimit(1)
+                .padding(.horizontal, isExpanded ? 0 : 12)
+                .frame(maxWidth: isExpanded ? .infinity : nil)
+                .frame(height: 28)
+                .background {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(palette.cardGlassFill)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(palette.borderSelected.opacity(0.7), lineWidth: 1)
+                            )
+                    } else if isHovered {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(palette.controlHoverBackground)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: isExpanded ? .infinity : nil)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -292,6 +460,7 @@ private struct HeaderIconButton: View {
 private struct ClipboardEntryRow: View {
     let entry: ClipboardEntry
     let image: NSImage?
+    let fileIcon: NSImage?
     let isSelected: Bool
     let isCurrent: Bool
     let onPreviewImage: () -> Void
@@ -390,13 +559,13 @@ private struct ClipboardEntryRow: View {
         case .image:
             if let image {
                 Button(action: onPreviewImage) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: imageHeight)
-                        .padding(.leading, isCurrent ? 18 : 0)
-                        .padding(.trailing, 28)
+                    RoundedAspectFitImage(
+                        image: image,
+                        maxHeight: imageHeight,
+                        cornerRadius: 8
+                    )
+                    .padding(.leading, isCurrent ? 18 : 0)
+                    .padding(.trailing, 28)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -407,12 +576,42 @@ private struct ClipboardEntryRow: View {
                     .padding(.leading, isCurrent ? 18 : 0)
                     .padding(.trailing, 28)
             }
+
+        case .file:
+            HStack(spacing: 10) {
+                Group {
+                    if let fileIcon {
+                        Image(nsImage: fileIcon)
+                            .resizable()
+                            .interpolation(.high)
+                    } else {
+                        Image(systemName: "doc")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(palette.textSecondary)
+                    }
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(palette.textPrimary)
+                        .lineLimit(2)
+
+                    Text(entry.subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(palette.textTertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.leading, isCurrent ? 18 : 0)
+            .padding(.trailing, 30)
         }
     }
 
     private var rowHeight: CGFloat {
         switch entry.payload {
-        case .text:
+        case .text, .file:
             62
         case .image:
             134
@@ -438,13 +637,46 @@ private struct ClipboardEntryRow: View {
     }
 }
 
+private struct RoundedAspectFitImage: View {
+    let image: NSImage
+    let maxHeight: CGFloat
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            let fittedSize = Self.aspectFitSize(
+                image.size,
+                in: CGSize(width: geometry.size.width, height: maxHeight)
+            )
+
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: fittedSize.width, height: fittedSize.height)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .frame(width: geometry.size.width, height: maxHeight, alignment: .center)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: maxHeight)
+    }
+
+    private static func aspectFitSize(_ imageSize: CGSize, in bounds: CGSize) -> CGSize {
+        guard imageSize.width > 0, imageSize.height > 0, bounds.width > 0, bounds.height > 0 else {
+            return bounds
+        }
+
+        let scale = min(bounds.width / imageSize.width, bounds.height / imageSize.height)
+        return CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+    }
+}
+
 private struct CardBackground: View {
     let isSelected: Bool
     let palette: ThemePalette
 
     var body: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(palette.cardBackground)
+            .fill(palette.cardGlassFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(isSelected ? palette.borderSelected : palette.border, lineWidth: 1)
@@ -651,12 +883,22 @@ private struct ThemePalette {
         isDark ? Color(red: 24 / 255, green: 24 / 255, blue: 24 / 255) : Color(red: 0.965, green: 0.965, blue: 0.970)
     }
 
+    var windowTint: Color {
+        isDark
+            ? Color(red: 34 / 255, green: 34 / 255, blue: 36 / 255).opacity(0.78)
+            : Color.white.opacity(0.32)
+    }
+
     var headerBackground: Color {
         isDark ? Color.black.opacity(0.12) : Color.white.opacity(0.18)
     }
 
     var cardBackground: Color {
         isDark ? Color(red: 32 / 255, green: 32 / 255, blue: 32 / 255) : Color.white
+    }
+
+    var cardGlassFill: Color {
+        isDark ? .clear : Color.white.opacity(0.70)
     }
 
     var cardHoverBackground: Color {
@@ -704,7 +946,7 @@ private struct ThemePalette {
     }
 
     var expandFadeColor: Color {
-        isDark ? cardBackground.opacity(0.94) : cardBackground.opacity(0.94)
+        isDark ? windowTint : cardGlassFill.opacity(0.96)
     }
 
     func iconOpacity(_ opacity: Double) -> Color {

@@ -30,6 +30,13 @@ final class ClipboardMonitor {
         guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
 
+        if let fileURLs = readFileURLs() {
+            for url in fileURLs {
+                store.addFile(from: url)
+            }
+            return
+        }
+
         if let text = pasteboard.string(forType: .string) {
             store.addText(text)
             return
@@ -38,5 +45,41 @@ final class ClipboardMonitor {
         if let image = NSImage(pasteboard: pasteboard) {
             store.addImage(image)
         }
+    }
+
+    private func readFileURLs() -> [URL]? {
+        if
+            let urls = pasteboard.readObjects(
+                forClasses: [NSURL.self],
+                options: [
+                    .urlReadingFileURLsOnly: true
+                ]
+            ) as? [URL],
+            !urls.isEmpty
+        {
+            let fileURLs = urls
+                .map { $0.isFileURL ? $0 : URL(fileURLWithPath: $0.path) }
+                .filter { FileManager.default.fileExists(atPath: $0.path) }
+
+            if !fileURLs.isEmpty {
+                return fileURLs
+            }
+        }
+
+        if
+            let filenames = pasteboard.propertyList(
+                forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")
+            ) as? [String]
+        {
+            let fileURLs = filenames
+                .map { URL(fileURLWithPath: $0) }
+                .filter { FileManager.default.fileExists(atPath: $0.path) }
+
+            if !fileURLs.isEmpty {
+                return fileURLs
+            }
+        }
+
+        return nil
     }
 }

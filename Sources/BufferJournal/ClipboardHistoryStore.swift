@@ -12,6 +12,7 @@ final class ClipboardHistoryStore: ObservableObject {
     private let decoder: JSONDecoder
     private let rootURL: URL
     private let imagesURL: URL
+    private let filesURL: URL
     private let historyURL: URL
     private var imageCache: [UUID: NSImage] = [:]
 
@@ -19,6 +20,7 @@ final class ClipboardHistoryStore: ObservableObject {
         let supportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         rootURL = supportURL.appendingPathComponent("BufferJournal", isDirectory: true)
         imagesURL = rootURL.appendingPathComponent("Images", isDirectory: true)
+        filesURL = rootURL.appendingPathComponent("Files", isDirectory: true)
         historyURL = rootURL.appendingPathComponent("history.json")
 
         encoder = JSONEncoder()
@@ -48,9 +50,56 @@ final class ClipboardHistoryStore: ObservableObject {
         }
     }
 
+    func addFile(from sourceURL: URL) {
+        guard sourceURL.isFileURL else { return }
+
+        let didAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: sourceURL.path) else { return }
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: sourceURL.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return
+        }
+
+        let originalName = sourceURL.lastPathComponent
+        let storedFilename = Self.storedFilename(for: originalName)
+        let destinationURL = filesURL.appendingPathComponent(storedFilename)
+
+        do {
+            let data = try Data(contentsOf: sourceURL)
+            try data.write(to: destinationURL, options: .atomic)
+
+            let attributes = try fileManager.attributesOfItem(atPath: sourceURL.path)
+            let byteCount = (attributes[.size] as? NSNumber)?.int64Value ?? Int64(data.count)
+
+            add(
+                ClipboardEntry.file(
+                    storedFilename: storedFilename,
+                    originalName: originalName,
+                    byteCount: byteCount,
+                    data: data
+                )
+            )
+        } catch {
+            NSLog("BufferJournal: failed to write file: \(error.localizedDescription)")
+        }
+    }
+
     func imageURL(for entry: ClipboardEntry) -> URL? {
         guard case let .image(filename) = entry.payload else { return nil }
         return imagesURL.appendingPathComponent(filename)
+    }
+
+    func fileURL(for entry: ClipboardEntry) -> URL? {
+        guard case let .file(storedFilename, _, _) = entry.payload else { return nil }
+        return filesURL.appendingPathComponent(storedFilename)
     }
 
     func image(for entry: ClipboardEntry) -> NSImage? {
@@ -64,11 +113,17 @@ final class ClipboardHistoryStore: ObservableObject {
         return image
     }
 
+    func fileIcon(for entry: ClipboardEntry) -> NSImage? {
+        guard let url = fileURL(for: entry) else { return nil }
+        return NSWorkspace.shared.icon(forFile: url.path)
+    }
+
     func clear() {
         entries.removeAll()
         currentClipboardFingerprint = nil
         imageCache.removeAll()
         try? FileManager.default.removeItem(at: imagesURL)
+        try? FileManager.default.removeItem(at: filesURL)
         createDirectoriesIfNeeded()
         save()
     }
@@ -79,7 +134,7 @@ final class ClipboardHistoryStore: ObservableObject {
             currentClipboardFingerprint = nil
         }
         imageCache[entry.id] = nil
-        removeImageFiles(for: [entry])
+        removeStoredFiles(for: [entry])
         save()
     }
 
@@ -120,15 +175,20 @@ final class ClipboardHistoryStore: ObservableObject {
     private func createDirectoriesIfNeeded() {
         do {
             try FileManager.default.createDirectory(at: imagesURL, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: filesURL, withIntermediateDirectories: true)
         } catch {
             NSLog("BufferJournal: failed to create storage: \(error.localizedDescription)")
         }
     }
 
-    private func removeImageFiles(for entries: [ClipboardEntry]) {
+    private func removeStoredFiles(for entries: [ClipboardEntry]) {
         for entry in entries {
-            guard let url = imageURL(for: entry) else { continue }
-            try? FileManager.default.removeItem(at: url)
+            if let url = imageURL(for: entry) {
+                try? FileManager.default.removeItem(at: url)
+            }
+            if let url = fileURL(for: entry) {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
     }
 
@@ -149,7 +209,14 @@ final class ClipboardHistoryStore: ObservableObject {
         for entry in removedEntries {
             imageCache[entry.id] = nil
         }
-        removeImageFiles(for: removedEntries)
+        removeStoredFiles(for: removedEntries)
+    }
+
+    private static func storedFilename(for originalName: String) -> String {
+        let sanitized = originalName
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        return "\(UUID().uuidString)_\(sanitized)"
     }
 }
 
