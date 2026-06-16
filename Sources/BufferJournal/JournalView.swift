@@ -303,7 +303,7 @@ struct JournalView: View {
                 .padding(.bottom, Layout.rowSpacing)
 
                 if let draggedPinnedEntry {
-                    entryRow(draggedPinnedEntry)
+                    entryRow(draggedPinnedEntry, isDragging: true)
                         .padding(.horizontal, Layout.contentInset)
                         .offset(y: floatingDragY)
                         .scaleEffect(1.025)
@@ -330,7 +330,7 @@ struct JournalView: View {
         }
     }
 
-    private func entryRow(_ entry: ClipboardEntry) -> some View {
+    private func entryRow(_ entry: ClipboardEntry, isDragging: Bool = false) -> some View {
         ClipboardEntryRow(
             entry: entry,
             image: store.image(for: entry),
@@ -338,6 +338,7 @@ struct JournalView: View {
             isSelected: selectedID == entry.id,
             isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
             isPinLimitReached: !entry.isPinned && store.entries.filter(\.isPinned).count >= 10,
+            isDragging: isDragging,
             onSelect: {
                 select(entry)
             },
@@ -638,6 +639,7 @@ private struct ClipboardEntryRow: View {
     let isSelected: Bool
     let isCurrent: Bool
     let isPinLimitReached: Bool
+    let isDragging: Bool
     let onSelect: () -> Void
     let onPreviewImage: () -> Void
     let onEditText: () -> Void
@@ -664,10 +666,10 @@ private struct ClipboardEntryRow: View {
         }
         .frame(minHeight: rowHeight)
         .background {
-            CardBackground(isSelected: isSelected, palette: palette)
+            CardBackground(isSelected: isSelected, isDragging: isDragging, palette: palette)
         }
         .overlay(alignment: .topLeading) {
-            if isCurrent && showsRowIcons {
+            if isCurrent {
                 Image(systemName: "clipboard")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(palette.iconOpacity(0.48))
@@ -743,7 +745,7 @@ private struct ClipboardEntryRow: View {
                         cornerRadius: 8
                     )
                     .padding(.leading, isCurrent ? 18 : 0)
-                    .padding(.trailing, 88)
+                    .padding(.trailing, imageTrailingPadding)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -752,7 +754,7 @@ private struct ClipboardEntryRow: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: imageHeight)
                     .padding(.leading, isCurrent ? 18 : 0)
-                    .padding(.trailing, 88)
+                    .padding(.trailing, imageTrailingPadding)
             }
 
         case .file:
@@ -837,6 +839,9 @@ private struct ClipboardEntryRow: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(tint ?? palette.iconOpacity(isHovered ? 0.76 : 0.46))
                 .frame(width: 28, height: 28)
+                .background {
+                    IconGlassBackground(cornerRadius: 8, isHighlighted: isHovered, palette: palette)
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
@@ -854,6 +859,10 @@ private struct ClipboardEntryRow: View {
 
     private var imageHeight: CGFloat {
         118
+    }
+
+    private var imageTrailingPadding: CGFloat {
+        entry.isPinned ? 18 : 0
     }
 
     private var canExpandText: Bool {
@@ -908,13 +917,35 @@ private struct RoundedAspectFitImage: View {
     }
 }
 
+private struct IconGlassBackground: View {
+    let cornerRadius: CGFloat
+    let isHighlighted: Bool
+    let palette: ThemePalette
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        ZStack {
+            NativeGlassEffectView(style: .regular, cornerRadius: cornerRadius)
+                .clipShape(shape)
+
+            shape
+                .fill(palette.iconGlassTint.opacity(isHighlighted ? 1 : 0.72))
+
+            shape
+                .stroke(palette.iconGlassBorder.opacity(isHighlighted ? 1 : 0.72), lineWidth: 1)
+        }
+    }
+}
+
 private struct CardBackground: View {
     let isSelected: Bool
+    let isDragging: Bool
     let palette: ThemePalette
 
     var body: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(palette.cardGlassFill)
+            .fill(isDragging ? palette.draggedCardBackground : palette.cardGlassFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(isSelected ? palette.borderSelected : palette.border, lineWidth: 1)
@@ -954,8 +985,8 @@ private struct ImagePreviewOverlay: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(palette.iconOpacity(0.76))
-                            .frame(width: 32, height: 32)
-                            .background(palette.cardBackground, in: Circle())
+                            .frame(width: 34, height: 34)
+                            .background(palette.cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                             .shadow(color: palette.shadow(0.10), radius: 10, y: 5)
                     }
                     .buttonStyle(.plain)
@@ -972,9 +1003,9 @@ private struct ImagePreviewOverlay: View {
                             .font(.system(size: 14, weight: .semibold))
                     }
                     .foregroundStyle(palette.textPrimary)
-                    .padding(.horizontal, 18)
-                    .frame(height: 42)
-                    .background(isPasteHovered ? palette.cardHoverBackground : palette.cardBackground, in: Capsule())
+                    .padding(.horizontal, 14)
+                    .frame(height: 34)
+                    .background(isPasteHovered ? palette.cardHoverBackground : palette.cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .shadow(color: palette.shadow(isPasteHovered ? 0.15 : 0.10), radius: isPasteHovered ? 16 : 11, y: 6)
                     .scaleEffect(isPasteHovered ? 1.015 : 1)
                 }
@@ -1087,10 +1118,13 @@ private struct ToastOverlay: View {
         Text(message)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(palette.textPrimary)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .frame(height: 34)
-            .background(palette.modalBackground, in: Capsule())
-            .overlay(Capsule().stroke(palette.borderSelected, lineWidth: 1))
+            .background(palette.modalBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(palette.borderSelected, lineWidth: 1)
+            )
             .shadow(color: palette.shadow(0.12), radius: 14, y: 6)
     }
 }
@@ -1139,6 +1173,10 @@ struct ThemePalette {
         isDark ? .clear : Color.white.opacity(0.70)
     }
 
+    var draggedCardBackground: Color {
+        isDark ? Color(red: 0.18, green: 0.18, blue: 0.19) : .white
+    }
+
     var cardHoverBackground: Color {
         isDark ? Color(red: 38 / 255, green: 38 / 255, blue: 38 / 255) : Color(white: 0.965)
     }
@@ -1153,6 +1191,14 @@ struct ThemePalette {
 
     var controlHoverBackground: Color {
         isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.055)
+    }
+
+    var iconGlassTint: Color {
+        isDark ? Color.white.opacity(0.055) : Color.white.opacity(0.38)
+    }
+
+    var iconGlassBorder: Color {
+        isDark ? Color.white.opacity(0.14) : Color.white.opacity(0.48)
     }
 
     var placeholderBackground: Color {
