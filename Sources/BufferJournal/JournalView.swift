@@ -45,6 +45,7 @@ struct JournalView: View {
     @ObservedObject var store: ClipboardHistoryStore
     @ObservedObject var settings: AppSettings
     let onSelect: (ClipboardEntry) -> Void
+    let onEditText: (ClipboardEntry) -> Void
     let onClose: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -59,6 +60,11 @@ struct JournalView: View {
     @State private var toastToken = UUID()
     @State private var selectedFilter: EntryFilter = .all
     @State private var tabBarIntrinsicWidth: CGFloat = 0
+    @State private var draggedPinnedEntryID: ClipboardEntry.ID?
+    @State private var draggedPinnedStartY: CGFloat?
+    @State private var draggedPinnedListTopY: CGFloat?
+    @State private var draggedPinnedTranslation: CGFloat = 0
+    @State private var rowFrames: [ClipboardEntry.ID: CGRect] = [:]
 
     private var filteredEntries: [ClipboardEntry] {
         switch selectedFilter {
@@ -282,35 +288,38 @@ struct JournalView: View {
 
                 VStack(spacing: Layout.rowSpacing) {
                     ForEach(filteredEntries) { entry in
-                        ClipboardEntryRow(
-                            entry: entry,
-                            image: store.image(for: entry),
-                            fileIcon: store.fileIcon(for: entry),
-                            isSelected: selectedID == entry.id,
-                            isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
-                            onPreviewImage: {
-                                withAnimation(.easeOut(duration: 0.16)) {
-                                    previewEntry = entry
-                                }
-                            },
-                            onDelete: {
-                                entryPendingDeletion = entry
-                            }
-                        )
+                        entryRow(entry)
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            select(entry)
-                        }
+                        .background(entryFrameReader(for: entry.id))
+                        .opacity(draggedPinnedEntryID == entry.id ? 0 : 1)
+                        .zIndex(entry.isPinned ? 1 : 0)
+                        .highPriorityGesture(pinnedDragGesture(for: entry))
+                        .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.86), value: filteredEntries.map(\.id))
                         .id(entry.id)
                     }
                 }
                 .padding(.horizontal, Layout.contentInset)
                 .padding(.top, Layout.topChromeHeight + Layout.rowSpacing)
                 .padding(.bottom, Layout.rowSpacing)
+
+                if let draggedPinnedEntry {
+                    entryRow(draggedPinnedEntry)
+                        .padding(.horizontal, Layout.contentInset)
+                        .offset(y: floatingDragY)
+                        .scaleEffect(1.025)
+                        .shadow(color: palette.shadow(0.14), radius: 16, y: 8)
+                        .allowsHitTesting(false)
+                        .zIndex(20)
+                        .transition(.identity)
+                }
             }
+            .coordinateSpace(name: "entriesList")
         }
         .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onPreferenceChange(EntryFramePreferenceKey.self) { frames in
+            rowFrames = frames
+        }
         .onMoveCommand { direction in
             moveSelection(direction)
         }
@@ -319,6 +328,36 @@ struct JournalView: View {
                 select(entry)
             }
         }
+    }
+
+    private func entryRow(_ entry: ClipboardEntry) -> some View {
+        ClipboardEntryRow(
+            entry: entry,
+            image: store.image(for: entry),
+            fileIcon: store.fileIcon(for: entry),
+            isSelected: selectedID == entry.id,
+            isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
+            isPinLimitReached: !entry.isPinned && store.entries.filter(\.isPinned).count >= 10,
+            onSelect: {
+                select(entry)
+            },
+            onPreviewImage: {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    previewEntry = entry
+                }
+            },
+            onEditText: {
+                onEditText(entry)
+            },
+            onTogglePin: {
+                if !store.togglePin(entry) {
+                    showToast("Максимум 10 закрепов")
+                }
+            },
+            onDelete: {
+                entryPendingDeletion = entry
+            }
+        )
     }
 
     private var emptyState: some View {
@@ -352,16 +391,19 @@ struct JournalView: View {
 
     private func select(_ entry: ClipboardEntry) {
         selectedID = entry.id
-        showToast()
+        showSelectionToast()
         onSelect(entry)
     }
 
-    private func showToast() {
+    private func showSelectionToast() {
         guard !settings.closeAfterSelection else { return }
+        showToast(settings.pasteOnSelection ? "Pasted" : "Copied")
+    }
 
+    private func showToast(_ message: String) {
         let token = UUID()
         toastToken = token
-        toastMessage = settings.pasteOnSelection ? "Pasted" : "Copied"
+        toastMessage = message
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.15) {
             guard toastToken == token else { return }
@@ -383,6 +425,138 @@ struct JournalView: View {
         default:
             break
         }
+    }
+
+    private func entryFrameReader(for id: ClipboardEntry.ID) -> some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: EntryFramePreferenceKey.self,
+                value: [id: proxy.frame(in: .named("entriesList"))]
+            )
+        }
+    }
+
+    private func pinnedDragGesture(for entry: ClipboardEntry) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("entriesList"))
+            .onChanged { value in
+                guard entry.isPinned else { return }
+
+                if draggedPinnedEntryID == nil {
+                    let listTopY = currentListTopY
+                    draggedPinnedEntryID = entry.id
+                    draggedPinnedListTopY = listTopY
+                    draggedPinnedStartY = layoutMinY(for: entry.id, listTopY: listTopY)
+                }
+
+                guard draggedPinnedEntryID == entry.id else { return }
+                draggedPinnedTranslation = value.translation.height
+                updatePinnedOrder(sourceID: entry.id, locationY: value.location.y)
+            }
+            .onEnded { _ in
+                guard draggedPinnedEntryID == entry.id else { return }
+
+                withAnimation(.interactiveSpring(response: 0.26, dampingFraction: 0.88)) {
+                    draggedPinnedStartY = layoutMinY(for: entry.id, listTopY: draggedPinnedListTopY ?? currentListTopY)
+                    draggedPinnedTranslation = 0
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    if draggedPinnedEntryID == entry.id {
+                        draggedPinnedEntryID = nil
+                        draggedPinnedStartY = nil
+                        draggedPinnedListTopY = nil
+                    }
+                }
+            }
+    }
+
+    private func updatePinnedOrder(sourceID: ClipboardEntry.ID, locationY: CGFloat) {
+        let visiblePinnedEntries = filteredEntries.filter(\.isPinned)
+        guard visiblePinnedEntries.count > 1 else { return }
+        let listTopY = draggedPinnedListTopY ?? currentListTopY
+
+        guard let sourceIndex = visiblePinnedEntries.firstIndex(where: { $0.id == sourceID }) else { return }
+
+        for target in visiblePinnedEntries where target.id != sourceID {
+            guard
+                let targetIndex = visiblePinnedEntries.firstIndex(where: { $0.id == target.id }),
+                let targetFrame = layoutFrame(for: target, listTopY: listTopY)
+            else {
+                continue
+            }
+
+            let threshold = targetFrame.height * 0.32
+            let afterTarget: Bool
+            if targetIndex > sourceIndex {
+                guard locationY >= targetFrame.minY + threshold else { continue }
+                afterTarget = true
+            } else {
+                guard locationY <= targetFrame.maxY - threshold else { continue }
+                afterTarget = false
+            }
+
+            store.movePinnedEntry(sourceID: sourceID, to: target.id, afterTarget: afterTarget)
+            return
+        }
+    }
+
+    private var draggedPinnedEntry: ClipboardEntry? {
+        guard let draggedPinnedEntryID else { return nil }
+        return store.entries.first { $0.id == draggedPinnedEntryID }
+    }
+
+    private var floatingDragY: CGFloat {
+        guard let draggedPinnedStartY else {
+            return draggedPinnedTranslation
+        }
+
+        return draggedPinnedStartY + draggedPinnedTranslation
+    }
+
+    private var currentListTopY: CGFloat {
+        let visibleFrames = filteredEntries.compactMap { rowFrames[$0.id]?.minY }
+        return visibleFrames.min() ?? Layout.topChromeHeight + Layout.rowSpacing
+    }
+
+    private func layoutFrame(for entry: ClipboardEntry, listTopY: CGFloat) -> CGRect? {
+        guard let minY = layoutMinY(for: entry.id, listTopY: listTopY) else { return nil }
+        return CGRect(
+            x: 0,
+            y: minY,
+            width: rowFrames[entry.id]?.width ?? 0,
+            height: rowHeight(for: entry)
+        )
+    }
+
+    private func layoutMinY(for id: ClipboardEntry.ID, listTopY: CGFloat) -> CGFloat? {
+        var y = listTopY
+
+        for entry in filteredEntries {
+            if entry.id == id {
+                return y
+            }
+
+            y += rowHeight(for: entry) + Layout.rowSpacing
+        }
+
+        return nil
+    }
+
+    private func rowHeight(for entry: ClipboardEntry) -> CGFloat {
+        switch entry.payload {
+        case .text, .file:
+            return 62
+        case .image:
+            return 134
+        }
+    }
+}
+
+private struct EntryFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [ClipboardEntry.ID: CGRect] = [:]
+
+    static func reduce(value: inout [ClipboardEntry.ID: CGRect], nextValue: () -> [ClipboardEntry.ID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, newValue in newValue })
     }
 }
 
@@ -463,10 +637,16 @@ private struct ClipboardEntryRow: View {
     let fileIcon: NSImage?
     let isSelected: Bool
     let isCurrent: Bool
+    let isPinLimitReached: Bool
+    let onSelect: () -> Void
     let onPreviewImage: () -> Void
+    let onEditText: () -> Void
+    let onTogglePin: () -> Void
     let onDelete: () -> Void
 
     @State private var isHovered = false
+    @State private var isPinHovered = false
+    @State private var isEditHovered = false
     @State private var isDeleteHovered = false
     @State private var isExpandHovered = false
     @State private var isExpanded = false
@@ -487,7 +667,7 @@ private struct ClipboardEntryRow: View {
             CardBackground(isSelected: isSelected, palette: palette)
         }
         .overlay(alignment: .topLeading) {
-            if isCurrent {
+            if isCurrent && showsRowIcons {
                 Image(systemName: "clipboard")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(palette.iconOpacity(0.48))
@@ -498,18 +678,11 @@ private struct ClipboardEntryRow: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isDeleteHovered ? Color.red.opacity(0.86) : palette.iconOpacity(0.46))
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .onHover { isDeleteHovered = $0 }
+            actionToolbar
             .padding(.top, 8)
             .padding(.trailing, 8)
-            .help("Delete clip")
+            .opacity(showsRowIcons ? 1 : 0)
+            .allowsHitTesting(showsRowIcons)
         }
         .overlay(alignment: .bottom) {
             if canExpandText && !isExpanded {
@@ -520,7 +693,7 @@ private struct ClipboardEntryRow: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if canExpandText {
+            if canExpandText && showsRowIcons {
                 Button {
                     isExpanded.toggle()
                 } label: {
@@ -537,9 +710,14 @@ private struct ClipboardEntryRow: View {
                 .help(isExpanded ? "Collapse clip" : "Expand clip")
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
+        }
         .shadow(color: palette.shadow(isHovered ? 0.10 : 0.06), radius: isHovered ? 10 : 6, y: isHovered ? 5 : 2)
         .animation(.easeOut(duration: 0.16), value: isHovered)
         .animation(.easeOut(duration: 0.16), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: showsRowIcons)
         .onHover { isHovered = $0 }
     }
 
@@ -552,7 +730,7 @@ private struct ClipboardEntryRow: View {
                 .lineLimit(isExpanded ? nil : 3)
                 .foregroundStyle(palette.textPrimary)
                 .padding(.leading, isCurrent ? 18 : 0)
-                .padding(.trailing, 30)
+                .padding(.trailing, 88)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -565,7 +743,7 @@ private struct ClipboardEntryRow: View {
                         cornerRadius: 8
                     )
                     .padding(.leading, isCurrent ? 18 : 0)
-                    .padding(.trailing, 28)
+                    .padding(.trailing, 88)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -574,7 +752,7 @@ private struct ClipboardEntryRow: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: imageHeight)
                     .padding(.leading, isCurrent ? 18 : 0)
-                    .padding(.trailing, 28)
+                    .padding(.trailing, 88)
             }
 
         case .file:
@@ -605,12 +783,68 @@ private struct ClipboardEntryRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.leading, isCurrent ? 18 : 0)
-            .padding(.trailing, 30)
+            .padding(.trailing, 88)
         }
     }
 
+    private var actionToolbar: some View {
+        HStack(spacing: 2) {
+            if entry.isText {
+                iconButton(
+                    systemName: "pencil",
+                    isHovered: isEditHovered,
+                    help: "Edit text",
+                    action: onEditText
+                )
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
+                .onHover { isEditHovered = $0 }
+            }
+
+            iconButton(
+                systemName: "trash",
+                isHovered: isDeleteHovered,
+                tint: isDeleteHovered ? Color.red.opacity(0.86) : nil,
+                help: "Delete clip",
+                action: onDelete
+            )
+            .opacity(isHovered ? 1 : 0)
+            .allowsHitTesting(isHovered)
+            .onHover { isDeleteHovered = $0 }
+
+            iconButton(
+                systemName: entry.isPinned ? "pin.fill" : "pin",
+                isHovered: isPinHovered,
+                tint: entry.isPinned ? palette.iconOpacity(0.82) : nil,
+                help: entry.isPinned ? "Unpin clip" : (isPinLimitReached ? "Pin limit reached" : "Pin clip"),
+                action: onTogglePin
+            )
+            .opacity(isHovered || entry.isPinned ? 1 : 0)
+            .allowsHitTesting(isHovered || entry.isPinned)
+            .onHover { isPinHovered = $0 }
+        }
+    }
+
+    private func iconButton(
+        systemName: String,
+        isHovered: Bool,
+        tint: Color? = nil,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint ?? palette.iconOpacity(isHovered ? 0.76 : 0.46))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(help)
+    }
+
     private var rowHeight: CGFloat {
-        switch entry.payload {
+        return switch entry.payload {
         case .text, .file:
             62
         case .image:
@@ -629,6 +863,10 @@ private struct ClipboardEntryRow: View {
 
         let value = previewText(text)
         return value.contains("\n") || value.count > 135
+    }
+
+    private var showsRowIcons: Bool {
+        isHovered || entry.isPinned
     }
 
     private func previewText(_ text: String) -> String {
@@ -872,7 +1110,7 @@ private struct ExpandFadeOverlay: View {
     }
 }
 
-private struct ThemePalette {
+struct ThemePalette {
     let colorScheme: ColorScheme
 
     var isDark: Bool {

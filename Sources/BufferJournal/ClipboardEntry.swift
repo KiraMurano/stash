@@ -59,9 +59,46 @@ enum ClipboardPayload: Codable, Equatable {
 
 struct ClipboardEntry: Codable, Identifiable, Equatable {
     let id: UUID
-    let payload: ClipboardPayload
+    var payload: ClipboardPayload
     let createdAt: Date
-    let fingerprint: String
+    var fingerprint: String
+    var isPinned: Bool
+    var pinnedOrder: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case payload
+        case createdAt
+        case fingerprint
+        case isPinned
+        case pinnedOrder
+    }
+
+    init(
+        id: UUID,
+        payload: ClipboardPayload,
+        createdAt: Date,
+        fingerprint: String,
+        isPinned: Bool = false,
+        pinnedOrder: Int? = nil
+    ) {
+        self.id = id
+        self.payload = payload
+        self.createdAt = createdAt
+        self.fingerprint = fingerprint
+        self.isPinned = isPinned
+        self.pinnedOrder = pinnedOrder
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        payload = try container.decode(ClipboardPayload.self, forKey: .payload)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        fingerprint = try container.decode(String.self, forKey: .fingerprint)
+        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        pinnedOrder = try container.decodeIfPresent(Int.self, forKey: .pinnedOrder)
+    }
 
     var title: String {
         switch payload {
@@ -111,7 +148,7 @@ extension ClipboardEntry {
             id: UUID(),
             payload: .text(value),
             createdAt: Date(),
-            fingerprint: "text:\(Self.sha256(Data(value.utf8)))"
+            fingerprint: Self.textFingerprint(value)
         )
     }
 
@@ -139,6 +176,10 @@ extension ClipboardEntry {
 
     private static func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func textFingerprint(_ value: String) -> String {
+        "text:\(Self.sha256(Data(value.utf8)))"
     }
 
     private static func formattedFileSize(_ byteCount: Int64) -> String {
