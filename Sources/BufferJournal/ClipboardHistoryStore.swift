@@ -7,6 +7,7 @@ final class ClipboardHistoryStore: ObservableObject {
     @Published private(set) var currentClipboardFingerprint: String?
 
     private let maxEntries = 20
+    private let maxPinnedEntries = 10
     private let maxEntryAge: TimeInterval = 24 * 60 * 60
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -138,15 +139,120 @@ final class ClipboardHistoryStore: ObservableObject {
         save()
     }
 
+    @discardableResult
+    func updateText(for entry: ClipboardEntry, to text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        guard let entryIndex = entries.firstIndex(where: { $0.id == entry.id }) else { return false }
+        guard case .text = entries[entryIndex].payload else { return false }
+
+        let oldFingerprint = entries[entryIndex].fingerprint
+        let newFingerprint = ClipboardEntry.textFingerprint(text)
+
+        if oldFingerprint != newFingerprint {
+            let duplicateEntries = entries.filter { $0.id != entry.id && $0.fingerprint == newFingerprint }
+            entries.removeAll { $0.id != entry.id && $0.fingerprint == newFingerprint }
+            removeStoredFiles(for: duplicateEntries)
+        }
+
+        guard let updatedIndex = entries.firstIndex(where: { $0.id == entry.id }) else { return false }
+        entries[updatedIndex].payload = .text(text)
+        entries[updatedIndex].fingerprint = newFingerprint
+
+        if currentClipboardFingerprint == oldFingerprint {
+            currentClipboardFingerprint = newFingerprint
+        }
+
+        sortEntries()
+        pruneEntries()
+        save()
+        return true
+    }
+
+    @discardableResult
+    func togglePin(_ entry: ClipboardEntry) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return false }
+
+        if entries[index].isPinned {
+            entries[index].isPinned = false
+            entries[index].pinnedOrder = nil
+            normalizePinnedOrder()
+            sortEntries()
+            pruneEntries()
+            save()
+            return true
+        }
+
+        guard entries.filter(\.isPinned).count < maxPinnedEntries else {
+            return false
+        }
+
+        let nextOrder = (entries.compactMap(\.pinnedOrder).max() ?? -1) + 1
+        entries[index].isPinned = true
+        entries[index].pinnedOrder = nextOrder
+        sortEntries()
+        pruneEntries()
+        save()
+        return true
+    }
+
+    func movePinnedEntry(sourceID: ClipboardEntry.ID, to targetID: ClipboardEntry.ID, afterTarget: Bool) {
+        guard sourceID != targetID else { return }
+
+        var pinnedEntries = entries
+            .filter(\.isPinned)
+            .sorted { lhs, rhs in
+                let lhsOrder = lhs.pinnedOrder ?? Int.max
+                let rhsOrder = rhs.pinnedOrder ?? Int.max
+                if lhsOrder == rhsOrder {
+                    return lhs.createdAt > rhs.createdAt
+                }
+                return lhsOrder < rhsOrder
+            }
+        let originalPinnedIDs = pinnedEntries.map(\.id)
+
+        guard
+            let sourceIndex = pinnedEntries.firstIndex(where: { $0.id == sourceID }),
+            pinnedEntries.contains(where: { $0.id == targetID })
+        else {
+            return
+        }
+
+        let movedEntry = pinnedEntries.remove(at: sourceIndex)
+        guard var targetIndex = pinnedEntries.firstIndex(where: { $0.id == targetID }) else { return }
+        if afterTarget {
+            targetIndex += 1
+        }
+        pinnedEntries.insert(movedEntry, at: min(targetIndex, pinnedEntries.count))
+        guard pinnedEntries.map(\.id) != originalPinnedIDs else { return }
+
+        for (order, pinnedEntry) in pinnedEntries.enumerated() {
+            if let index = entries.firstIndex(where: { $0.id == pinnedEntry.id }) {
+                entries[index].pinnedOrder = order
+            }
+        }
+
+        sortEntries()
+        save()
+    }
+
     func markCurrent(_ entry: ClipboardEntry) {
         currentClipboardFingerprint = entry.fingerprint
     }
 
     private func add(_ entry: ClipboardEntry) {
+        if let duplicate = entries.first(where: { $0.fingerprint == entry.fingerprint && $0.isPinned }) {
+            markCurrent(duplicate)
+            sortEntries()
+            save()
+            return
+        }
+
         entries.removeAll { $0.fingerprint == entry.fingerprint }
         entries.insert(entry, at: 0)
         markCurrent(entry)
 
+        sortEntries()
         pruneEntries()
         save()
     }
@@ -156,6 +262,8 @@ final class ClipboardHistoryStore: ObservableObject {
 
         do {
             entries = try decoder.decode([ClipboardEntry].self, from: data)
+            normalizePinnedOrder()
+            sortEntries()
             pruneEntries()
             save()
         } catch {
@@ -194,7 +302,14 @@ final class ClipboardHistoryStore: ObservableObject {
 
     private func pruneEntries() {
         let cutoff = Date().addingTimeInterval(-maxEntryAge)
-        let retainedEntries = Array(entries.filter { $0.createdAt >= cutoff }.prefix(maxEntries))
+        let pinnedEntries = entries.filter(\.isPinned)
+        let unpinnedCapacity = max(0, maxEntries - pinnedEntries.count)
+        let retainedUnpinnedEntries = Array(
+            entries
+                .filter { !$0.isPinned && $0.createdAt >= cutoff }
+                .prefix(unpinnedCapacity)
+        )
+        let retainedEntries = pinnedEntries + retainedUnpinnedEntries
         let retainedIDs = Set(retainedEntries.map(\.id))
         let removedEntries = entries.filter { !retainedIDs.contains($0.id) }
         guard !removedEntries.isEmpty else { return }
@@ -210,6 +325,41 @@ final class ClipboardHistoryStore: ObservableObject {
             imageCache[entry.id] = nil
         }
         removeStoredFiles(for: removedEntries)
+    }
+
+    private func sortEntries() {
+        let pinnedEntries = entries
+            .filter(\.isPinned)
+            .sorted { lhs, rhs in
+                let lhsOrder = lhs.pinnedOrder ?? Int.max
+                let rhsOrder = rhs.pinnedOrder ?? Int.max
+                if lhsOrder == rhsOrder {
+                    return lhs.createdAt > rhs.createdAt
+                }
+                return lhsOrder < rhsOrder
+            }
+        let unpinnedEntries = entries.filter { !$0.isPinned }
+        entries = pinnedEntries + unpinnedEntries
+    }
+
+    private func normalizePinnedOrder() {
+        let pinnedIDs = entries
+            .filter(\.isPinned)
+            .sorted { lhs, rhs in
+                let lhsOrder = lhs.pinnedOrder ?? Int.max
+                let rhsOrder = rhs.pinnedOrder ?? Int.max
+                if lhsOrder == rhsOrder {
+                    return lhs.createdAt > rhs.createdAt
+                }
+                return lhsOrder < rhsOrder
+            }
+            .map(\.id)
+
+        for (order, id) in pinnedIDs.enumerated() {
+            if let index = entries.firstIndex(where: { $0.id == id }) {
+                entries[index].pinnedOrder = order
+            }
+        }
     }
 
     private static func storedFilename(for originalName: String) -> String {

@@ -19,6 +19,7 @@ final class JournalPanelController {
     private let writer: ClipboardWriter
     private let settings: AppSettings
     private var panel: NSPanel?
+    private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
 
     init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings) {
         self.store = store
@@ -78,6 +79,9 @@ final class JournalPanelController {
             onSelect: { [weak self] entry in
                 self?.handleSelection(entry)
             },
+            onEditText: { [weak self] entry in
+                self?.openTextEditor(for: entry)
+            },
             onClose: { [weak self] in
                 self?.close()
             }
@@ -128,6 +132,59 @@ final class JournalPanelController {
         } else {
             performSelection()
         }
+    }
+
+    private func openTextEditor(for entry: ClipboardEntry) {
+        guard case let .text(text) = entry.payload else { return }
+
+        if let session = textEditSessions[entry.id] {
+            NSApp.activate(ignoringOtherApps: true)
+            session.window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let view = ClipboardTextEditorView(
+            title: entry.title,
+            initialText: text,
+            settings: settings,
+            onCancel: { [weak self] in
+                self?.closeTextEditor(for: entry.id)
+            },
+            onSave: { [weak self] editedText in
+                guard let self else { return }
+                if store.updateText(for: entry, to: editedText) {
+                    closeTextEditor(for: entry.id)
+                }
+            }
+        )
+
+        let hostingView = NSHostingView(rootView: view)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 360),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Edit Clip"
+        window.contentView = hostingView
+        window.minSize = NSSize(width: 420, height: 260)
+        window.isReleasedWhenClosed = false
+        window.center()
+
+        let delegate = TextEditWindowDelegate { [weak self] in
+            self?.textEditSessions[entry.id] = nil
+        }
+        window.delegate = delegate
+        textEditSessions[entry.id] = TextEditWindowSession(window: window, delegate: delegate)
+
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func closeTextEditor(for id: ClipboardEntry.ID) {
+        guard let session = textEditSessions[id] else { return }
+        session.window.close()
+        textEditSessions[id] = nil
     }
 
     private func positionIfNeeded(_ panel: NSPanel) {
