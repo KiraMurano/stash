@@ -16,6 +16,7 @@ final class ClipboardHistoryStore: ObservableObject {
     private let filesURL: URL
     private let historyURL: URL
     private var imageCache: [UUID: NSImage] = [:]
+    private var pruneTimer: Timer?
 
     init() {
         let supportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -30,6 +31,7 @@ final class ClipboardHistoryStore: ObservableObject {
 
         createDirectoriesIfNeeded()
         load()
+        scheduleNextPrune()
     }
 
     func addText(_ text: String) {
@@ -120,13 +122,22 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     func clear() {
-        entries.removeAll()
-        currentClipboardFingerprint = nil
-        imageCache.removeAll()
-        try? FileManager.default.removeItem(at: imagesURL)
-        try? FileManager.default.removeItem(at: filesURL)
-        createDirectoriesIfNeeded()
+        let removedEntries = entries.filter { !$0.isPinned }
+        guard !removedEntries.isEmpty else { return }
+
+        entries.removeAll { !$0.isPinned }
+        if
+            let currentClipboardFingerprint,
+            !entries.contains(where: { $0.fingerprint == currentClipboardFingerprint })
+        {
+            self.currentClipboardFingerprint = nil
+        }
+        for entry in removedEntries {
+            imageCache[entry.id] = nil
+        }
+        removeStoredFiles(for: removedEntries)
         save()
+        scheduleNextPrune()
     }
 
     func remove(_ entry: ClipboardEntry) {
@@ -137,6 +148,7 @@ final class ClipboardHistoryStore: ObservableObject {
         imageCache[entry.id] = nil
         removeStoredFiles(for: [entry])
         save()
+        scheduleNextPrune()
     }
 
     @discardableResult
@@ -166,6 +178,7 @@ final class ClipboardHistoryStore: ObservableObject {
         sortEntries()
         pruneEntries()
         save()
+        scheduleNextPrune()
         return true
     }
 
@@ -180,6 +193,7 @@ final class ClipboardHistoryStore: ObservableObject {
             sortEntries()
             pruneEntries()
             save()
+            scheduleNextPrune()
             return true
         }
 
@@ -193,6 +207,7 @@ final class ClipboardHistoryStore: ObservableObject {
         sortEntries()
         pruneEntries()
         save()
+        scheduleNextPrune()
         return true
     }
 
@@ -245,6 +260,7 @@ final class ClipboardHistoryStore: ObservableObject {
             markCurrent(duplicate)
             sortEntries()
             save()
+            scheduleNextPrune()
             return
         }
 
@@ -255,6 +271,7 @@ final class ClipboardHistoryStore: ObservableObject {
         sortEntries()
         pruneEntries()
         save()
+        scheduleNextPrune()
     }
 
     private func load() {
@@ -266,6 +283,7 @@ final class ClipboardHistoryStore: ObservableObject {
             sortEntries()
             pruneEntries()
             save()
+            scheduleNextPrune()
         } catch {
             NSLog("BufferJournal: failed to load history: \(error.localizedDescription)")
         }
@@ -306,7 +324,7 @@ final class ClipboardHistoryStore: ObservableObject {
         let unpinnedCapacity = max(0, maxEntries - pinnedEntries.count)
         let retainedUnpinnedEntries = Array(
             entries
-                .filter { !$0.isPinned && $0.createdAt >= cutoff }
+                .filter { !$0.isPinned && $0.createdAt > cutoff }
                 .prefix(unpinnedCapacity)
         )
         let retainedEntries = pinnedEntries + retainedUnpinnedEntries
@@ -325,6 +343,30 @@ final class ClipboardHistoryStore: ObservableObject {
             imageCache[entry.id] = nil
         }
         removeStoredFiles(for: removedEntries)
+    }
+
+    private func scheduleNextPrune() {
+        pruneTimer?.invalidate()
+        pruneTimer = nil
+
+        let now = Date()
+        guard let nextExpiration = entries
+            .filter({ !$0.isPinned })
+            .map({ $0.createdAt.addingTimeInterval(maxEntryAge) })
+            .filter({ $0 > now })
+            .min()
+        else {
+            return
+        }
+
+        pruneTimer = Timer.scheduledTimer(withTimeInterval: nextExpiration.timeIntervalSince(now), repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.pruneEntries()
+                self.save()
+                self.scheduleNextPrune()
+            }
+        }
     }
 
     private func sortEntries() {

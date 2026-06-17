@@ -106,7 +106,7 @@ struct JournalView: View {
 
                     DeleteConfirmationOverlay(
                         title: isClearConfirmationShown ? "Clear history?" : "Delete clip?",
-                        message: isClearConfirmationShown ? "All saved clips will be removed." : "This clip will be removed.",
+                        message: isClearConfirmationShown ? "Unpinned clips will be removed. Pinned clips stay saved." : "This clip will be removed.",
                         actionTitle: isClearConfirmationShown ? "Clear" : "Delete",
                         onCancel: {
                             isClearConfirmationShown = false
@@ -744,8 +744,6 @@ private struct ClipboardEntryRow: View {
                         maxHeight: imageHeight,
                         cornerRadius: 8
                     )
-                    .padding(.leading, isCurrent ? 18 : 0)
-                    .padding(.trailing, imageTrailingPadding)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -753,8 +751,6 @@ private struct ClipboardEntryRow: View {
                     .fill(palette.placeholderBackground)
                     .frame(maxWidth: .infinity)
                     .frame(height: imageHeight)
-                    .padding(.leading, isCurrent ? 18 : 0)
-                    .padding(.trailing, imageTrailingPadding)
             }
 
         case .file:
@@ -861,10 +857,6 @@ private struct ClipboardEntryRow: View {
         118
     }
 
-    private var imageTrailingPadding: CGFloat {
-        entry.isPinned ? 18 : 0
-    }
-
     private var canExpandText: Bool {
         guard case let .text(text) = entry.payload else {
             return false
@@ -926,9 +918,6 @@ private struct IconGlassBackground: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
         ZStack {
-            NativeGlassEffectView(style: .regular, cornerRadius: cornerRadius)
-                .clipShape(shape)
-
             shape
                 .fill(palette.iconGlassTint.opacity(isHighlighted ? 1 : 0.72))
 
