@@ -1044,28 +1044,21 @@ private struct WindowResizeGrip: View {
     @State private var isHovered = false
 
     private static let size: CGFloat = 30
-    /// Stroke centre sits 3.5 pt outside the edge: half the 4 pt stroke plus a 1.5 pt gap.
-    private static let gap: CGFloat = 3.5
+    /// Dot centre sits 4.5 pt outside the edge: half the 6 pt dot plus a 1.5 pt gap.
+    private static let gap: CGFloat = 4.5
 
     var body: some View {
         Canvas { context, size in
-            // One arc concentric with the panel's rounded corner, just outside its edge.
+            // A dot on the corner's diagonal, just outside the rounded edge.
             // The panel corner sits `margin` in from the canvas's bottom-right.
             let corner = CGPoint(x: size.width - margin, y: size.height - margin)
             let center = CGPoint(x: corner.x - cornerRadius, y: corner.y - cornerRadius)
-            var path = Path()
-            path.addArc(
-                center: center,
-                radius: cornerRadius + Self.gap,
-                startAngle: .degrees(20),
-                endAngle: .degrees(70),
-                clockwise: false
-            )
-            // Same look as the divider's grab mark: 4 pt, round caps, grey that turns orange.
-            context.stroke(
-                path,
-                with: .color(isHovered ? ThemePalette.orange : palette.iconOpacity(0.22)),
-                style: StrokeStyle(lineWidth: 4, lineCap: .round)
+            let distance = (cornerRadius + Self.gap) / 2.squareRoot()
+            let dot = CGPoint(x: center.x + distance, y: center.y + distance)
+            let diameter: CGFloat = 6
+            context.fill(
+                Path(ellipseIn: CGRect(x: dot.x - diameter / 2, y: dot.y - diameter / 2, width: diameter, height: diameter)),
+                with: .color(isHovered ? ThemePalette.orange : palette.iconOpacity(0.22))
             )
         }
         .frame(width: Self.size, height: Self.size)
