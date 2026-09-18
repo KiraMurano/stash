@@ -53,6 +53,9 @@ struct JournalView: View {
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
     @State private var isListScrolled = false
+    /// Clips seen so far, to tell freshly copied ones apart; nil until the list first appears.
+    @State private var knownIDs: Set<ClipboardEntry.ID>?
+    @State private var freshIDs: Set<ClipboardEntry.ID> = []
     @State private var query = ""
     @State private var keyboardScrollTarget: KeyboardScrollTarget?
     @FocusState private var isSearchFocused: Bool
@@ -364,6 +367,21 @@ struct JournalView: View {
         .environment(\.defaultMinListRowHeight, 20)
         // New clips arrive from the pasteboard monitor outside any transaction; animate the insert here.
         .animation(.easeOut(duration: 0.28), value: store.entries.map(\.id))
+        .onAppear {
+            if knownIDs == nil {
+                knownIDs = Set(store.entries.map(\.id))
+            }
+        }
+        .onChange(of: store.entries.map(\.id)) { ids in
+            let current = Set(ids)
+            let added = current.subtracting(knownIDs ?? current)
+            knownIDs = current
+            guard !added.isEmpty else { return }
+            freshIDs.formUnion(added)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                freshIDs.subtract(added)
+            }
+        }
         .onChange(of: keyboardScrollTarget) { target in
             guard let target else { return }
             switch target {
@@ -390,7 +408,8 @@ struct JournalView: View {
             onQuickPaste: { select(entry) },
             onExpand: expandAction(for: entry),
             onTogglePin: { togglePin(entry) },
-            onDelete: { entryPendingDeletion = entry }
+            onDelete: { entryPendingDeletion = entry },
+            isFresh: freshIDs.contains(entry.id)
         )
         .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
         .listRowSeparator(.hidden)
@@ -827,9 +846,45 @@ private struct EntryRow: View {
     let onExpand: (() -> Void)?
     let onTogglePin: () -> Void
     let onDelete: () -> Void
+    let isFresh: Bool
 
     @Environment(\.l10n) private var l10n
     @State private var isHovered = false
+    @State private var isRevealed: Bool
+
+    init(
+        entry: ClipboardEntry,
+        thumbnail: NSImage?,
+        fileIcon: NSImage?,
+        title: String,
+        subtitle: String,
+        isSelected: Bool,
+        isCurrent: Bool,
+        palette: ThemePalette,
+        quickPasteTitle: String,
+        onQuickPaste: @escaping () -> Void,
+        onExpand: (() -> Void)?,
+        onTogglePin: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
+        isFresh: Bool
+    ) {
+        self.entry = entry
+        self.thumbnail = thumbnail
+        self.fileIcon = fileIcon
+        self.title = title
+        self.subtitle = subtitle
+        self.isSelected = isSelected
+        self.isCurrent = isCurrent
+        self.palette = palette
+        self.quickPasteTitle = quickPasteTitle
+        self.onQuickPaste = onQuickPaste
+        self.onExpand = onExpand
+        self.onTogglePin = onTogglePin
+        self.onDelete = onDelete
+        self.isFresh = isFresh
+        // A freshly copied clip starts hidden and fades in once it is on screen.
+        _isRevealed = State(initialValue: !isFresh)
+    }
 
     private static let actionSize: CGFloat = 26
     private static let actionSpacing: CGFloat = 4
@@ -935,6 +990,18 @@ private struct EntryRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
+        .opacity(isRevealed ? 1 : 0)
+        .offset(y: isRevealed ? 0 : -8)
+        .scaleEffect(isRevealed ? 1 : 0.97, anchor: .top)
+        .onAppear {
+            guard !isRevealed else { return }
+            // Next runloop, so the hidden state renders first and the change animates.
+            DispatchQueue.main.async {
+                withAnimation(.easeOut(duration: 0.35)) {
+                    isRevealed = true
+                }
+            }
+        }
     }
 
     private func rowAction(
