@@ -15,6 +15,8 @@ struct JournalView: View {
         static let sidebarMaxWidth: CGFloat = 440
         static let detailMinWidth: CGFloat = 300
         static let rowHeight: CGFloat = 50
+        /// Transparent strip on the right and bottom of the window for the resize grip.
+        static let gripMargin: CGFloat = 12
     }
 
     private enum EntryFilter: CaseIterable, Identifiable {
@@ -123,11 +125,6 @@ struct JournalView: View {
                 }
             }
 
-            WindowResizeGrip(palette: palette)
-                .padding(7)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .zIndex(10)
-
             if isClearConfirmationShown || entryPendingDeletion != nil {
                 ZStack {
                     palette.dialogBackdrop
@@ -174,6 +171,12 @@ struct JournalView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
+        // Transparent margin right and below the panel holds the corner resize grip outside the curve.
+        .padding(.trailing, Layout.gripMargin)
+        .padding(.bottom, Layout.gripMargin)
+        .overlay(alignment: .bottomTrailing) {
+            WindowResizeGrip(palette: palette)
+        }
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .preferredColorScheme(settings.themeMode.colorScheme)
@@ -306,13 +309,13 @@ struct JournalView: View {
 
     private static let listBottomID = "list-bottom"
 
-    /// The app icon draws its tile on 80.5% of the frame (macOS icon grid); the title's font
-    /// size is solved so the capital "S" is exactly as tall as that visible tile.
+    /// The system draws the app icon's tile on about 71% of the image frame; the title's font
+    /// size is solved so the capital "S" (with its ~3% round overshoot) matches that tile.
     private enum Logo {
-        static let iconFrame: CGFloat = 28
-        static let visibleIconHeight = iconFrame * 824 / 1024
+        static let iconFrame: CGFloat = 32
+        static let visibleIconHeight = iconFrame * 0.714
         static let capHeightRatio = NSFont.systemFont(ofSize: 100, weight: .bold).capHeight / 100
-        static let fontSize = (visibleIconHeight / capHeightRatio).rounded()
+        static let fontSize = (visibleIconHeight / capHeightRatio / 1.03).rounded()
         static let capHeight = fontSize * capHeightRatio
     }
 
@@ -560,12 +563,10 @@ struct JournalView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .frame(height: 28)
-                .background(ThemePalette.orange, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(AccentButtonStyle(cornerRadius: 8))
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 22)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .overlay(alignment: .top) {
             palette.separator.frame(height: 1)
@@ -866,10 +867,8 @@ private struct EntryRow: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(width: 26, height: 26)
-                        .background(ThemePalette.orange, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .shadow(color: palette.controlShadow, radius: ThemePalette.controlShadowRadius, y: 1)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AccentButtonStyle(cornerRadius: 7))
                 .help(quickPasteTitle)
                 .padding(.trailing, 8)
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -938,6 +937,8 @@ private struct SidebarResizeHandle: View {
                 Capsule()
                     .fill(isHovered || isDragging ? ThemePalette.orange : palette.iconOpacity(0.22))
                     .frame(width: 4, height: 32)
+                    // Keep a gap from the 1 pt divider line instead of sitting on it.
+                    .offset(x: -9)
                     .animation(.easeOut(duration: 0.12), value: isHovered || isDragging)
             }
             .contentShape(Rectangle())
@@ -984,8 +985,10 @@ private struct WindowResizeGrip: View {
                 style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
             )
         }
-        .frame(width: 11, height: 11)
-        .padding(3)
+        .frame(width: 9, height: 9)
+        .padding(2)
+        // Near-transparent fill so the grip's whole square takes clicks in the transparent margin.
+        .background(Color.black.opacity(0.001))
         .background(WindowResizeArea())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.12), value: isHovered)
@@ -1267,6 +1270,37 @@ private struct TypeSegmentedControl: View {
         }
         .frame(height: 28)
         .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+/// Orange filled button; hover darkens it (shadcn `bg-primary/90`), press darkens further.
+private struct AccentButtonStyle: ButtonStyle {
+    let cornerRadius: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        AccentButtonBody(configuration: configuration, cornerRadius: cornerRadius)
+    }
+
+    private struct AccentButtonBody: View {
+        let configuration: ButtonStyleConfiguration
+        let cornerRadius: CGFloat
+
+        @State private var isHovered = false
+
+        var body: some View {
+            configuration.label
+                .background(
+                    ThemePalette.orange,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Color.black.opacity(configuration.isPressed ? 0.16 : (isHovered ? 0.09 : 0)))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .onHover { isHovered = $0 }
+                .animation(.easeOut(duration: 0.12), value: isHovered)
+        }
     }
 }
 
