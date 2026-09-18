@@ -1681,7 +1681,11 @@ struct ThemePalette {
 
     /// Frosted tint over the glass for the list pane (denser) and the preview pane (lighter).
     var sidebarTint: Color {
-        isDark ? Color(red: 28 / 255, green: 28 / 255, blue: 30 / 255).opacity(0.84) : Color.white.opacity(0.82)
+        // The Stash themes grey the list pane so the white / black selection card stands out.
+        if solid {
+            return isDark ? Color(white: 0.21).opacity(0.9) : Color(white: 0.9).opacity(0.9)
+        }
+        return isDark ? Color(red: 28 / 255, green: 28 / 255, blue: 30 / 255).opacity(0.84) : Color.white.opacity(0.82)
     }
 
     var detailTint: Color {
@@ -1728,8 +1732,8 @@ struct ThemePalette {
     /// .concepts/2026-09-18-stash-theme.html) so orange buttons on it never sit on orange.
     var selectionFill: Color {
         guard solid else { return accentSoft }
-        // Grey card, a step darker than the opaque buttons so they still stand out on it.
-        return isDark ? Color(white: 0.23) : Color(white: 0.88)
+        // White / near-black card on the greyer Stash list pane.
+        return isDark ? Color(white: 0.08) : .white
     }
 
     var selectionText: Color {
