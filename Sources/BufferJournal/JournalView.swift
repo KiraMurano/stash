@@ -203,12 +203,14 @@ struct JournalView: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: Logo.iconFrame, height: Logo.iconFrame)
+                    .overlay(WindowDragHandle())
 
                 Text("Stash")
                     .font(.system(size: Logo.fontSize, weight: .heavy))
                     .foregroundStyle(palette.textPrimary)
                     // Center on the capital letters, not on the line box, so "S" lines up with the icon.
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - Logo.capHeight / 2 }
+                    .overlay(WindowDragHandle())
 
                 Spacer()
 
@@ -216,6 +218,7 @@ struct JournalView: View {
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(palette.textTertiary)
+                    .overlay(WindowDragHandle())
 
                 GlassIconButton(
                     systemName: "trash",
@@ -233,6 +236,7 @@ struct JournalView: View {
             searchField
                 .padding(.horizontal, 10)
                 .padding(.bottom, 8)
+                .background(WindowDragHandle())
 
             TypeSegmentedControl(
                 titles: EntryFilter.allCases.map { $0.title(l10n) },
@@ -246,6 +250,7 @@ struct JournalView: View {
             )
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
+            .background(WindowDragHandle())
             .overlay(alignment: .bottom) {
                 // Shadow under the header once the list scrolls beneath it.
                 LinearGradient(
@@ -383,7 +388,10 @@ struct JournalView: View {
             isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
             palette: palette,
             quickPasteTitle: settings.pasteOnSelection ? l10n("Paste", "Вставить") : l10n("Copy", "Скопировать"),
-            onQuickPaste: { select(entry) }
+            onQuickPaste: { select(entry) },
+            onExpand: expandAction(for: entry),
+            onTogglePin: { togglePin(entry) },
+            onDelete: { entryPendingDeletion = entry }
         )
         .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
         .listRowSeparator(.hidden)
@@ -408,10 +416,12 @@ struct JournalView: View {
                         .foregroundStyle(palette.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .overlay(WindowDragHandle())
 
                     Text("· \(timeTitle(entry.createdAt))")
                         .font(.system(size: 11))
                         .foregroundStyle(palette.textTertiary)
+                        .overlay(WindowDragHandle())
 
                     if store.currentClipboardFingerprint == entry.fingerprint {
                         Text(l10n("in clipboard", "в буфере"))
@@ -420,6 +430,7 @@ struct JournalView: View {
                             .padding(.horizontal, 6)
                             .frame(height: 16)
                             .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                            .overlay(WindowDragHandle())
                     }
 
                     Spacer()
@@ -537,11 +548,7 @@ struct JournalView: View {
                 systemName: entry.isPinned ? "pin.fill" : "pin",
                 tint: entry.isPinned ? palette.accentText : nil,
                 help: entry.isPinned ? l10n("Unpin clip", "Открепить") : l10n("Pin clip", "Закрепить"),
-                action: {
-                    if !store.togglePin(entry) {
-                        showToast(l10n("Up to 10 pinned clips", "Максимум 10 закрепов"))
-                    }
-                }
+                action: { togglePin(entry) }
             )
 
             GlassIconButton(
@@ -562,11 +569,10 @@ struct JournalView: View {
                         .font(.system(size: 11, weight: .semibold))
                 }
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .frame(height: 28)
             }
-            .buttonStyle(AccentButtonStyle(cornerRadius: 8))
+            .buttonStyle(TranslucentButtonStyle(tone: .accent, cornerRadius: 8))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -762,6 +768,25 @@ struct JournalView: View {
 
     // MARK: Actions
 
+    private func togglePin(_ entry: ClipboardEntry) {
+        if !store.togglePin(entry) {
+            showToast(l10n("Up to 10 pinned clips", "Максимум 10 закрепов"))
+        }
+    }
+
+    /// Images open in Preview, files in their default app; text is already shown in full on the right.
+    private func expandAction(for entry: ClipboardEntry) -> (() -> Void)? {
+        switch entry.payload {
+        case .text:
+            return nil
+        case .image:
+            return { onPreviewImage(entry) }
+        case .file:
+            guard let url = store.fileURL(for: entry) else { return nil }
+            return { NSWorkspace.shared.open(url) }
+        }
+    }
+
     private func select(_ entry: ClipboardEntry) {
         selectedID = entry.id
         if !settings.closeAfterSelection {
@@ -797,8 +822,20 @@ private struct EntryRow: View {
     let palette: ThemePalette
     let quickPasteTitle: String
     let onQuickPaste: () -> Void
+    let onExpand: (() -> Void)?
+    let onTogglePin: () -> Void
+    let onDelete: () -> Void
 
+    @Environment(\.l10n) private var l10n
     @State private var isHovered = false
+
+    private static let actionSize: CGFloat = 26
+    private static let actionSpacing: CGFloat = 4
+
+    private var actionsWidth: CGFloat {
+        let count = CGFloat(onExpand == nil ? 3 : 4)
+        return count * Self.actionSize + (count - 1) * Self.actionSpacing
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -842,6 +879,16 @@ private struct EntryRow: View {
             }
             .opacity(isHovered ? 0 : 1)
         }
+        // Under the hover actions the text fades out instead of reflowing.
+        .mask {
+            HStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: isHovered ? 24 : 0)
+                Color.clear
+                    .frame(width: isHovered ? actionsWidth : 0)
+            }
+        }
         .padding(.horizontal, 8)
         // Fixed height: variable rows made the list re-measure while scrolling and jump.
         .frame(height: JournalView.Layout.rowHeight - 2)
@@ -864,20 +911,40 @@ private struct EntryRow: View {
         .overlay(alignment: .trailing) {
             // Floats over the row so hovering never reflows the title.
             if isHovered {
-                Button(action: onQuickPaste) {
-                    Image(systemName: "return")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
+                HStack(spacing: Self.actionSpacing) {
+                    if let onExpand {
+                        rowAction("arrow.up.left.and.arrow.down.right", help: entry.isImage ? l10n("Open in Preview", "Открыть в Просмотре") : l10n("Open", "Открыть"), action: onExpand)
+                    }
+                    rowAction(
+                        entry.isPinned ? "pin.fill" : "pin",
+                        tone: entry.isPinned ? .accent : .neutral,
+                        help: entry.isPinned ? l10n("Unpin clip", "Открепить") : l10n("Pin clip", "Закрепить"),
+                        action: onTogglePin
+                    )
+                    rowAction("trash", tone: .destructive, help: l10n("Delete clip", "Удалить"), action: onDelete)
+                    rowAction("return", tone: .accent, help: quickPasteTitle, action: onQuickPaste)
                 }
-                .buttonStyle(AccentButtonStyle(cornerRadius: 7))
-                .help(quickPasteTitle)
                 .padding(.trailing, 8)
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
+    }
+
+    private func rowAction(
+        _ systemName: String,
+        tone: TranslucentButtonStyle.Tone = .neutral,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .bold))
+                .frame(width: Self.actionSize, height: Self.actionSize)
+        }
+        .buttonStyle(TranslucentButtonStyle(tone: tone, cornerRadius: 7))
+        .help(help)
     }
 
     private var titleText: some View {
@@ -1288,33 +1355,64 @@ private struct TypeSegmentedControl: View {
     }
 }
 
-/// Orange filled button; hover darkens it (shadcn `bg-primary/90`), press darkens further.
-private struct AccentButtonStyle: ButtonStyle {
+/// Translucent button: a tinted fill that deepens on hover (shadcn-style), more on press.
+/// Neutral is grey, accent is orange with an orange label, destructive turns red on hover.
+struct TranslucentButtonStyle: ButtonStyle {
+    enum Tone {
+        case neutral
+        case accent
+        case destructive
+    }
+
+    var tone: Tone = .neutral
     let cornerRadius: CGFloat
 
     func makeBody(configuration: Configuration) -> some View {
-        AccentButtonBody(configuration: configuration, cornerRadius: cornerRadius)
+        TranslucentButtonBody(configuration: configuration, tone: tone, cornerRadius: cornerRadius)
     }
 
-    private struct AccentButtonBody: View {
+    private struct TranslucentButtonBody: View {
         let configuration: ButtonStyleConfiguration
+        let tone: Tone
         let cornerRadius: CGFloat
 
+        @Environment(\.colorScheme) private var colorScheme
         @State private var isHovered = false
+
+        private var palette: ThemePalette {
+            ThemePalette(colorScheme: colorScheme)
+        }
 
         var body: some View {
             configuration.label
-                .background(
-                    ThemePalette.orange,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color.black.opacity(configuration.isPressed ? 0.16 : (isHovered ? 0.09 : 0)))
-                )
+                .foregroundStyle(foreground)
+                .background(fill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .onHover { isHovered = $0 }
                 .animation(.easeOut(duration: 0.12), value: isHovered)
+        }
+
+        private var level: Double {
+            configuration.isPressed ? 2 : (isHovered ? 1 : 0)
+        }
+
+        private var foreground: Color {
+            switch tone {
+            case .accent: palette.accentText
+            case .destructive: isHovered ? Color.red.opacity(0.9) : palette.iconOpacity(0.7)
+            case .neutral: palette.iconOpacity(isHovered ? 0.85 : 0.7)
+            }
+        }
+
+        private var fill: Color {
+            switch tone {
+            case .accent:
+                return ThemePalette.orange.opacity((palette.isDark ? 0.28 : 0.18) + 0.08 * level)
+            case .destructive where isHovered:
+                return Color.red.opacity((palette.isDark ? 0.2 : 0.12) + 0.06 * (level - 1))
+            case .neutral, .destructive:
+                return palette.iconOpacity((palette.isDark ? 0.10 : 0.06) + 0.05 * level)
+            }
         }
     }
 }
@@ -1326,35 +1424,14 @@ private struct GlassIconButton: View {
     let help: String
     let action: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isHovered = false
-
-    private var palette: ThemePalette {
-        ThemePalette(colorScheme: colorScheme)
-    }
-
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(iconColor)
                 .frame(width: 28, height: 28)
-                .background(isHovered ? palette.controlHoverBackground : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TranslucentButtonStyle(tone: tint != nil ? .accent : (isDestructive ? .destructive : .neutral), cornerRadius: 8))
         .help(help)
-        .onHover { isHovered = $0 }
-    }
-
-    private var iconColor: Color {
-        if isDestructive, isHovered {
-            return .red.opacity(0.86)
-        }
-        if let tint {
-            return tint
-        }
-        return palette.iconOpacity(isHovered ? 0.82 : 0.55)
     }
 }
 
@@ -1413,10 +1490,10 @@ private struct DeleteConfirmationOverlay: View {
                 Button(action: onConfirm) {
                     Text(actionTitle)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.red.opacity(0.9))
                         .padding(.horizontal, 14)
                         .frame(height: 28)
-                        .background(Color.red.opacity(isConfirmHovered ? 0.95 : 0.84), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(Color.red.opacity((palette.isDark ? 0.2 : 0.12) + (isConfirmHovered ? 0.08 : 0)), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .onHover { isConfirmHovered = $0 }
