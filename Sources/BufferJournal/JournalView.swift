@@ -1485,14 +1485,17 @@ struct TranslucentButtonStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .foregroundStyle(foreground)
-                .background(fill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                // Opaque buttons in the Stash themes need an edge to read on opaque surfaces
-                // (an orange button on the orange selected row, grey on grey hover).
-                .shadow(
-                    color: palette.solid ? palette.controlShadow : .clear,
-                    radius: ThemePalette.controlShadowRadius,
-                    y: 1
-                )
+                .background {
+                    // Opaque buttons in the Stash themes need an edge to read on opaque surfaces.
+                    // The shadow sits on the plate only, so glyphs and labels stay crisp.
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(fill)
+                        .shadow(
+                            color: palette.solid ? palette.controlShadow : .clear,
+                            radius: ThemePalette.controlShadowRadius,
+                            y: 1
+                        )
+                }
                 .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .onHover { isHovered = $0 }
                 .animation(.easeOut(duration: 0.12), value: isHovered)
@@ -1524,7 +1527,10 @@ struct TranslucentButtonStyle: ButtonStyle {
                 case .accent:
                     return ThemePalette.darken(ThemePalette.orange, by: 0.08 * level)
                 case .accentOnAccent:
-                    return ThemePalette.darken(.white, by: 0.06 * level)
+                    // Dark plate in the dark look; in the light look a soft off-white like the pane.
+                    return palette.isDark
+                        ? Color(white: 0.16 + 0.05 * level)
+                        : Color(white: 0.96 - 0.04 * level)
                 case .destructive where isHovered:
                     return ThemePalette.darken(ThemePalette.solidDestructive, by: 0.08 * (level - 1))
                 case .neutral, .destructive:
@@ -1609,8 +1615,11 @@ private struct DeleteConfirmationOverlay: View {
                         .foregroundStyle(palette.textPrimary)
                         .padding(.horizontal, 14)
                         .frame(height: 28)
-                        .background(palette.solid ? palette.solidControl(isCancelHovered ? 1 : 0) : (isCancelHovered ? palette.controlHoverBackground : palette.placeholderBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .shadow(color: palette.solid ? palette.controlShadow : .clear, radius: ThemePalette.controlShadowRadius, y: 1)
+                        .background {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(palette.solid ? palette.solidControl(isCancelHovered ? 1 : 0) : (isCancelHovered ? palette.controlHoverBackground : palette.placeholderBackground))
+                                .shadow(color: palette.solid ? palette.controlShadow : .clear, radius: ThemePalette.controlShadowRadius, y: 1)
+                        }
                 }
                 .buttonStyle(.plain)
                 .onHover { isCancelHovered = $0 }
@@ -1621,13 +1630,15 @@ private struct DeleteConfirmationOverlay: View {
                         .foregroundStyle(palette.solid ? Color.white : Color.red.opacity(0.9))
                         .padding(.horizontal, 14)
                         .frame(height: 28)
-                        .background(
-                            palette.solid
-                                ? ThemePalette.darken(ThemePalette.solidDestructive, by: isConfirmHovered ? 0.08 : 0)
-                                : Color.red.opacity((palette.isDark ? 0.2 : 0.12) + (isConfirmHovered ? 0.08 : 0)),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        )
-                        .shadow(color: palette.solid ? palette.controlShadow : .clear, radius: ThemePalette.controlShadowRadius, y: 1)
+                        .background {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(
+                                    palette.solid
+                                        ? ThemePalette.darken(ThemePalette.solidDestructive, by: isConfirmHovered ? 0.08 : 0)
+                                        : Color.red.opacity((palette.isDark ? 0.2 : 0.12) + (isConfirmHovered ? 0.08 : 0))
+                                )
+                                .shadow(color: palette.solid ? palette.controlShadow : .clear, radius: ThemePalette.controlShadowRadius, y: 1)
+                        }
                 }
                 .buttonStyle(.plain)
                 .onHover { isConfirmHovered = $0 }
