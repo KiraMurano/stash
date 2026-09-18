@@ -14,7 +14,7 @@ struct JournalView: View {
         static let sidebarMinWidth: CGFloat = 240
         static let sidebarMaxWidth: CGFloat = 440
         static let detailMinWidth: CGFloat = 300
-        static let rowHeight: CGFloat = 50
+        static let rowHeight: CGFloat = 58
         /// Transparent strip on the right and bottom of the window for the resize grip.
         static let gripMargin: CGFloat = 4
     }
