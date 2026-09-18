@@ -1586,11 +1586,13 @@ private struct DeleteConfirmationOverlay: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
+                // Plate spans the whole text block (title + message); the text sets the height.
                 Image(systemName: "trash")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Color.red.opacity(0.85))
-                    .frame(width: 32, height: 32)
-                    .background(Color.red.opacity(palette.isDark ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(width: 52)
+                    .frame(maxHeight: .infinity)
+                    .background(Color.red.opacity(palette.isDark ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -1602,17 +1604,18 @@ private struct DeleteConfirmationOverlay: View {
                         .foregroundStyle(palette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
-                Spacer()
-
                 Button(action: onCancel) {
                     Text(l10n("Cancel", "Отмена"))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(palette.textPrimary)
-                        .padding(.horizontal, 14)
-                        .frame(height: 28)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 30)
+                        .contentShape(Rectangle())
                         .background {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .fill(palette.solid ? palette.solidControl(isCancelHovered ? 1 : 0) : (isCancelHovered ? palette.controlHoverBackground : palette.placeholderBackground))
@@ -1626,8 +1629,9 @@ private struct DeleteConfirmationOverlay: View {
                     Text(actionTitle)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(palette.solid ? Color.white : Color.red.opacity(0.9))
-                        .padding(.horizontal, 14)
-                        .frame(height: 28)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 30)
+                        .contentShape(Rectangle())
                         .background {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .fill(
