@@ -32,12 +32,12 @@ struct JournalView: View {
 
         var id: Self { self }
 
-        var title: String {
+        func title(_ l10n: L10n) -> String {
             switch self {
-            case .all: "Все"
-            case .text: "Текст"
-            case .media: "Медиа"
-            case .files: "Файлы"
+            case .all: l10n("All", "Все")
+            case .text: l10n("Text", "Текст")
+            case .media: l10n("Media", "Медиа")
+            case .files: l10n("Files", "Файлы")
             }
         }
     }
@@ -83,6 +83,10 @@ struct JournalView: View {
         ThemePalette(colorScheme: colorScheme)
     }
 
+    private var l10n: L10n {
+        settings.l10n
+    }
+
     var body: some View {
         ZStack {
             NativeGlassEffectView(style: .regular, cornerRadius: Layout.cornerRadius)
@@ -105,9 +109,11 @@ struct JournalView: View {
                     GlassBackdrop(cornerRadius: Layout.cornerRadius, palette: palette)
 
                     DeleteConfirmationOverlay(
-                        title: isClearConfirmationShown ? "Clear history?" : "Delete clip?",
-                        message: isClearConfirmationShown ? "Unpinned clips will be removed. Pinned clips stay saved." : "This clip will be removed.",
-                        actionTitle: isClearConfirmationShown ? "Clear" : "Delete",
+                        title: isClearConfirmationShown ? l10n("Clear history?", "Очистить историю?") : l10n("Delete clip?", "Удалить клип?"),
+                        message: isClearConfirmationShown
+                            ? l10n("Unpinned clips will be removed. Pinned clips stay saved.", "Незакреплённые клипы будут удалены. Закреплённые останутся.")
+                            : l10n("This clip will be removed.", "Этот клип будет удалён."),
+                        actionTitle: isClearConfirmationShown ? l10n("Clear", "Очистить") : l10n("Delete", "Удалить"),
                         onCancel: {
                             isClearConfirmationShown = false
                             entryPendingDeletion = nil
@@ -153,6 +159,7 @@ struct JournalView: View {
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .preferredColorScheme(settings.themeMode.colorScheme)
+        .environment(\.l10n, l10n)
         .onExitCommand(perform: onClose)
     }
 
@@ -182,7 +189,7 @@ struct JournalView: View {
                     }
                 )
                 .onHover { isHeaderTrashHovered = $0 }
-                .help("Clear history")
+                .help(l10n("Clear history", "Очистить историю"))
 
                 HeaderIconButton(
                     systemName: "xmark",
@@ -191,7 +198,7 @@ struct JournalView: View {
                     action: onClose
                 )
                 .onHover { isHeaderCloseHovered = $0 }
-                .help("Close")
+                .help(l10n("Close", "Закрыть"))
             }
             .padding(.horizontal, Layout.contentInset)
             .padding(.top, Layout.headerTopPadding)
@@ -246,7 +253,7 @@ struct JournalView: View {
         HStack(spacing: 6) {
             ForEach(EntryFilter.allCases) { filter in
                 FilterTabButton(
-                    title: filter.title,
+                    title: filter.title(l10n),
                     isSelected: selectedFilter == filter,
                     isExpanded: expanded,
                     palette: palette
@@ -331,7 +338,7 @@ struct JournalView: View {
             },
             onTogglePin: {
                 if !store.togglePin(entry) {
-                    showToast("Максимум 10 закрепов")
+                    showToast(l10n("Up to 10 pinned clips", "Максимум 10 закрепов"))
                 }
             },
             onDelete: {
@@ -354,18 +361,18 @@ struct JournalView: View {
 
     private var emptyStateMessage: String {
         if store.entries.isEmpty {
-            return "No saved clips"
+            return l10n("No saved clips", "Нет сохранённых клипов")
         }
 
         switch selectedFilter {
         case .all:
-            return "No saved clips"
+            return l10n("No saved clips", "Нет сохранённых клипов")
         case .text:
-            return "Нет текста"
+            return l10n("No text", "Нет текста")
         case .media:
-            return "Нет медиа"
+            return l10n("No media", "Нет медиа")
         case .files:
-            return "Нет файлов"
+            return l10n("No files", "Нет файлов")
         }
     }
 
@@ -377,7 +384,7 @@ struct JournalView: View {
 
     private func showSelectionToast() {
         guard !settings.closeAfterSelection else { return }
-        showToast(settings.pasteOnSelection ? "Pasted" : "Copied")
+        showToast(settings.pasteOnSelection ? l10n("Pasted", "Вставлено") : l10n("Copied", "Скопировано"))
     }
 
     private func showToast(_ message: String) {
@@ -633,6 +640,7 @@ private struct ClipboardEntryRow: View {
     @State private var isZoomHovered = false
     @State private var isExpanded = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.l10n) private var l10n
 
     private var palette: ThemePalette {
         ThemePalette(colorScheme: colorScheme)
@@ -656,7 +664,7 @@ private struct ClipboardEntryRow: View {
                     .frame(width: 22, height: 22)
                     .padding(.top, 8)
                     .padding(.leading, 8)
-                    .help("Current clipboard")
+                    .help(l10n("Current clipboard", "Сейчас в буфере"))
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -689,7 +697,7 @@ private struct ClipboardEntryRow: View {
                 .onHover { isExpandHovered = $0 }
                 .padding(.trailing, 6)
                 .padding(.bottom, 4)
-                .help(isExpanded ? "Collapse clip" : "Expand clip")
+                .help(isExpanded ? l10n("Collapse clip", "Свернуть") : l10n("Expand clip", "Развернуть"))
             }
         }
         .contentShape(Rectangle())
@@ -746,12 +754,12 @@ private struct ClipboardEntryRow: View {
                 .frame(width: 36, height: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.title)
+                    Text(entry.title(l10n))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(palette.textPrimary)
                         .lineLimit(2)
 
-                    Text(entry.subtitle)
+                    Text(entry.subtitle(l10n))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(palette.textTertiary)
                 }
@@ -768,7 +776,7 @@ private struct ClipboardEntryRow: View {
                 iconButton(
                     systemName: "pencil",
                     isHovered: isEditHovered,
-                    help: "Edit text",
+                    help: l10n("Edit text", "Редактировать"),
                     action: onEditText
                 )
                 .opacity(isHovered ? 1 : 0)
@@ -780,7 +788,7 @@ private struct ClipboardEntryRow: View {
                 iconButton(
                     systemName: "arrow.up.left.and.arrow.down.right",
                     isHovered: isZoomHovered,
-                    help: "Open preview",
+                    help: l10n("Open preview", "Открыть превью"),
                     action: onPreviewImage
                 )
                 .opacity(isHovered ? 1 : 0)
@@ -792,7 +800,7 @@ private struct ClipboardEntryRow: View {
                 systemName: "trash",
                 isHovered: isDeleteHovered,
                 tint: isDeleteHovered ? Color.red.opacity(0.86) : nil,
-                help: "Delete clip",
+                help: l10n("Delete clip", "Удалить"),
                 action: onDelete
             )
             .opacity(isHovered ? 1 : 0)
@@ -803,7 +811,9 @@ private struct ClipboardEntryRow: View {
                 systemName: entry.isPinned ? "pin.fill" : "pin",
                 isHovered: isPinHovered,
                 tint: entry.isPinned ? palette.iconOpacity(0.82) : nil,
-                help: entry.isPinned ? "Unpin clip" : (isPinLimitReached ? "Pin limit reached" : "Pin clip"),
+                help: entry.isPinned
+                    ? l10n("Unpin clip", "Открепить")
+                    : (isPinLimitReached ? l10n("Pin limit reached", "Достигнут лимит закрепов") : l10n("Pin clip", "Закрепить")),
                 action: onTogglePin
             )
             .opacity(isHovered || entry.isPinned ? 1 : 0)
@@ -865,7 +875,7 @@ private struct ClipboardEntryRow: View {
 
     private func previewText(_ text: String) -> String {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? "Empty text" : value
+        return value.isEmpty ? l10n("Empty text", "Пустой текст") : value
     }
 }
 
@@ -962,6 +972,7 @@ private struct DeleteConfirmationOverlay: View {
     @State private var isConfirmHovered = false
     @State private var isCancelHovered = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.l10n) private var l10n
 
     private var palette: ThemePalette {
         ThemePalette(colorScheme: colorScheme)
@@ -981,7 +992,7 @@ private struct DeleteConfirmationOverlay: View {
 
             HStack(spacing: 8) {
                 Button(action: onCancel) {
-                    Text("Cancel")
+                    Text(l10n("Cancel", "Отмена"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
                         .frame(maxWidth: .infinity)

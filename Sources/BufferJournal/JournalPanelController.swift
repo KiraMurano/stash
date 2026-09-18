@@ -148,7 +148,7 @@ final class JournalPanelController {
         }
 
         let view = ClipboardTextEditorView(
-            title: entry.title,
+            title: entry.title(settings.l10n),
             initialText: text,
             settings: settings,
             onCancel: { [weak self] in
@@ -169,7 +169,7 @@ final class JournalPanelController {
             backing: .buffered,
             defer: false
         )
-        window.title = "Edit Clip"
+        window.title = settings.l10n("Edit Clip", "Редактирование")
         window.contentView = hostingView
         window.minSize = NSSize(width: 420, height: 260)
         window.isReleasedWhenClosed = false
@@ -208,7 +208,7 @@ final class JournalPanelController {
             backing: .buffered,
             defer: false
         )
-        window.title = entry.title
+        window.title = entry.title(settings.l10n)
         window.titlebarAppearsTransparent = true
         window.contentView = NSHostingView(rootView: view)
         window.minSize = NSSize(width: 320, height: 240)

@@ -29,7 +29,7 @@ struct ImagePreviewView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "clipboard")
                         .font(.system(size: 13, weight: .semibold))
-                    Text(settings.pasteOnSelection ? "Вставить" : "Скопировать")
+                    Text(settings.pasteOnSelection ? settings.l10n("Paste", "Вставить") : settings.l10n("Copy", "Скопировать"))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(palette.textPrimary)
