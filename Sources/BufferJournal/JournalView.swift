@@ -14,7 +14,7 @@ struct JournalView: View {
         static let sidebarMinWidth: CGFloat = 240
         static let sidebarMaxWidth: CGFloat = 440
         static let detailMinWidth: CGFloat = 300
-        static let rowHeight: CGFloat = 60
+        static let rowHeight: CGFloat = 50
     }
 
     private enum EntryFilter: CaseIterable, Identifiable {
@@ -51,6 +51,9 @@ struct JournalView: View {
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
     @State private var isListScrolled = false
+    @State private var query = ""
+    @State private var keyboardScrollTarget: ClipboardEntry.ID?
+    @FocusState private var isSearchFocused: Bool
     @State private var sidebarDragStartWidth: CGFloat?
     @AppStorage("SidebarWidth") private var storedSidebarWidth: Double = Double(Layout.sidebarWidth)
 
@@ -63,17 +66,26 @@ struct JournalView: View {
     }
 
     private var filteredEntries: [ClipboardEntry] {
-        switch selectedFilter {
+        let byType: [ClipboardEntry] = switch selectedFilter {
         case .all: store.entries
         case .text: store.entries.filter(\.isText)
         case .media: store.entries.filter(\.isImage)
         case .files: store.entries.filter(\.isFile)
         }
+
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return byType }
+        return byType.filter { matches($0, needle) }
+    }
+
+    /// Entries in the order the list shows them (pinned first, then by day), for arrow navigation.
+    private var orderedEntries: [ClipboardEntry] {
+        sections.flatMap(\.entries)
     }
 
     /// The explicit selection when it is still visible, otherwise the first clip of the filter.
     private var selectedEntry: ClipboardEntry? {
-        filteredEntries.first { $0.id == selectedID } ?? filteredEntries.first
+        filteredEntries.first { $0.id == selectedID } ?? orderedEntries.first
     }
 
     var body: some View {
@@ -159,7 +171,12 @@ struct JournalView: View {
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, l10n)
-        .onExitCommand(perform: onClose)
+        .background(
+            KeyboardMonitor(
+                onKey: handleKey,
+                onBecomeKey: { isSearchFocused = true }
+            )
+        )
     }
 
     // MARK: Sidebar
@@ -196,6 +213,10 @@ struct JournalView: View {
             .padding(.bottom, 10)
             .background(WindowDragHandle())
 
+            searchField
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
+
             TypeSegmentedControl(
                 titles: EntryFilter.allCases.map { $0.title(l10n) },
                 selectedIndex: EntryFilter.allCases.firstIndex(of: selectedFilter) ?? 0,
@@ -231,7 +252,42 @@ struct JournalView: View {
         }
     }
 
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(palette.textTertiary)
+
+            TextField(l10n("Search", "Поиск"), text: $query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .foregroundStyle(palette.textPrimary)
+                .focused($isSearchFocused)
+
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .help(l10n("Clear search", "Очистить поиск"))
+            }
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 30)
+        .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(isSearchFocused ? ThemePalette.orange.opacity(0.55) : .clear, lineWidth: 1)
+        )
+        .animation(.easeOut(duration: 0.12), value: isSearchFocused)
+    }
+
     private var entryList: some View {
+        ScrollViewReader { proxy in
         List {
             // Headers are plain rows: List section headers on macOS are sticky and draw their own bar.
             ForEach(sections, id: \.title) { section in
@@ -248,6 +304,7 @@ struct JournalView: View {
 
                 ForEach(section.entries) { entry in
                     row(entry)
+                        .id(entry.id)
                 }
                 .onMove(perform: section.isPinned ? { movePinned(in: section.entries, from: $0, to: $1) } : nil)
             }
@@ -256,6 +313,12 @@ struct JournalView: View {
         .scrollContentBackground(.hidden)
         .background(ScrollOffsetObserver { isListScrolled = $0 })
         .environment(\.defaultMinListRowHeight, 20)
+        .onChange(of: keyboardScrollTarget) { target in
+            guard let target else { return }
+            proxy.scrollTo(target)
+            keyboardScrollTarget = nil
+        }
+        }
     }
 
     private func row(_ entry: ClipboardEntry) -> some View {
@@ -289,9 +352,11 @@ struct JournalView: View {
         if let entry = selectedEntry {
             VStack(spacing: 0) {
                 HStack(spacing: 6) {
-                    Text(kindTitle(entry))
+                    Text(entry.isFile ? entry.title(l10n) : kindTitle(entry))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(palette.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
 
                     Text("· \(timeTitle(entry.createdAt))")
                         .font(.system(size: 11))
@@ -362,8 +427,8 @@ struct JournalView: View {
                     .foregroundStyle(palette.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
             }
-            .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
 
         case .image:
             if let image = store.image(for: entry) {
@@ -572,10 +637,14 @@ struct JournalView: View {
         if calendar.isDateInYesterday(date) {
             return l10n("yesterday", "вчера") + ", " + DateFormatter.entryTime.string(from: date)
         }
-        return date.formatted(.dateTime.day().month(.abbreviated))
+        let locale = Locale(identifier: settings.language.resolved == .russian ? "ru_RU" : "en_US")
+        return date.formatted(.dateTime.day().month(.abbreviated).locale(locale))
     }
 
     private var emptyStateMessage: String {
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+            return l10n("Nothing found", "Ничего не найдено")
+        }
         if store.entries.isEmpty {
             return l10n("No saved clips", "Нет сохранённых клипов")
         }
@@ -585,6 +654,52 @@ struct JournalView: View {
         case .text: return l10n("No text", "Нет текста")
         case .media: return l10n("No images", "Нет картинок")
         case .files: return l10n("No files", "Нет файлов")
+        }
+    }
+
+    private func matches(_ entry: ClipboardEntry, _ needle: String) -> Bool {
+        let haystack: String = switch entry.payload {
+        case let .text(text): text
+        case .image: kindTitle(entry) + " " + (pixelSize(of: entry) ?? "")
+        case .file: entry.title(l10n)
+        }
+        return haystack.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
+    /// Arrow keys move the selection, Return pastes it, Escape clears the search or closes.
+    private func handleKey(_ event: NSEvent) -> Bool {
+        guard !isClearConfirmationShown, entryPendingDeletion == nil else {
+            if event.keyCode == 53 {
+                isClearConfirmationShown = false
+                entryPendingDeletion = nil
+                return true
+            }
+            return false
+        }
+
+        switch event.keyCode {
+        case 125, 126:
+            let entries = orderedEntries
+            guard !entries.isEmpty else { return true }
+            let current = entries.firstIndex { $0.id == selectedEntry?.id } ?? 0
+            let next = event.keyCode == 125 ? min(current + 1, entries.count - 1) : max(current - 1, 0)
+            selectedID = entries[next].id
+            keyboardScrollTarget = entries[next].id
+            return true
+        case 36, 76:
+            if let entry = selectedEntry {
+                select(entry)
+            }
+            return true
+        case 53:
+            if query.isEmpty {
+                onClose()
+            } else {
+                query = ""
+            }
+            return true
+        default:
+            return false
         }
     }
 
@@ -631,13 +746,13 @@ private struct EntryRow: View {
     var body: some View {
         HStack(spacing: 10) {
             thumb
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
                 .background(palette.placeholderBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .font(.system(size: 13, weight: isSelected || !entry.isText ? .semibold : .regular))
                     .foregroundStyle(isSelected ? palette.accentText : palette.textPrimary)
                     .lineLimit(entry.isImage ? 1 : 2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -675,7 +790,7 @@ private struct EntryRow: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .frame(minHeight: JournalView.Layout.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -686,7 +801,7 @@ private struct EntryRow: View {
                 Capsule()
                     .fill(ThemePalette.orange)
                     .frame(width: 3)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 10)
                     .offset(x: -6)
             }
         }
@@ -716,7 +831,7 @@ private struct EntryRow: View {
             }
         case let .text(text):
             Text(String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(palette.textSecondary)
         }
     }
@@ -748,6 +863,86 @@ private struct SidebarResizeHandle: View {
                     .onChanged { onChanged($0.translation.width) }
                     .onEnded { _ in onEnded() }
             )
+    }
+}
+
+/// Local key-down monitor for the panel's window, plus a callback when that window becomes key.
+private struct KeyboardMonitor: NSViewRepresentable {
+    let onKey: (NSEvent) -> Bool
+    let onBecomeKey: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onKey: onKey, onBecomeKey: onBecomeKey)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        context.coordinator.view = view
+        context.coordinator.start()
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onKey = onKey
+        context.coordinator.onBecomeKey = onBecomeKey
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.stop()
+    }
+
+    @MainActor
+    final class Coordinator {
+        var onKey: (NSEvent) -> Bool
+        var onBecomeKey: () -> Void
+        weak var view: NSView?
+        private var monitor: Any?
+        private var keyObserver: NSObjectProtocol?
+
+        init(onKey: @escaping (NSEvent) -> Bool, onBecomeKey: @escaping () -> Void) {
+            self.onKey = onKey
+            self.onBecomeKey = onBecomeKey
+        }
+
+        func start() {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                nonisolated(unsafe) let event = event
+                let handled = MainActor.assumeIsolated { () -> Bool in
+                    guard
+                        let self,
+                        let window = self.view?.window,
+                        event.window === window,
+                        event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+                    else {
+                        return false
+                    }
+                    return self.onKey(event)
+                }
+                return handled ? nil : event
+            }
+            keyObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                let window = ObjectIdentifier(notification.object as AnyObject)
+                MainActor.assumeIsolated {
+                    guard let self, let own = self.view?.window, ObjectIdentifier(own) == window else { return }
+                    self.onBecomeKey()
+                }
+            }
+        }
+
+        func stop() {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+            if let keyObserver {
+                NotificationCenter.default.removeObserver(keyObserver)
+            }
+            monitor = nil
+            keyObserver = nil
+        }
     }
 }
 
@@ -1184,7 +1379,7 @@ private struct ScrollBarAppearanceSetter: NSViewRepresentable {
 
         let scrollerAppearanceName: NSAppearance.Name = colorScheme == .dark ? .darkAqua : .aqua
         let scrollerAppearance = NSAppearance(named: scrollerAppearanceName)
-        let knobStyle: NSScroller.KnobStyle = colorScheme == .dark ? .dark : .light
+        let knobStyle: NSScroller.KnobStyle = colorScheme == .dark ? .light : .dark
         scrollView.scrollerStyle = .overlay
         scrollView.verticalScroller?.appearance = scrollerAppearance
         scrollView.horizontalScroller?.appearance = scrollerAppearance
