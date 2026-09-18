@@ -1,6 +1,6 @@
-# Buffer Journal
+# Stash
 
-Minimal macOS clipboard history app inspired by Windows clipboard journal.
+Stash is a minimal macOS clipboard history app inspired by Windows clipboard journal.
 
 ## Features
 
@@ -20,9 +20,11 @@ Scripts/build_app.sh
 The app bundle is created at:
 
 ```text
-.build/Buffer Journal.app
+.build/Stash.app
 ```
 
 ## Run
 
 Open the generated app bundle. Copy text or an image, press `Option+V`, then click a card to copy it back into the system pasteboard. If `Paste on Selection` is enabled in the menu bar menu, Buffer Journal also sends `Cmd+V` without refocusing the target app.
+
+The app was previously called Buffer Journal. The bundle identifier (`local.buffer-journal`) and the storage folder (`~/Library/Application Support/BufferJournal`) keep their old names so settings and history carry over.
