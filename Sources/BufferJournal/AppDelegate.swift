@@ -36,7 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Stash")
+        let icon = Bundle.main.image(forResource: "StatusIcon")
+            ?? NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Stash")
+        icon?.isTemplate = true
+        icon?.accessibilityDescription = "Stash"
+        statusItem.button?.image = icon
         rebuildMenu()
     }
 
