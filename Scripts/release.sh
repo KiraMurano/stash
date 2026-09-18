@@ -22,15 +22,13 @@ VERSION="$MAJOR.$MINOR"
 TAG="v$VERSION"
 
 Scripts/build_app.sh "$VERSION"
-ZIP="$ROOT_DIR/.build/Stash-$VERSION.zip"
-rm -f "$ZIP"
-ditto -c -k --keepParent "$ROOT_DIR/.build/Stash.app" "$ZIP"
+DMG="$(Scripts/make_dmg.sh "$VERSION")"
 
 git tag -a "$TAG" -m "Stash $VERSION"
 git push origin "$TAG"
 
 if [[ -n "${1:-}" ]]; then
-    gh release create "$TAG" "$ZIP" --title "Stash $VERSION" --notes-file "$1"
+    gh release create "$TAG" "$DMG" --title "Stash $VERSION" --notes-file "$1"
 else
-    gh release create "$TAG" "$ZIP" --title "Stash $VERSION" --generate-notes
+    gh release create "$TAG" "$DMG" --title "Stash $VERSION" --generate-notes
 fi
