@@ -52,7 +52,7 @@ struct JournalView: View {
     @State private var toastToken = UUID()
     @State private var isListScrolled = false
     @State private var query = ""
-    @State private var keyboardScrollTarget: ClipboardEntry.ID?
+    @State private var keyboardScrollTarget: KeyboardScrollTarget?
     @FocusState private var isSearchFocused: Bool
     @State private var isSearchEditing = false
     @State private var sidebarDragStartWidth: CGFloat?
@@ -296,6 +296,8 @@ struct JournalView: View {
         .animation(.easeOut(duration: 0.12), value: isSearchEditing)
     }
 
+    private static let listBottomID = "list-bottom"
+
     private var entryList: some View {
         ScrollViewReader { proxy in
         List {
@@ -306,7 +308,8 @@ struct JournalView: View {
                     .foregroundStyle(palette.textTertiary)
                     .padding(.leading, 8)
                     .padding(.top, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .leading)
+                    .id(section.title)
                     .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
@@ -322,6 +325,7 @@ struct JournalView: View {
             // Bottom inset so the last row does not touch the panel edge.
             Color.clear
                 .frame(height: 8)
+                .id(Self.listBottomID)
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -335,7 +339,11 @@ struct JournalView: View {
         .animation(.easeOut(duration: 0.28), value: store.entries.map(\.id))
         .onChange(of: keyboardScrollTarget) { target in
             guard let target else { return }
-            proxy.scrollTo(target)
+            switch target {
+            case let .entry(id): proxy.scrollTo(id)
+            case .top: if let first = sections.first { proxy.scrollTo(first.title, anchor: .top) }
+            case .bottom: proxy.scrollTo(Self.listBottomID, anchor: .bottom)
+            }
             keyboardScrollTarget = nil
         }
         }
@@ -344,7 +352,7 @@ struct JournalView: View {
     private func row(_ entry: ClipboardEntry) -> some View {
         EntryRow(
             entry: entry,
-            thumbnail: store.image(for: entry),
+            thumbnail: store.thumbnail(for: entry),
             fileIcon: store.fileIcon(for: entry),
             title: rowTitle(entry),
             subtitle: rowSubtitle(entry),
@@ -354,7 +362,7 @@ struct JournalView: View {
             quickPasteTitle: settings.pasteOnSelection ? l10n("Paste", "Вставить") : l10n("Copy", "Скопировать"),
             onQuickPaste: { select(entry) }
         )
-        .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+        .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
         .contentShape(Rectangle())
@@ -547,6 +555,12 @@ struct JournalView: View {
 
     // MARK: Data
 
+    private enum KeyboardScrollTarget: Equatable {
+        case entry(ClipboardEntry.ID)
+        case top
+        case bottom
+    }
+
     private struct EntrySection {
         let title: String
         let entries: [ClipboardEntry]
@@ -704,7 +718,8 @@ struct JournalView: View {
             let current = entries.firstIndex { $0.id == selectedEntry?.id } ?? 0
             let next = event.keyCode == 125 ? min(current + 1, entries.count - 1) : max(current - 1, 0)
             selectedID = entries[next].id
-            keyboardScrollTarget = entries[next].id
+            // At the ends scroll to the header / bottom inset so the row keeps its margin.
+            keyboardScrollTarget = next == 0 ? .top : (next == entries.count - 1 ? .bottom : .entry(entries[next].id))
             return true
         case 36, 76:
             if let entry = selectedEntry {
@@ -795,23 +810,26 @@ private struct EntryRow: View {
                 if entry.isPinned {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(palette.accentText)
+                        .foregroundStyle(palette.textTertiary)
                 }
                 if isCurrent {
                     Image(systemName: "doc.on.clipboard")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(palette.textTertiary)
+                        .foregroundStyle(palette.accentText)
                 }
             }
             .opacity(isHovered ? 0 : 1)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(minHeight: JournalView.Layout.rowHeight)
+        // Fixed height: variable rows made the list re-measure while scrolling and jump.
+        .frame(height: JournalView.Layout.rowHeight - 2)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isSelected ? palette.accentSoft : (isHovered ? palette.controlHoverBackground : .clear))
         }
+        // The 1 pt gap between highlights stays visual only: the hover area covers it.
+        .padding(.vertical, 1)
+        .contentShape(Rectangle())
         .overlay(alignment: .leading) {
             if isSelected {
                 Capsule()
@@ -844,7 +862,7 @@ private struct EntryRow: View {
 
     private var titleText: some View {
         Text(title)
-            .font(.system(size: 13, weight: isSelected || !entry.isText ? .semibold : .regular))
+            .font(.system(size: 13, weight: entry.isText ? .regular : .semibold))
             .foregroundStyle(isSelected ? palette.accentText : palette.textPrimary)
     }
 
