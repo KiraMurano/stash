@@ -185,22 +185,24 @@ struct JournalView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: 2) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 30, height: 30)
+                    .frame(width: Logo.iconFrame, height: Logo.iconFrame)
 
                 Text("Stash")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: Logo.fontSize, weight: .bold))
                     .foregroundStyle(palette.textPrimary)
+                    // Center on the capital letters, not on the line box, so "S" lines up with the icon.
+                    .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - Logo.capHeight / 2 }
+
+                Spacer()
 
                 Text("\(store.entries.count)/20")
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(palette.textTertiary)
-
-                Spacer()
 
                 GlassIconButton(
                     systemName: "trash",
@@ -297,6 +299,16 @@ struct JournalView: View {
     }
 
     private static let listBottomID = "list-bottom"
+
+    /// The app icon draws its tile on 80.5% of the frame (macOS icon grid); the title's font
+    /// size is solved so the capital "S" is exactly as tall as that visible tile.
+    private enum Logo {
+        static let iconFrame: CGFloat = 28
+        static let visibleIconHeight = iconFrame * 824 / 1024
+        static let capHeightRatio = NSFont.systemFont(ofSize: 100, weight: .bold).capHeight / 100
+        static let fontSize = (visibleIconHeight / capHeightRatio).rounded()
+        static let capHeight = fontSize * capHeightRatio
+    }
 
     private var entryList: some View {
         ScrollViewReader { proxy in
@@ -785,7 +797,7 @@ private struct EntryRow: View {
                 .background(palette.placeholderBackground)
                 .background(palette.sidebarTint)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: palette.shadow(0.22), radius: 1.5, y: 1)
+                .shadow(color: palette.controlShadow, radius: ThemePalette.controlShadowRadius, y: 1)
 
             Group {
                 if entry.isText {
@@ -848,7 +860,7 @@ private struct EntryRow: View {
                         .foregroundStyle(.white)
                         .frame(width: 26, height: 26)
                         .background(ThemePalette.orange, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .shadow(color: palette.shadow(0.18), radius: 4, y: 1)
+                        .shadow(color: palette.controlShadow, radius: ThemePalette.controlShadowRadius, y: 1)
                 }
                 .buttonStyle(.plain)
                 .help(quickPasteTitle)
@@ -1342,6 +1354,13 @@ struct ThemePalette {
     /// Soft orange behind the selected row.
     var accentSoft: Color {
         Self.orange.opacity(isDark ? 0.22 : 0.13)
+    }
+
+    /// One tight shadow for small raised things in rows: thumbnails and the quick-paste button.
+    static let controlShadowRadius: CGFloat = 1
+
+    var controlShadow: Color {
+        shadow(0.28)
     }
 
     /// Dim layer behind confirmation dialogs.
