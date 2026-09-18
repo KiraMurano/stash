@@ -16,6 +16,8 @@ final class ClipboardHistoryStore: ObservableObject {
     private let filesURL: URL
     private let historyURL: URL
     private var imageCache: [UUID: NSImage] = [:]
+    private var thumbnailCache: [UUID: NSImage] = [:]
+    private var fileIconCache: [UUID: NSImage] = [:]
     private var pruneTimer: Timer?
 
     init() {
@@ -116,9 +118,66 @@ final class ClipboardHistoryStore: ObservableObject {
         return image
     }
 
+    /// Small aspect-filled copy for list rows, rendered once. Drawing the full image into a
+    /// 36 pt thumbnail on every scroll frame made the list stutter.
+    func thumbnail(for entry: ClipboardEntry, side: CGFloat = 72) -> NSImage? {
+        if let cached = thumbnailCache[entry.id] {
+            return cached
+        }
+
+        guard
+            let image = image(for: entry),
+            image.size.width > 0, image.size.height > 0,
+            let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: Int(side),
+                pixelsHigh: Int(side),
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            )
+        else {
+            return nil
+        }
+
+        let scale = max(side / image.size.width, side / image.size.height)
+        let drawSize = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(
+            in: NSRect(x: (side - drawSize.width) / 2, y: (side - drawSize.height) / 2, width: drawSize.width, height: drawSize.height),
+            from: .zero,
+            operation: .copy,
+            fraction: 1
+        )
+        NSGraphicsContext.restoreGraphicsState()
+
+        let thumbnail = NSImage(size: NSSize(width: side / 2, height: side / 2))
+        thumbnail.addRepresentation(rep)
+        thumbnailCache[entry.id] = thumbnail
+        return thumbnail
+    }
+
     func fileIcon(for entry: ClipboardEntry) -> NSImage? {
+        if let cached = fileIconCache[entry.id] {
+            return cached
+        }
+
         guard let url = fileURL(for: entry) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        fileIconCache[entry.id] = icon
+        return icon
+    }
+
+    private func forgetCachedImages(for id: UUID) {
+        imageCache[id] = nil
+        thumbnailCache[id] = nil
+        fileIconCache[id] = nil
     }
 
     func clear() {
@@ -133,7 +192,7 @@ final class ClipboardHistoryStore: ObservableObject {
             self.currentClipboardFingerprint = nil
         }
         for entry in removedEntries {
-            imageCache[entry.id] = nil
+            forgetCachedImages(for: entry.id)
         }
         removeStoredFiles(for: removedEntries)
         save()
@@ -145,7 +204,7 @@ final class ClipboardHistoryStore: ObservableObject {
         if currentClipboardFingerprint == entry.fingerprint {
             currentClipboardFingerprint = nil
         }
-        imageCache[entry.id] = nil
+        forgetCachedImages(for: entry.id)
         removeStoredFiles(for: [entry])
         save()
         scheduleNextPrune()
@@ -340,7 +399,7 @@ final class ClipboardHistoryStore: ObservableObject {
             self.currentClipboardFingerprint = nil
         }
         for entry in removedEntries {
-            imageCache[entry.id] = nil
+            forgetCachedImages(for: entry.id)
         }
         removeStoredFiles(for: removedEntries)
     }
