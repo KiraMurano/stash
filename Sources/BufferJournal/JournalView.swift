@@ -115,7 +115,9 @@ struct JournalView: View {
                                 },
                                 onEnded: { sidebarDragStartWidth = nil }
                             )
-                            .offset(x: 4)
+                            // Hit area spans 4 pt left of the divider to 10 pt right of it, so the
+                            // border and the grab mark light up and drag as one.
+                            .offset(x: 10)
                         }
                         .zIndex(1)
 
@@ -930,15 +932,15 @@ private struct SidebarResizeHandle: View {
 
     var body: some View {
         Color.clear
-            .frame(width: 8)
+            .frame(width: 14)
             .frame(maxHeight: .infinity)
             .overlay {
                 // Grab mark on the divider; turns orange while hovered or dragged.
                 Capsule()
                     .fill(isHovered || isDragging ? ThemePalette.orange : palette.iconOpacity(0.22))
                     .frame(width: 4, height: 32)
-                    // Keep a gap from the 1 pt divider line instead of sitting on it.
-                    .offset(x: -9)
+                    // Just right of the 1 pt divider line, with a small gap; floats over the preview.
+                    .offset(x: 2)
                     .animation(.easeOut(duration: 0.12), value: isHovered || isDragging)
             }
             .contentShape(Rectangle())
