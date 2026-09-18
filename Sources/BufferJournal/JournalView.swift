@@ -1479,6 +1479,13 @@ struct TranslucentButtonStyle: ButtonStyle {
             configuration.label
                 .foregroundStyle(foreground)
                 .background(fill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                // Opaque buttons in the Stash themes need an edge to read on opaque surfaces
+                // (an orange button on the orange selected row, grey on grey hover).
+                .shadow(
+                    color: palette.solid ? palette.controlShadow : .clear,
+                    radius: ThemePalette.controlShadowRadius,
+                    y: 1
+                )
                 .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .onHover { isHovered = $0 }
                 .animation(.easeOut(duration: 0.12), value: isHovered)
@@ -1593,6 +1600,7 @@ private struct DeleteConfirmationOverlay: View {
                         .padding(.horizontal, 14)
                         .frame(height: 28)
                         .background(palette.solid ? palette.solidControl(isCancelHovered ? 1 : 0) : (isCancelHovered ? palette.controlHoverBackground : palette.placeholderBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .shadow(color: palette.solid ? palette.controlShadow : .clear, radius: ThemePalette.controlShadowRadius, y: 1)
                 }
                 .buttonStyle(.plain)
                 .onHover { isCancelHovered = $0 }
@@ -1609,6 +1617,7 @@ private struct DeleteConfirmationOverlay: View {
                                 : Color.red.opacity((palette.isDark ? 0.2 : 0.12) + (isConfirmHovered ? 0.08 : 0)),
                             in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                         )
+                        .shadow(color: palette.solid ? palette.controlShadow : .clear, radius: ThemePalette.controlShadowRadius, y: 1)
                 }
                 .buttonStyle(.plain)
                 .onHover { isConfirmHovered = $0 }
