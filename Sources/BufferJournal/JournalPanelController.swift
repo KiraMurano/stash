@@ -39,6 +39,8 @@ final class JournalPanelController {
         positionIfNeeded(panel)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
+        // Key without activating the app: search and arrows work, the target app stays frontmost.
+        panel.makeKey()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
@@ -114,6 +116,7 @@ final class JournalPanelController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        panel.animationBehavior = .none
         panel.minSize = Constants.minSize
 
         self.panel = panel
@@ -131,9 +134,22 @@ final class JournalPanelController {
 
         if settings.closeAfterSelection {
             close(completion: performSelection)
+        } else if settings.pasteOnSelection, let panel, panel.isKeyWindow {
+            relinquishKeyFocus(of: panel)
+            // Give the window server a moment to hand key focus back before Cmd+V is sent.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                performSelection()
+            }
         } else {
             performSelection()
         }
+    }
+
+    /// Hands keyboard focus back to the app underneath while keeping the panel on screen,
+    /// so a synthesized Cmd+V reaches that app instead of the search field.
+    private func relinquishKeyFocus(of panel: NSPanel) {
+        panel.orderOut(nil)
+        panel.orderFrontRegardless()
     }
 
     private func openTextEditor(for entry: ClipboardEntry) {
@@ -280,7 +296,7 @@ final class JournalPanelController {
 }
 
 private final class JournalPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
 
