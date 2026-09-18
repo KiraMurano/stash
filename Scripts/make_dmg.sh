@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# Packs .build/Stash.app into .build/Stash-<version>.dmg with an Applications
-# shortcut, so installing is a drag onto the folder.
+# Packs .build/Stash.app into .build/Stash-<version>.dmg: a white window with an
+# orange arc from Stash to an Applications shortcut, so installing is one drag.
+# The window layout is written by dmgbuild (Finder scripting no longer keeps it
+# on macOS 26); it is installed into .build/dmg-venv on first run.
 # Usage: Scripts/make_dmg.sh <version>
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$1"
 DMG="$ROOT_DIR/.build/Stash-$VERSION.dmg"
-STAGING="$(mktemp -d)"
-trap 'rm -rf "$STAGING"' EXIT
+VENV="$ROOT_DIR/.build/dmg-venv"
 
-cp -R "$ROOT_DIR/.build/Stash.app" "$STAGING/"
-ln -s /Applications "$STAGING/Applications"
+if [[ ! -x "$VENV/bin/dmgbuild" ]]; then
+    python3 -m venv "$VENV"
+    "$VENV/bin/pip" install --quiet dmgbuild==1.6.7
+fi
+
 rm -f "$DMG"
-hdiutil create -volname "Stash $VERSION" -srcfolder "$STAGING" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+"$VENV/bin/dmgbuild" -s "$ROOT_DIR/Scripts/dmg_settings.py" -D root="$ROOT_DIR" "Stash $VERSION" "$DMG" >/dev/null
 echo "$DMG"
