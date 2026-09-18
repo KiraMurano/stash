@@ -36,14 +36,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Buffer Journal")
+        statusItem.button?.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Stash")
         rebuildMenu()
     }
 
     private func rebuildMenu() {
         let l10n = settings.l10n
         let menu = NSMenu()
-        menu.addItem(menuItem(l10n("Open Journal", "Открыть журнал"), action: #selector(openJournal)))
+        menu.addItem(menuItem(l10n("Open Stash", "Открыть Stash"), action: #selector(openJournal)))
         menu.addItem(NSMenuItem.separator())
 
         pasteOnSelectionItem = menuItem(l10n("Paste on Selection", "Вставлять при выборе"), action: #selector(togglePasteOnSelection))

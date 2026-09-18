@@ -167,7 +167,7 @@ struct JournalView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Buffer Journal")
+                    Text("Stash")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(palette.textPrimary)
                         .overlay(WindowDragHandle())
