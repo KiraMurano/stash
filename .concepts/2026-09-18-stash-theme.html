@@ -1,0 +1,247 @@
+<meta charset="utf-8">
+<title>2026-09-18 Stash theme — selection and buttons, round 1</title>
+<!--
+  Concept page (visual-prototype skill), round 1.
+  Question: in the opaque Stash theme, how should the selected row and the buttons on it look,
+  so nothing blends and accent buttons do not need the inverted white fill.
+  Tokens: ThemePalette in Sources/BufferJournal/JournalView.swift, feature/stash-split@003b6e5
+  (orange #F46A25, solidControl light 0.93 / dark 0.30 white, controlShadow radius 1 y 1,
+  black 28% light / 41% dark, sidebar tint white 82% / rgb(28,28,30) 84%).
+  Font: system-ui (SF Pro on macOS, as the app uses .system()).
+  Glass: approximated with backdrop-filter over a wallpaper.
+-->
+<style>
+  :root { --orange: #f46a25; }
+  .cx-light {
+    --wallpaper: linear-gradient(135deg,#8fb6e8 0%,#c9a7d9 45%,#f2c6a0 100%);
+    --sidebar: rgba(255,255,255,.82);
+    --text-1: rgba(0,0,0,.90); --text-2: rgba(0,0,0,.58); --text-3: rgba(0,0,0,.38);
+    --placeholder: rgba(0,0,0,.05);
+    --hover: rgba(0,0,0,.055);
+    --solid: rgb(237,237,237); --solid-hover: rgb(227,227,227);
+    --shadow: 0 1px 1px rgba(0,0,0,.28);
+    --card: #ffffff; --ink: #1d1d1f;
+    --orange-deep: #c9531a;
+  }
+  .cx-dark {
+    --wallpaper: linear-gradient(135deg,#1d2a44 0%,#3a2346 50%,#4a2f25 100%);
+    --sidebar: rgba(28,28,30,.84);
+    --text-1: rgba(255,255,255,.90); --text-2: rgba(255,255,255,.58); --text-3: rgba(255,255,255,.38);
+    --placeholder: rgba(255,255,255,.06);
+    --hover: rgba(255,255,255,.08);
+    --solid: rgb(77,77,77); --solid-hover: rgb(89,89,89);
+    --shadow: 0 1px 1px rgba(0,0,0,.41);
+    --card: rgb(58,58,60); --ink: #f2f2f7;
+    --orange-deep: #b8481a;
+  }
+
+  /* ── Scaffold ── */
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 14px/1.45 system-ui, sans-serif; color: #1a1a1a; background: #f4f4f2; }
+  .cx-header h1 { margin: 0 0 6px; font-size: 22px; }
+  .cx-header p { margin: 4px 0; color: #555; max-width: 980px; }
+  .cx-header code { font-size: 12px; background: #e8e8e4; padding: 1px 4px; border-radius: 4px; }
+  .cx-controls { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center;
+    margin: 16px -24px; padding: 10px 24px; background: #f4f4f2ee; backdrop-filter: blur(6px); border-bottom: 1px solid #ddd; }
+  .cx-control { display: flex; gap: 4px; align-items: center; }
+  .cx-control > span { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #777; margin-right: 4px; }
+  .cx-control button { font: inherit; font-size: 12px; padding: 3px 9px; border: 1px solid #ccc; border-radius: 99px; background: #fff; cursor: pointer; }
+  .cx-control button[aria-pressed="true"] { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+  .cx-block { margin: 28px 0 40px; }
+  .cx-block > h2 { font-size: 17px; margin: 0 0 12px; }
+  .cx-frames { display: flex; flex-wrap: wrap; gap: 32px 28px; align-items: flex-start; }
+  .cx-variant { display: flex; flex-direction: column; gap: 8px; }
+  .cx-variant > h3 { margin: 0; font-size: 15px; }
+  .cx-variant > .cx-caption { margin: 0; max-width: 700px; color: #555; font-size: 13px; }
+  .cx-pair { display: flex; gap: 12px; }
+  .cx-frame { display: flex; flex-direction: column; gap: 6px; }
+  .cx-frame > .cx-theme-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .06em; }
+  .cx-screen { padding: 18px; border-radius: 14px; background: var(--wallpaper); }
+  .cx-readout { font-size: 12px; color: #444; font-variant-numeric: tabular-nums; }
+  .cx-readout .cx-bad { color: #b3261e; font-weight: 600; }
+  .cx-verdict { margin-top: 20px; padding: 12px 16px; background: #fff; border-left: 3px solid #1a1a1a; max-width: 900px; }
+  .cx-verdict ol { margin: 6px 0 0; padding-left: 20px; }
+
+  /* ── Mock (st-) ── */
+  .st-pane { width: 330px; border-radius: 20px; overflow: hidden; color: var(--text-1); font-family: system-ui, -apple-system, sans-serif;
+    background: var(--sidebar); backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6);
+    box-shadow: 0 14px 40px rgba(0,0,0,.25); padding: 12px 10px 0; }
+  .st-seg { position: relative; display: grid; grid-template-columns: repeat(4,1fr); height: 28px; padding: 2px; border-radius: 8px; background: var(--placeholder); margin-bottom: 8px; }
+  .st-seg span { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 500; color: var(--text-2); }
+  .st-seg span.on { color: #fff; font-weight: 600; }
+  .st-seg i { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px)/4); border-radius: 6px; background: var(--orange); }
+  .st-sec { font-size: 11px; font-weight: 600; color: var(--text-3); padding: 6px 8px 4px; }
+  .st-row { position: relative; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 8px; margin: 1px 0; border-radius: 8px; }
+  .st-row.hov { background: var(--hover); }
+  .st-thumb { width: 42px; height: 42px; flex: none; border-radius: 8px; background: var(--placeholder); display: flex; align-items: center; justify-content: center;
+    font-weight: 600; color: var(--text-2); box-shadow: var(--shadow); overflow: hidden; }
+  .st-thumb.img { background: linear-gradient(160deg,#ffd6a5,#ff7a59 60%,#7c3a6b); }
+  .st-body { flex: 1; min-width: 0; }
+  .st-t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st-t.b { font-weight: 600; }
+  .st-m { font-size: 11px; color: var(--text-3); }
+  .st-row.has-acts .st-body { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 140px), transparent calc(100% - 116px)); mask-image: linear-gradient(to right, #000 calc(100% - 140px), transparent calc(100% - 116px)); }
+  .st-acts { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; }
+  .st-btn { width: 26px; height: 26px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; background: var(--solid); color: var(--text-2); box-shadow: var(--shadow); }
+  .st-btn svg { width: 12px; height: 12px; }
+  .st-btn.acc { background: var(--orange); color: #fff; }
+  .st-bar { display: flex; gap: 6px; align-items: center; padding: 10px 2px 12px; margin-top: 6px; border-top: 1px solid var(--hover); }
+  .st-bar .st-btn { width: 28px; height: 28px; border-radius: 8px; }
+  .st-paste { margin-left: auto; height: 28px; padding: 0 12px; border-radius: 8px; background: var(--orange); color: #fff; font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow); }
+
+  /* selection treatments */
+  .sel-fill .st-row.sel { background: var(--orange); color: #fff; }
+  .sel-fill .st-row.sel .st-m { color: rgba(255,255,255,.78); }
+
+  .v11 .st-row.sel .st-btn { background: #fff; color: var(--orange); }            /* current: inverted */
+  .v11 .st-row.sel .st-btn.neu { background: var(--solid); color: var(--text-2); }
+
+  .v12 .st-row.sel .st-btn.acc { background: var(--orange-deep); color: #fff; }   /* deeper orange */
+
+  .v13 .st-row.sel .st-btn.acc,
+  .v13 .st-row.sel .st-btn.neu { background: rgba(255,255,255,.24); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); } /* glass on orange */
+
+  .v14 .st-row.sel { background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 3px 10px rgba(0,0,0,.08); }  /* raised card */
+  .v14 .st-row.sel .st-t { color: var(--orange); font-weight: 600; }
+  .v14 .st-row.sel::before { content: ""; position: absolute; left: -6px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; background: var(--orange); }
+
+  .v15 .st-row.sel { background: var(--card); box-shadow: inset 0 0 0 2px var(--orange); }   /* orange outline */
+  .v15 .st-row.sel .st-t { color: var(--orange); font-weight: 600; }
+
+  .v16 .st-row.sel { background: var(--ink); color: var(--card); }               /* ink selection, orange only on buttons */
+  .v16 .st-row.sel .st-m { color: color-mix(in srgb, var(--card) 65%, transparent); }
+  .v16 .st-row.sel .st-btn.neu { background: color-mix(in srgb, var(--card) 18%, var(--ink)); color: color-mix(in srgb, var(--card) 80%, transparent); }
+  .v16 .st-seg i { background: var(--ink); } .v16 .st-seg span.on { color: var(--card); }
+</style>
+
+<header class="cx-header">
+  <h1>Stash-тема — выбранная строка и кнопки на ней</h1>
+  <p>Вопрос: как сделать непрозрачную Stash-тему, чтобы ни кнопки, ни выбор не сливались, и без инвертированных белых кнопок. Шесть вариантов на одних данных, в светлой и тёмной теме. Под каждым — два контраста кнопки «вставить» на строке: кнопка к фону строки (видно ли саму кнопку) и иконка к кнопке (читается ли знак). Для элементов интерфейса нужно ≥ 3:1.</p>
+  <p>Токены: <code>ThemePalette</code> в <code>Sources/BufferJournal/JournalView.swift</code> · Дерево: <code>feature/stash-split@003b6e5</code> · Шрифт: системный (SF Pro) · Стекло приближено <code>backdrop-filter</code>.</p>
+</header>
+
+<div class="cx-controls" id="cx-controls"></div>
+
+<section class="cx-block" id="cx-block-1">
+  <h2>1. Выбранная строка и кнопки</h2>
+  <div class="cx-frames"></div>
+  <div class="cx-verdict">
+    <strong>Рекомендую 1.4 — выбранная строка становится приподнятой карточкой с оранжевой полоской и заголовком, поэтому оранжевые кнопки всегда стоят на светлом или сером фоне и ничего не надо инвертировать.</strong>
+    <ol>
+      <li>1.3 — если хочется оставить заливку строки оранжевой: кнопки на ней полупрозрачные белые, «стекло на оранжевом», без сплошного белого.</li>
+      <li>1.6 — самый контрастный: выбор чёрный/белый, оранжевый остаётся только у кнопок и становится их сигналом.</li>
+    </ol>
+  </div>
+</section>
+
+<script>
+const STATE = { theme: 'both', hover: 'sel' };
+const CONTROLS = [
+  { key: 'theme', label: 'Тема', options: [['light', 'Светлая'], ['dark', 'Тёмная'], ['both', 'Обе']] },
+  { key: 'hover', label: 'Кнопки видны', options: [['sel', 'На выбранной строке'], ['other', 'На другой строке'], ['none', 'Нигде']] },
+];
+const I = {
+  expand: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9 7M2.5 13.5L7 9"/></svg>',
+  pin: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10.5 1.5l4 4-1.2.6-2.6 2.6.4 3.3-1.1 1.1-2.8-2.8L3.5 14M3.7 6.8l1.1-1.1 3.3.4 2.6-2.6z"/></svg>',
+  pinOn: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.5 1.5l4 4-1.2.6-2.6 2.6.4 3.3-1.1 1.1-2.8-2.8L3.5 14l-.9.2.2-.9 3.7-3.7L3.7 6.8l1.1-1.1 3.3.4 2.6-2.6z"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></svg>',
+  paste: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3v5H4M6.5 5.5L4 8l2.5 2.5"/></svg>',
+  pencil: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 2.5l2.5 2.5L6 12.5 3 13l.5-3z"/></svg>',
+};
+const ROWS = [
+  { sec: 'Закреплённые' },
+  { t: 'Create a vertical 9:16 mobile illustration for the game', m: '21 июня', th: 'C', pin: true, sel: true },
+  { t: 'Изображение', b: true, m: '3420×2214 · 12:07', img: true, pin: true },
+  { sec: 'Сегодня' },
+  { t: 'git log --oneline --graph --decorate', m: '13:30', th: 'g' },
+  { t: 'Договор_аренды_2026.pdf', b: true, m: '2,4 МБ · 13:12', th: '📄' },
+];
+function actions(r) {
+  return `<div class="st-acts">${r.img ? `<span class="st-btn neu">${I.expand}</span>` : ''}
+    <span class="st-btn ${r.pin ? 'acc' : 'neu'}">${r.pin ? I.pinOn : I.pin}</span>
+    <span class="st-btn neu">${I.trash}</span>
+    <span class="st-btn acc" data-paste>${I.paste}</span></div>`;
+}
+function pane() {
+  const showOn = STATE.hover === 'sel' ? r => r.sel : STATE.hover === 'other' ? r => r.img : () => false;
+  return `<div class="st-pane"><div class="st-seg"><i></i><span class="on">Все</span><span>Текст</span><span>Картинки</span><span>Файлы</span></div>
+    ${ROWS.map(r => r.sec ? `<div class="st-sec">${r.sec}</div>` : `
+      <div class="st-row ${r.sel ? 'sel' : ''} ${showOn(r) && !r.sel ? 'hov' : ''} ${showOn(r) ? 'has-acts' : ''}">
+        <div class="st-thumb ${r.img ? 'img' : ''}">${r.img ? '' : r.th}</div>
+        <div class="st-body"><div class="st-t ${r.b ? 'b' : ''}">${r.t}</div><div class="st-m">${r.m}</div></div>
+        ${showOn(r) ? actions(r) : ''}
+      </div>`).join('')}
+    <div class="st-bar"><span class="st-btn neu">${I.pencil}</span><span class="st-btn acc">${I.pinOn}</span><span class="st-btn neu">${I.trash}</span><span class="st-paste">Вставить ${I.paste.replace('<svg', '<svg width="12" height="12"')}</span></div>
+  </div>`;
+}
+const VARIANTS = [
+  { id: '1.1', cls: 'sel-fill v11', name: 'Сейчас: оранжевая строка, инвертированные кнопки',
+    caption: 'Эталон. Выбранная строка залита оранжевым, оранжевые кнопки на ней — белые с оранжевой иконкой. Плата: белые плашки выглядят чужеродно, как дыры в строке.' },
+  { id: '1.2', cls: 'sel-fill v12', name: 'Оранжевая строка, кнопки темнее',
+    caption: 'Заливка строки та же, оранжевые кнопки на ней — на тон темнее (#C9531A) с белой иконкой и тенью. Плата: разница в тоне небольшая, кнопка «вставить» читается слабо.' },
+  { id: '1.3', cls: 'sel-fill v13', name: 'Оранжевая строка, стеклянные кнопки',
+    caption: 'На оранжевой строке все кнопки — полупрозрачные белые (24%) с белой иконкой и тонкой светлой обводкой, «стекло на оранжевом». Плата: на выбранной строке кнопка «вставить» перестаёт быть оранжевой, акцент держит сама строка.' },
+  { id: '1.4', cls: 'v14', name: 'Выбор — приподнятая карточка',
+    caption: 'Выбранная строка не заливается оранжевым: она становится непрозрачной карточкой (белой / тёмно-серой) с тенью, оранжевой полоской слева и оранжевым заголовком. Оранжевые кнопки остаются оранжевыми везде. Плата: выбор менее «кричащий», чем сплошная заливка.' },
+  { id: '1.5', cls: 'v15', name: 'Выбор — оранжевая рамка',
+    caption: 'Выбранная строка — непрозрачная карточка с оранжевой рамкой 2 pt и оранжевым заголовком, без тени. Плата: рамка и оранжевые кнопки рядом дают много оранжевых линий.' },
+  { id: '1.6', cls: 'v16', name: 'Выбор чернилами, оранжевый только у кнопок',
+    caption: 'Выбранная строка и ползунок фильтра — почти чёрные в светлой теме и почти белые в тёмной. Оранжевый остаётся только у кнопок действий, поэтому они самые заметные на экране. Плата: уходит оранжевый характер у выбора.' },
+];
+
+/* Contrast of the paste button fill against the row it sits on (WCAG 2.x, non-text ≥ 3:1). */
+function lum(rgb) { const c = rgb.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; }
+function parse(c) { const m = c.match(/[\d.]+/g); return m ? m.slice(0, 4).map(Number) : null; }
+function over(fg, bg) { const a = fg[3] ?? 1; return [0, 1, 2].map(i => fg[i] * a + bg[i] * (1 - a)); }
+function measure(frame) {
+  const btn = frame.querySelector('.st-row [data-paste]');
+  if (!btn) return 'Кнопки на строке не показаны';
+  const row = btn.closest('.st-row');
+  const base = frame.classList.contains('cx-dark') ? [36, 36, 38] : [245, 245, 247];
+  const rowBg = parse(getComputedStyle(row).backgroundColor);
+  const rowRgb = rowBg && rowBg[3] !== 0 ? over(rowBg, base) : base;
+  const btnRgb = over(parse(getComputedStyle(btn).backgroundColor), rowRgb);
+  const glyphRgb = over(parse(getComputedStyle(btn).color), btnRgb);
+  const ratio = (x, y) => { const [a, b] = [lum(x), lum(y)]; return (Math.max(a, b) + .05) / (Math.min(a, b) + .05); };
+  const fmt = r => r < 3 ? `<span class="cx-bad">${r.toFixed(2)}:1</span>` : `${r.toFixed(2)}:1`;
+  return `«Вставить» на строке: кнопка/строка ${fmt(ratio(btnRgb, rowRgb))} · иконка/кнопка ${fmt(ratio(glyphRgb, btnRgb))}`;
+}
+
+function renderControls() {
+  const bar = document.getElementById('cx-controls');
+  bar.innerHTML = '';
+  for (const c of CONTROLS) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cx-control';
+    wrap.innerHTML = `<span>${c.label}</span>`;
+    for (const [value, text] of c.options) {
+      const btn = document.createElement('button');
+      btn.textContent = text;
+      btn.setAttribute('aria-pressed', String(STATE[c.key] === value));
+      btn.onclick = () => { STATE[c.key] = value; renderControls(); render(); };
+      wrap.append(btn);
+    }
+    bar.append(wrap);
+  }
+}
+function render() {
+  const themes = STATE.theme === 'both' ? ['light', 'dark'] : [STATE.theme];
+  const host = document.querySelector('#cx-block-1 .cx-frames');
+  host.innerHTML = VARIANTS.map(v => `
+    <div class="cx-variant"><h3>${v.id} ${v.name}</h3><p class="cx-caption">${v.caption}</p>
+      <div class="cx-pair">${themes.map(th => `
+        <div class="cx-frame">
+          ${themes.length > 1 ? `<span class="cx-theme-label">${th === 'light' ? 'Stash Light' : 'Stash Dark'}</span>` : ''}
+          <div class="cx-screen cx-${th} ${v.cls}">${pane()}</div>
+          <div class="cx-readout"></div>
+        </div>`).join('')}</div></div>`).join('');
+  requestAnimationFrame(() => {
+    for (const frame of host.querySelectorAll('.cx-frame')) {
+      frame.querySelector('.cx-readout').innerHTML = measure(frame.querySelector('.cx-screen'));
+    }
+  });
+}
+renderControls();
+document.fonts.ready.then(render);
+</script>
