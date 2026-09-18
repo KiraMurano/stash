@@ -44,6 +44,8 @@ struct L10n {
         case .system: self("Auto", "Авто")
         case .light: self("Light", "Светлая")
         case .dark: self("Dark", "Тёмная")
+        case .stashLight: "Stash Light"
+        case .stashDark: "Stash Dark"
         }
     }
 
@@ -66,6 +68,10 @@ struct L10n {
     }
 }
 
+private struct SolidAccentsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 private struct L10nKey: EnvironmentKey {
     static let defaultValue = L10n(language: AppLanguage.system.resolved)
 }
@@ -74,5 +80,11 @@ extension EnvironmentValues {
     var l10n: L10n {
         get { self[L10nKey.self] }
         set { self[L10nKey.self] = newValue }
+    }
+
+    /// Set by the Stash Light / Stash Dark themes.
+    var solidAccents: Bool {
+        get { self[SolidAccentsKey.self] }
+        set { self[SolidAccentsKey.self] = newValue }
     }
 }

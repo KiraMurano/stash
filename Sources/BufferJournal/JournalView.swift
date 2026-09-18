@@ -53,6 +53,7 @@ struct JournalView: View {
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
     @State private var isListScrolled = false
+    @State private var detailEdges = ScrollEdges()
     @State private var draggedPinnedID: ClipboardEntry.ID?
     @State private var dragStartIndex = 0
     @State private var dragTranslation: CGFloat = 0
@@ -64,7 +65,7 @@ struct JournalView: View {
     @AppStorage("SidebarWidth") private var storedSidebarWidth: Double = Double(Layout.sidebarWidth)
 
     private var palette: ThemePalette {
-        ThemePalette(colorScheme: colorScheme)
+        ThemePalette(colorScheme: colorScheme, solid: settings.themeMode.usesSolidAccents)
     }
 
     private var l10n: L10n {
@@ -188,6 +189,7 @@ struct JournalView: View {
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, l10n)
+        .environment(\.solidAccents, settings.themeMode.usesSolidAccents)
         .background(
             KeyboardMonitor(
                 onKey: handleKey,
@@ -222,6 +224,7 @@ struct JournalView: View {
                     .monospacedDigit()
                     .foregroundStyle(palette.textTertiary)
                     .overlay(WindowDragHandle())
+                    .padding(.trailing, 6)
 
                 GlassIconButton(
                     systemName: "trash",
@@ -256,17 +259,8 @@ struct JournalView: View {
             .background(WindowDragHandle())
             .overlay(alignment: .bottom) {
                 // Shadow under the header once the list scrolls beneath it.
-                LinearGradient(
-                    stops: [
-                        .init(color: palette.shadow(0.08), location: 0),
-                        .init(color: palette.shadow(0.03), location: 0.45),
-                        .init(color: palette.shadow(0), location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                    .frame(height: 20)
-                    .offset(y: 20)
+                EdgeShadow(palette: palette, edge: .top)
+                    .offset(y: EdgeShadow.height)
                     .opacity(isListScrolled ? 1 : 0)
                     .animation(.easeOut(duration: 0.15), value: isListScrolled)
                     .allowsHitTesting(false)
@@ -365,7 +359,7 @@ struct JournalView: View {
                 .padding(.horizontal, 10)
                 .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
             }
-            .background(ScrollOffsetObserver { isListScrolled = $0 })
+            .background(ScrollOffsetObserver { isListScrolled = $0.isScrolled })
             // New clips arrive from the pasteboard monitor outside any transaction: animate inserts,
             // removals and reorders here so rows slide apart and the new one fades in.
             .animation(.easeOut(duration: 0.3), value: store.entries.map(\.id))
@@ -408,7 +402,6 @@ struct JournalView: View {
             selectedID = entry.id
         }
         .simultaneousGesture(TapGesture(count: 2).onEnded { select(entry) })
-        .help(l10n("Double-click to paste", "Двойной клик — вставить"))
     }
 
     // MARK: Detail
@@ -433,10 +426,10 @@ struct JournalView: View {
                     if store.currentClipboardFingerprint == entry.fingerprint {
                         Text(l10n("in clipboard", "в буфере"))
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(palette.accentText)
+                            .foregroundStyle(palette.onAccent)
                             .padding(.horizontal, 6)
                             .frame(height: 16)
-                            .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                            .background(palette.accentFill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                             .overlay(WindowDragHandle())
                     }
 
@@ -447,13 +440,22 @@ struct JournalView: View {
                 .padding(.leading, 16)
                 .padding(.trailing, 10)
                 .padding(.top, 10)
+                .padding(.bottom, 4)
                 .background(WindowDragHandle())
+                .overlay(alignment: .bottom) {
+                    EdgeShadow(palette: palette, edge: .top)
+                        .offset(y: EdgeShadow.height)
+                        .opacity(entry.isText && detailEdges.isScrolled ? 1 : 0)
+                }
+                .zIndex(1)
 
                 stage(for: entry)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Text scrolls edge to edge under the header and footer; its insets are inside.
                     .padding(.horizontal, entry.isText ? 0 : 16)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, entry.isText ? 0 : 12)
 
+                VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     Text(l10n("Size", "Размер"))
                         .foregroundStyle(palette.textTertiary)
@@ -463,10 +465,19 @@ struct JournalView: View {
                 }
                 .font(.system(size: 11, weight: .medium))
                 .padding(.horizontal, 16)
+                .padding(.top, 8)
                 .padding(.bottom, 10)
 
                 actionBar(for: entry)
+                }
+                .overlay(alignment: .top) {
+                    EdgeShadow(palette: palette, edge: .bottom)
+                        .offset(y: -EdgeShadow.height)
+                        .opacity(entry.isText && detailEdges.hasMoreBelow ? 1 : 0)
+                }
+                .zIndex(1)
             }
+            .animation(.easeOut(duration: 0.15), value: detailEdges)
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "tray")
@@ -505,8 +516,10 @@ struct JournalView: View {
                 // Insets live inside the scroll view so the scroller gets its own lane on the right.
                 .padding(.leading, 16)
                 .padding(.trailing, 22)
+                .padding(.vertical, 10)
                 .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
             }
+            .background(ScrollOffsetObserver { detailEdges = $0 })
             // A new clip starts at the top instead of keeping the previous clip's scroll position.
             .id(entry.id)
 
@@ -922,12 +935,12 @@ private struct EntryRow: View {
                 if entry.isPinned {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(palette.textTertiary)
+                        .foregroundStyle(isSelected ? palette.onAccentSecondary : palette.textTertiary)
                 }
                 if isCurrent {
                     Image(systemName: "doc.on.clipboard")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(palette.accentText)
+                        .foregroundStyle(isSelected && palette.solid ? .white : palette.accentText)
                 }
             }
             .opacity(isHovered ? 0 : 1)
@@ -937,7 +950,7 @@ private struct EntryRow: View {
         .frame(height: JournalView.Layout.rowHeight - 2)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? palette.accentSoft : (isHovered ? palette.controlHoverBackground : .clear))
+                .fill(isSelected ? palette.accentFill : (isHovered ? palette.controlHoverBackground : .clear))
         }
         // The 1 pt gap between highlights stays visual only: the hover area covers it.
         .padding(.vertical, 1)
@@ -993,13 +1006,13 @@ private struct EntryRow: View {
     private var titleText: some View {
         Text(title)
             .font(.system(size: 13, weight: entry.isText ? .regular : .semibold))
-            .foregroundStyle(isSelected ? palette.accentText : palette.textPrimary)
+            .foregroundStyle(isSelected ? palette.onAccent : palette.textPrimary)
     }
 
     private var subtitleText: some View {
         Text(subtitle)
             .font(.system(size: 11))
-            .foregroundStyle(palette.textTertiary)
+            .foregroundStyle(isSelected ? palette.onAccentSecondary : palette.textTertiary)
             .lineLimit(1)
     }
 
@@ -1247,8 +1260,38 @@ private struct KeyboardMonitor: NSViewRepresentable {
 
 /// Reports whether the enclosing scroll view has scrolled away from the top. SwiftUI geometry
 /// preferences inside a macOS ScrollView do not update while scrolling, so watch the clip view.
+/// Soft shadow cast by a header (`.top`, falls downward) or footer (`.bottom`, rises upward)
+/// over content scrolling beneath it.
+private struct EdgeShadow: View {
+    static let height: CGFloat = 20
+
+    let palette: ThemePalette
+    let edge: VerticalEdge
+
+    var body: some View {
+        LinearGradient(
+            stops: [
+                .init(color: palette.shadow(0.08), location: 0),
+                .init(color: palette.shadow(0.03), location: 0.45),
+                .init(color: palette.shadow(0), location: 1)
+            ],
+            startPoint: edge == .top ? .top : .bottom,
+            endPoint: edge == .top ? .bottom : .top
+        )
+        .frame(height: Self.height)
+        .allowsHitTesting(false)
+    }
+}
+
+struct ScrollEdges: Equatable {
+    /// Content is scrolled away from the top.
+    var isScrolled = false
+    /// More content lies below the visible area.
+    var hasMoreBelow = false
+}
+
 private struct ScrollOffsetObserver: NSViewRepresentable {
-    let onChange: (Bool) -> Void
+    let onChange: (ScrollEdges) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onChange: onChange)
@@ -1268,12 +1311,12 @@ private struct ScrollOffsetObserver: NSViewRepresentable {
 
     @MainActor
     final class Coordinator {
-        var onChange: (Bool) -> Void
+        var onChange: (ScrollEdges) -> Void
         private weak var scrollView: NSScrollView?
-        private var observer: NSObjectProtocol?
-        private var lastValue = false
+        private var observers: [NSObjectProtocol] = []
+        private var lastValue = ScrollEdges()
 
-        init(onChange: @escaping (Bool) -> Void) {
+        init(onChange: @escaping (ScrollEdges) -> Void) {
             self.onChange = onChange
         }
 
@@ -1292,25 +1335,36 @@ private struct ScrollOffsetObserver: NSViewRepresentable {
             self.scrollView = scrollView
             let clipView = scrollView.contentView
             clipView.postsBoundsChangedNotifications = true
-            observer = NotificationCenter.default.addObserver(
-                forName: NSView.boundsDidChangeNotification,
-                object: clipView,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.report()
-                }
+            clipView.postsFrameChangedNotifications = true
+            scrollView.documentView?.postsFrameChangedNotifications = true
+            // Scrolling moves the clip view's bounds; resizing the panel or the content changes frames.
+            for (name, object) in [
+                (NSView.boundsDidChangeNotification, clipView as NSView),
+                (NSView.frameDidChangeNotification, clipView as NSView),
+                (NSView.frameDidChangeNotification, scrollView.documentView),
+            ] {
+                guard let object else { continue }
+                observers.append(NotificationCenter.default.addObserver(forName: name, object: object, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.report()
+                    }
+                })
             }
             report()
         }
 
         private func report() {
             guard let scrollView else { return }
-            let offset = scrollView.contentView.bounds.origin.y + scrollView.contentInsets.top
-            let isScrolled = offset > 1
-            guard isScrolled != lastValue else { return }
-            lastValue = isScrolled
-            onChange(isScrolled)
+            let clip = scrollView.contentView.bounds
+            let offset = clip.origin.y + scrollView.contentInsets.top
+            let contentHeight = scrollView.documentView?.frame.height ?? 0
+            let edges = ScrollEdges(
+                isScrolled: offset > 1,
+                hasMoreBelow: clip.maxY < contentHeight - 1
+            )
+            guard edges != lastValue else { return }
+            lastValue = edges
+            onChange(edges)
         }
 
         /// The observer is the list's background, so the list's scroll view is the one that
@@ -1375,7 +1429,7 @@ private struct TypeSegmentedControl: View {
                         } label: {
                             Text(titles[index])
                                 .font(.system(size: 11.5, weight: index == selectedIndex ? .semibold : .medium))
-                                .foregroundStyle(index == selectedIndex ? palette.accentText : palette.textSecondary)
+                                .foregroundStyle(index == selectedIndex ? palette.onAccent : palette.textSecondary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
                                 .frame(width: segmentWidth, height: 24)
@@ -1414,10 +1468,11 @@ struct TranslucentButtonStyle: ButtonStyle {
         let cornerRadius: CGFloat
 
         @Environment(\.colorScheme) private var colorScheme
+        @Environment(\.solidAccents) private var solidAccents
         @State private var isHovered = false
 
         private var palette: ThemePalette {
-            ThemePalette(colorScheme: colorScheme)
+            ThemePalette(colorScheme: colorScheme, solid: solidAccents)
         }
 
         var body: some View {
@@ -1434,14 +1489,31 @@ struct TranslucentButtonStyle: ButtonStyle {
         }
 
         private var foreground: Color {
+            if palette.solid {
+                switch tone {
+                case .accent: return .white
+                case .destructive where isHovered: return .white
+                case .neutral, .destructive: return palette.iconOpacity(0.78)
+                }
+            }
             switch tone {
-            case .accent: palette.accentText
-            case .destructive: isHovered ? Color.red.opacity(0.9) : palette.iconOpacity(0.7)
-            case .neutral: palette.iconOpacity(isHovered ? 0.85 : 0.7)
+            case .accent: return palette.accentText
+            case .destructive: return isHovered ? Color.red.opacity(0.9) : palette.iconOpacity(0.7)
+            case .neutral: return palette.iconOpacity(isHovered ? 0.85 : 0.7)
             }
         }
 
         private var fill: Color {
+            if palette.solid {
+                switch tone {
+                case .accent:
+                    return ThemePalette.darken(ThemePalette.orange, by: 0.08 * level)
+                case .destructive where isHovered:
+                    return ThemePalette.darken(ThemePalette.solidDestructive, by: 0.08 * (level - 1))
+                case .neutral, .destructive:
+                    return palette.solidControl(level)
+                }
+            }
             switch tone {
             case .accent:
                 return ThemePalette.orange.opacity((palette.isDark ? 0.28 : 0.18) + 0.08 * level)
@@ -1483,10 +1555,11 @@ private struct DeleteConfirmationOverlay: View {
     @State private var isConfirmHovered = false
     @State private var isCancelHovered = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.solidAccents) private var solidAccents
     @Environment(\.l10n) private var l10n
 
     private var palette: ThemePalette {
-        ThemePalette(colorScheme: colorScheme)
+        ThemePalette(colorScheme: colorScheme, solid: solidAccents)
     }
 
     var body: some View {
@@ -1519,7 +1592,7 @@ private struct DeleteConfirmationOverlay: View {
                         .foregroundStyle(palette.textPrimary)
                         .padding(.horizontal, 14)
                         .frame(height: 28)
-                        .background(isCancelHovered ? palette.controlHoverBackground : palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(palette.solid ? palette.solidControl(isCancelHovered ? 1 : 0) : (isCancelHovered ? palette.controlHoverBackground : palette.placeholderBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .onHover { isCancelHovered = $0 }
@@ -1527,10 +1600,15 @@ private struct DeleteConfirmationOverlay: View {
                 Button(action: onConfirm) {
                     Text(actionTitle)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.red.opacity(0.9))
+                        .foregroundStyle(palette.solid ? Color.white : Color.red.opacity(0.9))
                         .padding(.horizontal, 14)
                         .frame(height: 28)
-                        .background(Color.red.opacity((palette.isDark ? 0.2 : 0.12) + (isConfirmHovered ? 0.08 : 0)), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(
+                            palette.solid
+                                ? ThemePalette.darken(ThemePalette.solidDestructive, by: isConfirmHovered ? 0.08 : 0)
+                                : Color.red.opacity((palette.isDark ? 0.2 : 0.12) + (isConfirmHovered ? 0.08 : 0)),
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
                 }
                 .buttonStyle(.plain)
                 .onHover { isConfirmHovered = $0 }
@@ -1556,9 +1634,10 @@ private struct DeleteConfirmationOverlay: View {
 private struct ToastOverlay: View {
     let message: String
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.solidAccents) private var solidAccents
 
     private var palette: ThemePalette {
-        ThemePalette(colorScheme: colorScheme)
+        ThemePalette(colorScheme: colorScheme, solid: solidAccents)
     }
 
     var body: some View {
@@ -1578,6 +1657,8 @@ private struct ToastOverlay: View {
 
 struct ThemePalette {
     let colorScheme: ColorScheme
+    /// Stash Light / Stash Dark: opaque accents and buttons instead of translucent tints.
+    var solid = false
 
     var isDark: Bool {
         colorScheme == .dark
@@ -1619,7 +1700,33 @@ struct ThemePalette {
 
     /// Translucent orange thumb of the type filter.
     var segmentThumb: Color {
-        Self.orange.opacity(isDark ? 0.28 : 0.18)
+        solid ? Self.orange : Self.orange.opacity(isDark ? 0.28 : 0.18)
+    }
+
+    /// Fill and text for orange accents that carry a label: selected row, active filter, badges.
+    var accentFill: Color {
+        solid ? Self.orange : accentSoft
+    }
+
+    var onAccent: Color {
+        solid ? .white : accentText
+    }
+
+    var onAccentSecondary: Color {
+        solid ? Color.white.opacity(0.78) : textTertiary
+    }
+
+    /// Opaque grey for buttons in the Stash themes; `level` 0 rest, 1 hover, 2 pressed.
+    func solidControl(_ level: Double) -> Color {
+        isDark ? Color(white: 0.23 + 0.04 * level) : Color(white: 0.93 - 0.04 * level)
+    }
+
+    static let solidDestructive = Color(red: 0.86, green: 0.21, blue: 0.19)
+
+    /// Opaque hover/press shade; `Color.mix` needs macOS 15.
+    static func darken(_ color: Color, by fraction: Double) -> Color {
+        guard fraction > 0, let blended = NSColor(color).blended(withFraction: fraction, of: .black) else { return color }
+        return Color(nsColor: blended)
     }
 
     var windowBackground: Color {

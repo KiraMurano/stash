@@ -9,6 +9,7 @@ struct ClipboardTextEditorView: View {
     let onSave: (String) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.solidAccents) private var solidAccents
     @Environment(\.l10n) private var l10n
     @FocusState private var isEditorFocused: Bool
     @State private var text: String
@@ -31,7 +32,7 @@ struct ClipboardTextEditorView: View {
     }
 
     private var palette: ThemePalette {
-        ThemePalette(colorScheme: colorScheme)
+        ThemePalette(colorScheme: colorScheme, solid: solidAccents)
     }
 
     var body: some View {
@@ -96,6 +97,7 @@ struct ClipboardTextEditorView: View {
         .background(palette.windowBackground)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, settings.l10n)
+        .environment(\.solidAccents, settings.themeMode.usesSolidAccents)
         .onAppear {
             DispatchQueue.main.async {
                 isEditorFocused = true
