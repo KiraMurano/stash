@@ -5,14 +5,13 @@ import SwiftUI
 @MainActor
 final class JournalPanelController {
     private enum Constants {
-        static let size = NSSize(width: 380, height: 400)
-        static let previousDefaultSize = NSSize(width: 430, height: 470)
+        static let size = NSSize(width: JournalView.Layout.width, height: JournalView.Layout.height)
         static let cornerRadius: CGFloat = 28
         static let savedOriginXKey = "JournalPanelOriginX"
         static let savedOriginYKey = "JournalPanelOriginY"
         static let savedWidthKey = "JournalPanelWidth"
         static let savedHeightKey = "JournalPanelHeight"
-        static let minSize = NSSize(width: 360, height: 360)
+        static let minSize = NSSize(width: JournalView.Layout.minWidth, height: JournalView.Layout.minHeight)
     }
 
     private let store: ClipboardHistoryStore
@@ -303,8 +302,8 @@ final class JournalPanelController {
         let width = defaults.double(forKey: Constants.savedWidthKey)
         let height = defaults.double(forKey: Constants.savedHeightKey)
 
-        if abs(width - Constants.previousDefaultSize.width) < 1,
-           abs(height - Constants.previousDefaultSize.height) < 1 {
+        // Sizes saved by the old single-column panel are too narrow for the split layout.
+        if width < Constants.minSize.width {
             return Constants.size
         }
 

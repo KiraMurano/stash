@@ -1,27 +1,17 @@
 import AppKit
 import SwiftUI
 
+/// Split journal: a denser frosted list with orange accents on the left, the selected clip
+/// in full on a lighter frosted pane on the right (concept 1.3.2.2, `.concepts/2026-09-18-journal-layout.html`).
 struct JournalView: View {
-    private enum Layout {
-        static let width: CGFloat = 380
-        static let height: CGFloat = 400
-        static let minWidth: CGFloat = 360
+    enum Layout {
+        static let width: CGFloat = 640
+        static let height: CGFloat = 440
+        static let minWidth: CGFloat = 560
         static let minHeight: CGFloat = 360
         static let cornerRadius: CGFloat = 24
-        static let headerTopPadding: CGFloat = 14
-        static let headerTitleBlockHeight: CGFloat = 32
-        static let tabSectionSpacing: CGFloat = 10
-        static let tabButtonHeight: CGFloat = 28
-        static let contentInset: CGFloat = 16
-        static let rowSpacing: CGFloat = 8
-
-        static var tabBarHeight: CGFloat {
-            tabSectionSpacing + tabButtonHeight + tabSectionSpacing
-        }
-
-        static var topChromeHeight: CGFloat {
-            headerTopPadding + headerTitleBlockHeight + tabBarHeight
-        }
+        static let sidebarWidth: CGFloat = 250
+        static let rowHeight: CGFloat = 42
     }
 
     private enum EntryFilter: CaseIterable, Identifiable {
@@ -36,7 +26,7 @@ struct JournalView: View {
             switch self {
             case .all: l10n("All", "Все")
             case .text: l10n("Text", "Текст")
-            case .media: l10n("Media", "Медиа")
+            case .media: l10n("Images", "Картинки")
             case .files: l10n("Files", "Файлы")
             }
         }
@@ -52,32 +42,11 @@ struct JournalView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var selectedID: ClipboardEntry.ID?
+    @State private var selectedFilter: EntryFilter = .all
     @State private var isClearConfirmationShown = false
     @State private var entryPendingDeletion: ClipboardEntry?
-    @State private var isHeaderTrashHovered = false
-    @State private var isHeaderCloseHovered = false
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
-    @State private var selectedFilter: EntryFilter = .all
-    @State private var tabBarIntrinsicWidth: CGFloat = 0
-    @State private var draggedPinnedEntryID: ClipboardEntry.ID?
-    @State private var draggedPinnedStartY: CGFloat?
-    @State private var draggedPinnedListTopY: CGFloat?
-    @State private var draggedPinnedTranslation: CGFloat = 0
-    @State private var rowFrames: [ClipboardEntry.ID: CGRect] = [:]
-
-    private var filteredEntries: [ClipboardEntry] {
-        switch selectedFilter {
-        case .all:
-            store.entries
-        case .text:
-            store.entries.filter(\.isText)
-        case .media:
-            store.entries.filter(\.isImage)
-        case .files:
-            store.entries.filter(\.isFile)
-        }
-    }
 
     private var palette: ThemePalette {
         ThemePalette(colorScheme: colorScheme)
@@ -87,22 +56,36 @@ struct JournalView: View {
         settings.l10n
     }
 
+    private var filteredEntries: [ClipboardEntry] {
+        switch selectedFilter {
+        case .all: store.entries
+        case .text: store.entries.filter(\.isText)
+        case .media: store.entries.filter(\.isImage)
+        case .files: store.entries.filter(\.isFile)
+        }
+    }
+
+    /// The explicit selection when it is still visible, otherwise the first clip of the filter.
+    private var selectedEntry: ClipboardEntry? {
+        filteredEntries.first { $0.id == selectedID } ?? filteredEntries.first
+    }
+
     var body: some View {
         ZStack {
             NativeGlassEffectView(style: .regular, cornerRadius: Layout.cornerRadius)
-            palette.windowTint
-            WindowDragHandle()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if filteredEntries.isEmpty {
-                emptyState
-            } else {
-                entriesList
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: Layout.sidebarWidth)
+                    .background(palette.sidebarTint)
+                    .overlay(alignment: .trailing) {
+                        palette.separator.frame(width: 1)
+                    }
+
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(palette.detailTint)
             }
-
-            header
-                .frame(maxHeight: .infinity, alignment: .top)
-                .zIndex(5)
 
             if isClearConfirmationShown || entryPendingDeletion != nil {
                 ZStack {
@@ -135,8 +118,8 @@ struct JournalView: View {
 
             if let toastMessage {
                 ToastOverlay(message: toastMessage)
-                    .padding(.bottom, 18)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 56)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     .zIndex(30)
             }
@@ -145,17 +128,6 @@ struct JournalView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
-        .onChange(of: filteredEntries) { entries in
-            if let selectedID, !entries.contains(where: { $0.id == selectedID }) {
-                self.selectedID = nil
-            }
-        }
-        .onChange(of: selectedFilter) { _ in
-            if let selectedID, !filteredEntries.contains(where: { $0.id == selectedID }) {
-                self.selectedID = nil
-            }
-        }
-        .animation(.easeOut(duration: 0.16), value: selectedID)
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .preferredColorScheme(settings.themeMode.colorScheme)
@@ -163,200 +135,380 @@ struct JournalView: View {
         .onExitCommand(perform: onClose)
     }
 
-    private var header: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Stash")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(palette.textPrimary)
-                        .overlay(WindowDragHandle())
+    // MARK: Sidebar
 
-                    Text("\(store.entries.count)/20")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(palette.textTertiary)
-                        .overlay(WindowDragHandle())
-                }
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 20, height: 20)
+
+                Text("Stash")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.textPrimary)
+
+                Text("\(store.entries.count)/20")
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(palette.textTertiary)
 
                 Spacer()
 
-                HeaderIconButton(
+                GlassIconButton(
                     systemName: "trash",
-                    isHovered: isHeaderTrashHovered,
-                    palette: palette,
-                    action: {
-                        isClearConfirmationShown = true
-                    }
+                    isDestructive: true,
+                    help: l10n("Clear history", "Очистить историю"),
+                    action: { isClearConfirmationShown = true }
                 )
-                .onHover { isHeaderTrashHovered = $0 }
-                .help(l10n("Clear history", "Очистить историю"))
-
-                HeaderIconButton(
-                    systemName: "xmark",
-                    isHovered: isHeaderCloseHovered,
-                    palette: palette,
-                    action: onClose
-                )
-                .onHover { isHeaderCloseHovered = $0 }
-                .help(l10n("Close", "Закрыть"))
             }
-            .padding(.horizontal, Layout.contentInset)
-            .padding(.top, Layout.headerTopPadding)
+            .padding(.leading, 14)
+            .padding(.trailing, 10)
+            .padding(.top, 12)
+            .padding(.bottom, 10)
+            .background(WindowDragHandle())
 
-            filterTabs
-                .padding(.top, Layout.tabSectionSpacing)
-                .padding(.bottom, Layout.tabSectionSpacing)
-        }
-        .background {
-            ZStack {
-                NativeGlassEffectView(style: .regular, cornerRadius: 0)
-                WindowDragHandle()
-            }
-        }
-    }
-
-    private var filterTabs: some View {
-        GeometryReader { geometry in
-            let shouldStretch = tabBarIntrinsicWidth > 0 && tabBarIntrinsicWidth <= geometry.size.width
-
-            Group {
-                if shouldStretch {
-                    tabButtonsRow(expanded: true)
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        tabButtonsRow(expanded: false)
+            TypeSegmentedControl(
+                titles: EntryFilter.allCases.map { $0.title(l10n) },
+                selectedIndex: EntryFilter.allCases.firstIndex(of: selectedFilter) ?? 0,
+                palette: palette,
+                onSelect: { index in
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        selectedFilter = EntryFilter.allCases[index]
                     }
                 }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-            .background(
-                tabButtonsRow(expanded: false)
-                    .fixedSize()
-                    .hidden()
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: TabBarWidthPreferenceKey.self,
-                                value: proxy.size.width
-                            )
-                        }
-                    )
             )
-        }
-        .frame(height: Layout.tabButtonHeight)
-        .onPreferenceChange(TabBarWidthPreferenceKey.self) { width in
-            tabBarIntrinsicWidth = width
-        }
-    }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
 
-    private func tabButtonsRow(expanded: Bool) -> some View {
-        HStack(spacing: 6) {
-            ForEach(EntryFilter.allCases) { filter in
-                FilterTabButton(
-                    title: filter.title(l10n),
-                    isSelected: selectedFilter == filter,
-                    isExpanded: expanded,
-                    palette: palette
-                ) {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        selectedFilter = filter
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, Layout.contentInset)
-    }
-
-    private var entriesList: some View {
-        ScrollView {
-            ZStack(alignment: .top) {
-                WindowDragHandle()
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: Layout.minHeight)
-
-                VStack(spacing: Layout.rowSpacing) {
-                    ForEach(filteredEntries) { entry in
-                        entryRow(entry)
-                        .contentShape(Rectangle())
-                        .background(entryFrameReader(for: entry.id))
-                        .opacity(draggedPinnedEntryID == entry.id ? 0 : 1)
-                        .zIndex(entry.isPinned ? 1 : 0)
-                        .highPriorityGesture(pinnedDragGesture(for: entry))
-                        .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.86), value: filteredEntries.map(\.id))
-                        .id(entry.id)
-                    }
-                }
-                .padding(.horizontal, Layout.contentInset)
-                .padding(.top, Layout.topChromeHeight + Layout.rowSpacing)
-                .padding(.bottom, Layout.rowSpacing)
-
-                if let draggedPinnedEntry {
-                    entryRow(draggedPinnedEntry, isDragging: true)
-                        .padding(.horizontal, Layout.contentInset)
-                        .offset(y: floatingDragY)
-                        .scaleEffect(1.025)
-                        .shadow(color: palette.shadow(0.14), radius: 16, y: 8)
-                        .allowsHitTesting(false)
-                        .zIndex(20)
-                        .transition(.identity)
-                }
-            }
-            .coordinateSpace(name: "entriesList")
-        }
-        .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onPreferenceChange(EntryFramePreferenceKey.self) { frames in
-            rowFrames = frames
-        }
-        .onMoveCommand { direction in
-            moveSelection(direction)
-        }
-        .onSubmit {
-            if let entry = filteredEntries.first(where: { $0.id == selectedID }) {
-                select(entry)
+            if filteredEntries.isEmpty {
+                Text(emptyStateMessage)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(palette.textSecondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(WindowDragHandle())
+            } else {
+                entryList
             }
         }
     }
 
-    private func entryRow(_ entry: ClipboardEntry, isDragging: Bool = false) -> some View {
-        ClipboardEntryRow(
+    private var entryList: some View {
+        List {
+            // Headers are plain rows: List section headers on macOS are sticky and draw their own bar.
+            ForEach(sections, id: \.title) { section in
+                Text(section.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(palette.textTertiary)
+                    .padding(.leading, 8)
+                    .padding(.top, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .moveDisabled(true)
+
+                ForEach(section.entries) { entry in
+                    row(entry)
+                }
+                .onMove(perform: section.isPinned ? { movePinned(in: section.entries, from: $0, to: $1) } : nil)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 20)
+    }
+
+    private func row(_ entry: ClipboardEntry) -> some View {
+        EntryRow(
             entry: entry,
-            image: store.image(for: entry),
+            thumbnail: store.image(for: entry),
             fileIcon: store.fileIcon(for: entry),
-            isSelected: selectedID == entry.id,
+            title: rowTitle(entry),
+            subtitle: "\(kindTitle(entry)) · \(timeTitle(entry.createdAt))",
+            isSelected: entry.id == selectedEntry?.id,
             isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
-            isPinLimitReached: !entry.isPinned && store.entries.filter(\.isPinned).count >= 10,
-            isDragging: isDragging,
-            onSelect: {
-                select(entry)
-            },
-            onPreviewImage: {
-                onPreviewImage(entry)
-            },
-            onEditText: {
-                onEditText(entry)
-            },
-            onTogglePin: {
-                if !store.togglePin(entry) {
-                    showToast(l10n("Up to 10 pinned clips", "Максимум 10 закрепов"))
-                }
-            },
-            onDelete: {
-                entryPendingDeletion = entry
-            }
+            palette: palette
         )
+        .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedID = entry.id
+        }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { select(entry) })
+        .help(l10n("Double-click to paste", "Двойной клик — вставить"))
     }
 
-    private var emptyState: some View {
-        VStack {
-            Spacer()
-            Text(emptyStateMessage)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(palette.textSecondary)
-            Spacer()
+    // MARK: Detail
+
+    @ViewBuilder
+    private var detail: some View {
+        if let entry = selectedEntry {
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Text(kindTitle(entry))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.textPrimary)
+
+                    Text("· \(timeTitle(entry.createdAt))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(palette.textTertiary)
+
+                    if store.currentClipboardFingerprint == entry.fingerprint {
+                        Text(l10n("in clipboard", "в буфере"))
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.accentText)
+                            .padding(.horizontal, 6)
+                            .frame(height: 16)
+                            .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    }
+
+                    Spacer()
+
+                    GlassIconButton(systemName: "xmark", help: l10n("Close", "Закрыть"), action: onClose)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 10)
+                .padding(.top, 10)
+                .background(WindowDragHandle())
+
+                stage(for: entry)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+
+                HStack(spacing: 12) {
+                    Text(l10n("Size", "Размер"))
+                        .foregroundStyle(palette.textTertiary)
+                    Text(metaTitle(entry))
+                        .foregroundStyle(palette.textSecondary)
+                    Spacer()
+                }
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+
+                actionBar(for: entry)
+            }
+        } else {
+            VStack(spacing: 6) {
+                Image(systemName: "tray")
+                    .font(.system(size: 24, weight: .regular))
+                    .foregroundStyle(palette.textTertiary)
+                Text(l10n("Nothing copied yet", "Пока ничего не скопировано"))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(palette.textSecondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(WindowDragHandle())
+            .overlay(alignment: .topTrailing) {
+                GlassIconButton(systemName: "xmark", help: l10n("Close", "Закрыть"), action: onClose)
+                    .padding(10)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WindowDragHandle())
+    }
+
+    @ViewBuilder
+    private func stage(for entry: ClipboardEntry) -> some View {
+        switch entry.payload {
+        case let .text(text):
+            ScrollView {
+                Text(text)
+                    .font(.system(size: 13))
+                    .lineSpacing(3)
+                    .foregroundStyle(palette.textPrimary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
+
+        case .image:
+            if let image = store.image(for: entry) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .shadow(color: palette.shadow(0.18), radius: 10, y: 4)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { onPreviewImage(entry) }
+                    .help(l10n("Double-click to open in a window", "Двойной клик — открыть в окне"))
+            } else {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(palette.placeholderBackground)
+            }
+
+        case .file:
+            VStack(spacing: 10) {
+                Group {
+                    if let icon = store.fileIcon(for: entry) {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .interpolation(.high)
+                    } else {
+                        Image(systemName: "doc")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundStyle(palette.textSecondary)
+                    }
+                }
+                .frame(width: 72, height: 72)
+
+                Text(entry.title(l10n))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(palette.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func actionBar(for entry: ClipboardEntry) -> some View {
+        HStack(spacing: 6) {
+            if entry.isText {
+                GlassIconButton(systemName: "pencil", help: l10n("Edit text", "Редактировать"), action: { onEditText(entry) })
+            }
+
+            if entry.isImage {
+                GlassIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: l10n("Open in a window", "Открыть в окне"), action: { onPreviewImage(entry) })
+            }
+
+            GlassIconButton(
+                systemName: entry.isPinned ? "pin.fill" : "pin",
+                tint: entry.isPinned ? palette.accentText : nil,
+                help: entry.isPinned ? l10n("Unpin clip", "Открепить") : l10n("Pin clip", "Закрепить"),
+                action: {
+                    if !store.togglePin(entry) {
+                        showToast(l10n("Up to 10 pinned clips", "Максимум 10 закрепов"))
+                    }
+                }
+            )
+
+            GlassIconButton(
+                systemName: "trash",
+                isDestructive: true,
+                help: l10n("Delete clip", "Удалить"),
+                action: { entryPendingDeletion = entry }
+            )
+
+            Spacer()
+
+            Button {
+                select(entry)
+            } label: {
+                HStack(spacing: 6) {
+                    Text(settings.pasteOnSelection ? l10n("Paste", "Вставить") : l10n("Copy", "Скопировать"))
+                    Image(systemName: "return")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background(ThemePalette.orange, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) {
+            palette.separator.frame(height: 1)
+        }
+    }
+
+    // MARK: Data
+
+    private struct EntrySection {
+        let title: String
+        let entries: [ClipboardEntry]
+        let isPinned: Bool
+    }
+
+    private var sections: [EntrySection] {
+        let calendar = Calendar.current
+        var result: [EntrySection] = []
+        let pinned = filteredEntries.filter(\.isPinned)
+        if !pinned.isEmpty {
+            result.append(EntrySection(title: l10n("Pinned", "Закреплённые"), entries: pinned, isPinned: true))
+        }
+
+        let rest = filteredEntries.filter { !$0.isPinned }
+        let today = rest.filter { calendar.isDateInToday($0.createdAt) }
+        let yesterday = rest.filter { calendar.isDateInYesterday($0.createdAt) }
+        let earlier = rest.filter { !calendar.isDateInToday($0.createdAt) && !calendar.isDateInYesterday($0.createdAt) }
+        for (title, entries) in [(l10n("Today", "Сегодня"), today), (l10n("Yesterday", "Вчера"), yesterday), (l10n("Earlier", "Раньше"), earlier)] where !entries.isEmpty {
+            result.append(EntrySection(title: title, entries: entries, isPinned: false))
+        }
+        return result
+    }
+
+    private func movePinned(in entries: [ClipboardEntry], from source: IndexSet, to destination: Int) {
+        guard let sourceIndex = source.first, entries.indices.contains(sourceIndex) else { return }
+        let sourceID = entries[sourceIndex].id
+
+        if destination >= entries.count {
+            guard let last = entries.last, last.id != sourceID else { return }
+            store.movePinnedEntry(sourceID: sourceID, to: last.id, afterTarget: true)
+        } else {
+            let target = entries[destination]
+            guard target.id != sourceID else { return }
+            store.movePinnedEntry(sourceID: sourceID, to: target.id, afterTarget: false)
+        }
+    }
+
+    private func kindTitle(_ entry: ClipboardEntry) -> String {
+        switch entry.payload {
+        case .text: l10n("Text", "Текст")
+        case .image: l10n("Image", "Картинка")
+        case .file: l10n("File", "Файл")
+        }
+    }
+
+    private func rowTitle(_ entry: ClipboardEntry) -> String {
+        guard entry.isImage else { return entry.title(l10n) }
+        if let size = pixelSize(of: entry) {
+            return "\(kindTitle(entry)) \(size)"
+        }
+        return kindTitle(entry)
+    }
+
+    private func metaTitle(_ entry: ClipboardEntry) -> String {
+        switch entry.payload {
+        case .text, .file:
+            return entry.subtitle(l10n)
+        case .image:
+            var parts: [String] = []
+            if let size = pixelSize(of: entry) {
+                parts.append(size)
+            }
+            if
+                let url = store.imageURL(for: entry),
+                let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber
+            {
+                parts.append("PNG")
+                parts.append(ByteCountFormatter.string(fromByteCount: bytes.int64Value, countStyle: .file))
+            }
+            return parts.joined(separator: " · ")
+        }
+    }
+
+    private func pixelSize(of entry: ClipboardEntry) -> String? {
+        guard let rep = store.image(for: entry)?.representations.first, rep.pixelsWide > 0 else { return nil }
+        return "\(rep.pixelsWide)×\(rep.pixelsHigh)"
+    }
+
+    private func timeTitle(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return DateFormatter.entryTime.string(from: date)
+        }
+        if calendar.isDateInYesterday(date) {
+            return l10n("yesterday", "вчера") + ", " + DateFormatter.entryTime.string(from: date)
+        }
+        return date.formatted(.dateTime.day().month(.abbreviated))
     }
 
     private var emptyStateMessage: String {
@@ -365,26 +517,21 @@ struct JournalView: View {
         }
 
         switch selectedFilter {
-        case .all:
-            return l10n("No saved clips", "Нет сохранённых клипов")
-        case .text:
-            return l10n("No text", "Нет текста")
-        case .media:
-            return l10n("No media", "Нет медиа")
-        case .files:
-            return l10n("No files", "Нет файлов")
+        case .all: return l10n("No saved clips", "Нет сохранённых клипов")
+        case .text: return l10n("No text", "Нет текста")
+        case .media: return l10n("No images", "Нет картинок")
+        case .files: return l10n("No files", "Нет файлов")
         }
     }
 
+    // MARK: Actions
+
     private func select(_ entry: ClipboardEntry) {
         selectedID = entry.id
-        showSelectionToast()
+        if !settings.closeAfterSelection {
+            showToast(settings.pasteOnSelection ? l10n("Pasted", "Вставлено") : l10n("Copied", "Скопировано"))
+        }
         onSelect(entry)
-    }
-
-    private func showSelectionToast() {
-        guard !settings.closeAfterSelection else { return }
-        showToast(settings.pasteOnSelection ? l10n("Pasted", "Вставлено") : l10n("Copied", "Скопировано"))
     }
 
     private func showToast(_ message: String) {
@@ -399,552 +546,179 @@ struct JournalView: View {
             }
         }
     }
-
-    private func moveSelection(_ direction: MoveCommandDirection) {
-        guard !filteredEntries.isEmpty else { return }
-        let currentIndex = filteredEntries.firstIndex { $0.id == selectedID } ?? 0
-
-        switch direction {
-        case .down:
-            selectedID = filteredEntries[min(currentIndex + 1, filteredEntries.count - 1)].id
-        case .up:
-            selectedID = filteredEntries[max(currentIndex - 1, 0)].id
-        default:
-            break
-        }
-    }
-
-    private func entryFrameReader(for id: ClipboardEntry.ID) -> some View {
-        GeometryReader { proxy in
-            Color.clear.preference(
-                key: EntryFramePreferenceKey.self,
-                value: [id: proxy.frame(in: .named("entriesList"))]
-            )
-        }
-    }
-
-    private func pinnedDragGesture(for entry: ClipboardEntry) -> some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .named("entriesList"))
-            .onChanged { value in
-                guard entry.isPinned else { return }
-
-                if draggedPinnedEntryID == nil {
-                    let listTopY = currentListTopY
-                    draggedPinnedEntryID = entry.id
-                    draggedPinnedListTopY = listTopY
-                    draggedPinnedStartY = layoutMinY(for: entry.id, listTopY: listTopY)
-                }
-
-                guard draggedPinnedEntryID == entry.id else { return }
-                draggedPinnedTranslation = value.translation.height
-                updatePinnedOrder(sourceID: entry.id, locationY: value.location.y)
-            }
-            .onEnded { _ in
-                guard draggedPinnedEntryID == entry.id else { return }
-
-                withAnimation(.interactiveSpring(response: 0.26, dampingFraction: 0.88)) {
-                    draggedPinnedStartY = layoutMinY(for: entry.id, listTopY: draggedPinnedListTopY ?? currentListTopY)
-                    draggedPinnedTranslation = 0
-                }
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                    if draggedPinnedEntryID == entry.id {
-                        draggedPinnedEntryID = nil
-                        draggedPinnedStartY = nil
-                        draggedPinnedListTopY = nil
-                    }
-                }
-            }
-    }
-
-    private func updatePinnedOrder(sourceID: ClipboardEntry.ID, locationY: CGFloat) {
-        let visiblePinnedEntries = filteredEntries.filter(\.isPinned)
-        guard visiblePinnedEntries.count > 1 else { return }
-        let listTopY = draggedPinnedListTopY ?? currentListTopY
-
-        guard let sourceIndex = visiblePinnedEntries.firstIndex(where: { $0.id == sourceID }) else { return }
-
-        for target in visiblePinnedEntries where target.id != sourceID {
-            guard
-                let targetIndex = visiblePinnedEntries.firstIndex(where: { $0.id == target.id }),
-                let targetFrame = layoutFrame(for: target, listTopY: listTopY)
-            else {
-                continue
-            }
-
-            let threshold = targetFrame.height * 0.32
-            let afterTarget: Bool
-            if targetIndex > sourceIndex {
-                guard locationY >= targetFrame.minY + threshold else { continue }
-                afterTarget = true
-            } else {
-                guard locationY <= targetFrame.maxY - threshold else { continue }
-                afterTarget = false
-            }
-
-            store.movePinnedEntry(sourceID: sourceID, to: target.id, afterTarget: afterTarget)
-            return
-        }
-    }
-
-    private var draggedPinnedEntry: ClipboardEntry? {
-        guard let draggedPinnedEntryID else { return nil }
-        return store.entries.first { $0.id == draggedPinnedEntryID }
-    }
-
-    private var floatingDragY: CGFloat {
-        guard let draggedPinnedStartY else {
-            return draggedPinnedTranslation
-        }
-
-        return draggedPinnedStartY + draggedPinnedTranslation
-    }
-
-    private var currentListTopY: CGFloat {
-        let visibleFrames = filteredEntries.compactMap { rowFrames[$0.id]?.minY }
-        return visibleFrames.min() ?? Layout.topChromeHeight + Layout.rowSpacing
-    }
-
-    private func layoutFrame(for entry: ClipboardEntry, listTopY: CGFloat) -> CGRect? {
-        guard let minY = layoutMinY(for: entry.id, listTopY: listTopY) else { return nil }
-        return CGRect(
-            x: 0,
-            y: minY,
-            width: rowFrames[entry.id]?.width ?? 0,
-            height: rowHeight(for: entry)
-        )
-    }
-
-    private func layoutMinY(for id: ClipboardEntry.ID, listTopY: CGFloat) -> CGFloat? {
-        var y = listTopY
-
-        for entry in filteredEntries {
-            if entry.id == id {
-                return y
-            }
-
-            y += rowHeight(for: entry) + Layout.rowSpacing
-        }
-
-        return nil
-    }
-
-    private func rowHeight(for entry: ClipboardEntry) -> CGFloat {
-        switch entry.payload {
-        case .text, .file:
-            return 62
-        case .image:
-            return 134
-        }
-    }
 }
 
-private struct EntryFramePreferenceKey: PreferenceKey {
-    static let defaultValue: [ClipboardEntry.ID: CGRect] = [:]
+// MARK: - Row
 
-    static func reduce(value: inout [ClipboardEntry.ID: CGRect], nextValue: () -> [ClipboardEntry.ID: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, newValue in newValue })
-    }
-}
-
-private struct TabBarWidthPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private struct FilterTabButton: View {
-    let title: String
-    let isSelected: Bool
-    let isExpanded: Bool
-    let palette: ThemePalette
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(isSelected ? palette.textPrimary : palette.textSecondary)
-                .lineLimit(1)
-                .padding(.horizontal, isExpanded ? 0 : 12)
-                .frame(maxWidth: isExpanded ? .infinity : nil)
-                .frame(height: 28)
-                .background {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(palette.cardGlassFill)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(palette.borderSelected.opacity(0.7), lineWidth: 1)
-                            )
-                    } else if isHovered {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(palette.controlHoverBackground)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: isExpanded ? .infinity : nil)
-        .onHover { isHovered = $0 }
-    }
-}
-
-private struct HeaderIconButton: View {
-    let systemName: String
-    let isHovered: Bool
-    let palette: ThemePalette
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(iconColor)
-                .frame(width: 30, height: 30)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var iconColor: Color {
-        if systemName == "trash", isHovered {
-            return .red.opacity(0.86)
-        }
-
-        return palette.iconOpacity(isHovered ? 0.82 : 0.52)
-    }
-}
-
-private struct ClipboardEntryRow: View {
+private struct EntryRow: View {
     let entry: ClipboardEntry
-    let image: NSImage?
+    let thumbnail: NSImage?
     let fileIcon: NSImage?
+    let title: String
+    let subtitle: String
     let isSelected: Bool
     let isCurrent: Bool
-    let isPinLimitReached: Bool
-    let isDragging: Bool
-    let onSelect: () -> Void
-    let onPreviewImage: () -> Void
-    let onEditText: () -> Void
-    let onTogglePin: () -> Void
-    let onDelete: () -> Void
+    let palette: ThemePalette
 
     @State private var isHovered = false
-    @State private var isPinHovered = false
-    @State private var isEditHovered = false
-    @State private var isDeleteHovered = false
-    @State private var isExpandHovered = false
-    @State private var isZoomHovered = false
-    @State private var isExpanded = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            thumb
+                .frame(width: 30, height: 30)
+                .background(palette.placeholderBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? palette.accentText : palette.textPrimary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.textTertiary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if isCurrent {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(palette.textTertiary)
+            }
+
+            if entry.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(palette.accentText)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(height: JournalView.Layout.rowHeight)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isSelected ? palette.accentSoft : (isHovered ? palette.controlHoverBackground : .clear))
+        }
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Capsule()
+                    .fill(ThemePalette.orange)
+                    .frame(width: 3)
+                    .padding(.vertical, 9)
+                    .offset(x: -6)
+            }
+        }
+        .onHover { isHovered = $0 }
+    }
+
+    @ViewBuilder
+    private var thumb: some View {
+        switch entry.payload {
+        case .image:
+            if let thumbnail {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .interpolation(.medium)
+                    .scaledToFill()
+            }
+        case .file:
+            if let fileIcon {
+                Image(nsImage: fileIcon)
+                    .resizable()
+                    .padding(3)
+            } else {
+                Image(systemName: "doc")
+                    .font(.system(size: 13))
+                    .foregroundStyle(palette.textSecondary)
+            }
+        case let .text(text):
+            Text(String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(palette.textSecondary)
+        }
+    }
+}
+
+// MARK: - Controls
+
+/// Type filter: a track (radius 8) with a translucent orange thumb (radius 6) that slides between segments.
+private struct TypeSegmentedControl: View {
+    let titles: [String]
+    let selectedIndex: Int
+    let palette: ThemePalette
+    let onSelect: (Int) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            let segmentWidth = (geometry.size.width - 4) / CGFloat(max(titles.count, 1))
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(palette.segmentThumb)
+                    .frame(width: segmentWidth)
+                    .offset(x: segmentWidth * CGFloat(selectedIndex))
+                    .padding(2)
+
+                HStack(spacing: 0) {
+                    ForEach(titles.indices, id: \.self) { index in
+                        Button {
+                            onSelect(index)
+                        } label: {
+                            Text(titles[index])
+                                .font(.system(size: 11.5, weight: index == selectedIndex ? .semibold : .medium))
+                                .foregroundStyle(index == selectedIndex ? palette.accentText : palette.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .frame(width: segmentWidth, height: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(2)
+            }
+        }
+        .frame(height: 28)
+        .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct GlassIconButton: View {
+    let systemName: String
+    var isDestructive = false
+    var tint: Color?
+    let help: String
+    let action: () -> Void
+
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.l10n) private var l10n
+    @State private var isHovered = false
 
     private var palette: ThemePalette {
         ThemePalette(colorScheme: colorScheme)
     }
 
     var body: some View {
-        ZStack {
-            content
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-        }
-        .frame(minHeight: rowHeight)
-        .background {
-            CardBackground(isSelected: isSelected, isDragging: isDragging, palette: palette)
-        }
-        .overlay(alignment: .topLeading) {
-            if isCurrent {
-                Image(systemName: "clipboard")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(palette.iconOpacity(0.48))
-                    .frame(width: 22, height: 22)
-                    .padding(.top, 8)
-                    .padding(.leading, 8)
-                    .help(l10n("Current clipboard", "Сейчас в буфере"))
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            actionToolbar
-            .padding(.top, 8)
-            .padding(.trailing, 8)
-            .opacity(showsRowIcons ? 1 : 0)
-            .allowsHitTesting(showsRowIcons)
-        }
-        .overlay(alignment: .bottom) {
-            if canExpandText && !isExpanded {
-                ExpandFadeOverlay(palette: palette)
-                    .frame(height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .allowsHitTesting(false)
-            }
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if canExpandText && showsRowIcons {
-                Button {
-                    isExpanded.toggle()
-                } label: {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.iconOpacity(isExpandHovered ? 0.78 : 0.50))
-                        .frame(width: 32, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .onHover { isExpandHovered = $0 }
-                .padding(.trailing, 6)
-                .padding(.bottom, 4)
-                .help(isExpanded ? l10n("Collapse clip", "Свернуть") : l10n("Expand clip", "Развернуть"))
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect()
-        }
-        .shadow(color: palette.shadow(isHovered ? 0.10 : 0.06), radius: isHovered ? 10 : 6, y: isHovered ? 5 : 2)
-        .animation(.easeOut(duration: 0.16), value: isHovered)
-        .animation(.easeOut(duration: 0.16), value: isSelected)
-        .animation(.easeOut(duration: 0.12), value: showsRowIcons)
-        .onHover { isHovered = $0 }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch entry.payload {
-        case let .text(text):
-            Text(previewText(text))
-                .font(.system(size: 14, weight: .regular))
-                .lineLimit(isExpanded ? nil : 3)
-                .foregroundStyle(palette.textPrimary)
-                .padding(.leading, isCurrent ? 18 : 0)
-                .padding(.trailing, Self.trailingReservedWidth)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-
-        case .image:
-            if let image {
-                RoundedAspectFitImage(
-                    image: image,
-                    maxHeight: imageHeight,
-                    cornerRadius: 8
-                )
-            } else {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(palette.placeholderBackground)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: imageHeight)
-            }
-
-        case .file:
-            HStack(spacing: 10) {
-                Group {
-                    if let fileIcon {
-                        Image(nsImage: fileIcon)
-                            .resizable()
-                            .interpolation(.high)
-                    } else {
-                        Image(systemName: "doc")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(palette.textSecondary)
-                    }
-                }
-                .frame(width: 36, height: 36)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.title(l10n))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(palette.textPrimary)
-                        .lineLimit(2)
-
-                    Text(entry.subtitle(l10n))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(palette.textTertiary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.leading, isCurrent ? 18 : 0)
-            .padding(.trailing, Self.trailingReservedWidth)
-        }
-    }
-
-    private var actionToolbar: some View {
-        HStack(spacing: 2) {
-            if entry.isText {
-                iconButton(
-                    systemName: "pencil",
-                    isHovered: isEditHovered,
-                    help: l10n("Edit text", "Редактировать"),
-                    action: onEditText
-                )
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-                .onHover { isEditHovered = $0 }
-            }
-
-            if entry.isImage {
-                iconButton(
-                    systemName: "arrow.up.left.and.arrow.down.right",
-                    isHovered: isZoomHovered,
-                    help: l10n("Open preview", "Открыть превью"),
-                    action: onPreviewImage
-                )
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-                .onHover { isZoomHovered = $0 }
-            }
-
-            iconButton(
-                systemName: "trash",
-                isHovered: isDeleteHovered,
-                tint: isDeleteHovered ? Color.red.opacity(0.86) : nil,
-                help: l10n("Delete clip", "Удалить"),
-                action: onDelete
-            )
-            .opacity(isHovered ? 1 : 0)
-            .allowsHitTesting(isHovered)
-            .onHover { isDeleteHovered = $0 }
-
-            iconButton(
-                systemName: entry.isPinned ? "pin.fill" : "pin",
-                isHovered: isPinHovered,
-                tint: entry.isPinned ? palette.iconOpacity(0.82) : nil,
-                help: entry.isPinned
-                    ? l10n("Unpin clip", "Открепить")
-                    : (isPinLimitReached ? l10n("Pin limit reached", "Достигнут лимит закрепов") : l10n("Pin clip", "Закрепить")),
-                action: onTogglePin
-            )
-            .opacity(isHovered || entry.isPinned ? 1 : 0)
-            .allowsHitTesting(isHovered || entry.isPinned)
-            .onHover { isPinHovered = $0 }
-        }
-    }
-
-    private func iconButton(
-        systemName: String,
-        isHovered: Bool,
-        tint: Color? = nil,
-        help: String,
-        action: @escaping () -> Void
-    ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(tint ?? palette.iconOpacity(isHovered ? 0.76 : 0.46))
+                .foregroundStyle(iconColor)
                 .frame(width: 28, height: 28)
-                .background {
-                    IconGlassBackground(cornerRadius: 8, isHighlighted: isHovered, palette: palette)
-                }
+                .background(isHovered ? palette.controlHoverBackground : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
         .help(help)
+        .onHover { isHovered = $0 }
     }
 
-    /// Space kept free on the right for the single always-visible action (pin);
-    /// the other hover actions float over the content.
-    private static let trailingReservedWidth: CGFloat = 28
-
-    private var rowHeight: CGFloat {
-        return switch entry.payload {
-        case .text, .file:
-            62
-        case .image:
-            134
+    private var iconColor: Color {
+        if isDestructive, isHovered {
+            return .red.opacity(0.86)
         }
-    }
-
-    private var imageHeight: CGFloat {
-        118
-    }
-
-    private var canExpandText: Bool {
-        guard case let .text(text) = entry.payload else {
-            return false
+        if let tint {
+            return tint
         }
-
-        let value = previewText(text)
-        return value.contains("\n") || value.count > 135
-    }
-
-    private var showsRowIcons: Bool {
-        isHovered || entry.isPinned
-    }
-
-    private func previewText(_ text: String) -> String {
-        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? l10n("Empty text", "Пустой текст") : value
-    }
-}
-
-private struct RoundedAspectFitImage: View {
-    let image: NSImage
-    let maxHeight: CGFloat
-    let cornerRadius: CGFloat
-
-    var body: some View {
-        GeometryReader { geometry in
-            let fittedSize = Self.aspectFitSize(
-                image.size,
-                in: CGSize(width: geometry.size.width, height: maxHeight)
-            )
-
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: fittedSize.width, height: fittedSize.height)
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .frame(width: geometry.size.width, height: maxHeight, alignment: .center)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: maxHeight)
-    }
-
-    private static func aspectFitSize(_ imageSize: CGSize, in bounds: CGSize) -> CGSize {
-        guard imageSize.width > 0, imageSize.height > 0, bounds.width > 0, bounds.height > 0 else {
-            return bounds
-        }
-
-        let scale = min(bounds.width / imageSize.width, bounds.height / imageSize.height)
-        return CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-    }
-}
-
-private struct IconGlassBackground: View {
-    let cornerRadius: CGFloat
-    let isHighlighted: Bool
-    let palette: ThemePalette
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
-        ZStack {
-            shape
-                .fill(palette.modalBackground)
-
-            shape
-                .fill(palette.iconGlassTint.opacity(isHighlighted ? 1 : 0.72))
-
-            shape
-                .stroke(palette.iconGlassBorder.opacity(isHighlighted ? 1 : 0.72), lineWidth: 1)
-        }
-    }
-}
-
-private struct CardBackground: View {
-    let isSelected: Bool
-    let isDragging: Bool
-    let palette: ThemePalette
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(isDragging ? palette.draggedCardBackground : palette.cardGlassFill)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? palette.borderSelected : palette.border, lineWidth: 1)
-            )
+        return palette.iconOpacity(isHovered ? 0.82 : 0.55)
     }
 }
 
@@ -1056,26 +830,38 @@ private struct ToastOverlay: View {
     }
 }
 
-private struct ExpandFadeOverlay: View {
-    let palette: ThemePalette
-
-    var body: some View {
-        LinearGradient(
-            colors: [
-                Color.clear,
-                palette.expandFadeColor
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-}
-
 struct ThemePalette {
     let colorScheme: ColorScheme
 
     var isDark: Bool {
         colorScheme == .dark
+    }
+
+    /// Orange from the app icon (#F46A25).
+    static let orange = Color(red: 244 / 255, green: 106 / 255, blue: 37 / 255)
+
+    /// Frosted tint over the glass for the list pane (denser) and the preview pane (lighter).
+    var sidebarTint: Color {
+        isDark ? Color(red: 28 / 255, green: 28 / 255, blue: 30 / 255).opacity(0.84) : Color.white.opacity(0.82)
+    }
+
+    var detailTint: Color {
+        isDark ? Color(red: 18 / 255, green: 18 / 255, blue: 20 / 255).opacity(0.42) : Color.white.opacity(0.38)
+    }
+
+    /// Orange for text and small marks, tuned per appearance for contrast.
+    var accentText: Color {
+        isDark ? Color(red: 1, green: 138 / 255, blue: 76 / 255) : Color(red: 217 / 255, green: 86 / 255, blue: 26 / 255)
+    }
+
+    /// Soft orange behind the selected row.
+    var accentSoft: Color {
+        Self.orange.opacity(isDark ? 0.22 : 0.13)
+    }
+
+    /// Translucent orange thumb of the type filter.
+    var segmentThumb: Color {
+        Self.orange.opacity(isDark ? 0.28 : 0.18)
     }
 
     var windowBackground: Color {

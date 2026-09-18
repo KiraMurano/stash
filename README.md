@@ -6,10 +6,10 @@ Stash is a minimal macOS clipboard history app inspired by Windows clipboard jou
 
 - Global `Option+V` shortcut opens the journal.
 - Text and images are saved from the system pasteboard.
-- Clicking an item replaces the current pasteboard content.
+- The journal is split: clips on the left, the selected clip in full on the right. Double-click a clip or press Paste to put it back on the pasteboard.
 - Menu settings can also paste immediately after selection, close the journal after selection, and switch theme and interface language (System, English, Русский).
 - History keeps up to 20 clips for 24 hours and is stored locally in `~/Library/Application Support/BufferJournal`.
-- The app runs as a menu bar accessory with a compact glass-style SwiftUI panel. The app icon is built from `Resources/AppIconSource.png` with `swift Scripts/make_icon.swift`.
+- The app runs as a menu bar accessory with a frosted-glass SwiftUI panel with orange accents. The app icon is built from `Resources/AppIconSource.png` with `swift Scripts/make_icon.swift`.
 
 ## Build
 
