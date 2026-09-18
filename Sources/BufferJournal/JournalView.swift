@@ -10,8 +10,11 @@ struct JournalView: View {
         static let minWidth: CGFloat = 560
         static let minHeight: CGFloat = 360
         static let cornerRadius: CGFloat = 24
-        static let sidebarWidth: CGFloat = 250
-        static let rowHeight: CGFloat = 42
+        static let sidebarWidth: CGFloat = 290
+        static let sidebarMinWidth: CGFloat = 240
+        static let sidebarMaxWidth: CGFloat = 440
+        static let detailMinWidth: CGFloat = 300
+        static let rowHeight: CGFloat = 60
     }
 
     private enum EntryFilter: CaseIterable, Identifiable {
@@ -47,6 +50,9 @@ struct JournalView: View {
     @State private var entryPendingDeletion: ClipboardEntry?
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
+    @State private var isListScrolled = false
+    @State private var sidebarDragStartWidth: CGFloat?
+    @AppStorage("SidebarWidth") private var storedSidebarWidth: Double = Double(Layout.sidebarWidth)
 
     private var palette: ThemePalette {
         ThemePalette(colorScheme: colorScheme)
@@ -74,22 +80,43 @@ struct JournalView: View {
         ZStack {
             NativeGlassEffectView(style: .regular, cornerRadius: Layout.cornerRadius)
 
-            HStack(spacing: 0) {
-                sidebar
-                    .frame(width: Layout.sidebarWidth)
-                    .background(palette.sidebarTint)
-                    .overlay(alignment: .trailing) {
-                        palette.separator.frame(width: 1)
-                    }
+            GeometryReader { geometry in
+                let width = sidebarWidth(in: geometry.size.width)
 
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(palette.detailTint)
+                HStack(spacing: 0) {
+                    sidebar
+                        .frame(width: width)
+                        .background(palette.sidebarTint)
+                        .overlay(alignment: .trailing) {
+                            palette.separator.frame(width: 1)
+                        }
+                        .overlay(alignment: .trailing) {
+                            SidebarResizeHandle(
+                                onChanged: { translation in
+                                    let start = sidebarDragStartWidth ?? width
+                                    sidebarDragStartWidth = start
+                                    storedSidebarWidth = Double(clampedSidebarWidth(start + translation, in: geometry.size.width))
+                                },
+                                onEnded: { sidebarDragStartWidth = nil }
+                            )
+                            .offset(x: 4)
+                        }
+                        .zIndex(1)
+
+                    detail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(palette.detailTint)
+                }
             }
 
             if isClearConfirmationShown || entryPendingDeletion != nil {
                 ZStack {
-                    GlassBackdrop(cornerRadius: Layout.cornerRadius, palette: palette)
+                    palette.dialogBackdrop
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            isClearConfirmationShown = false
+                            entryPendingDeletion = nil
+                        }
 
                     DeleteConfirmationOverlay(
                         title: isClearConfirmationShown ? l10n("Clear history?", "Очистить историю?") : l10n("Delete clip?", "Удалить клип?"),
@@ -142,10 +169,11 @@ struct JournalView: View {
             HStack(spacing: 8) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
-                    .frame(width: 20, height: 20)
+                    .interpolation(.high)
+                    .frame(width: 30, height: 30)
 
                 Text("Stash")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(palette.textPrimary)
 
                 Text("\(store.entries.count)/20")
@@ -179,7 +207,17 @@ struct JournalView: View {
                 }
             )
             .padding(.horizontal, 10)
-            .padding(.bottom, 6)
+            .padding(.bottom, 8)
+            .overlay(alignment: .bottom) {
+                // Shadow under the header once the list scrolls beneath it.
+                LinearGradient(colors: [palette.shadow(0.14), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 8)
+                    .offset(y: 8)
+                    .opacity(isListScrolled ? 1 : 0)
+                    .animation(.easeOut(duration: 0.15), value: isListScrolled)
+                    .allowsHitTesting(false)
+            }
+            .zIndex(1)
 
             if filteredEntries.isEmpty {
                 Text(emptyStateMessage)
@@ -216,6 +254,7 @@ struct JournalView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .background(ScrollOffsetObserver { isListScrolled = $0 })
         .environment(\.defaultMinListRowHeight, 20)
     }
 
@@ -225,10 +264,12 @@ struct JournalView: View {
             thumbnail: store.image(for: entry),
             fileIcon: store.fileIcon(for: entry),
             title: rowTitle(entry),
-            subtitle: "\(kindTitle(entry)) · \(timeTitle(entry.createdAt))",
+            subtitle: rowSubtitle(entry),
             isSelected: entry.id == selectedEntry?.id,
             isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
-            palette: palette
+            palette: palette,
+            quickPasteTitle: settings.pasteOnSelection ? l10n("Paste", "Вставить") : l10n("Copy", "Скопировать"),
+            onQuickPaste: { select(entry) }
         )
         .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
         .listRowSeparator(.hidden)
@@ -334,8 +375,8 @@ struct JournalView: View {
                     .shadow(color: palette.shadow(0.18), radius: 10, y: 4)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { onPreviewImage(entry) }
-                    .help(l10n("Double-click to open in a window", "Двойной клик — открыть в окне"))
+                    .onTapGesture { onPreviewImage(entry) }
+                    .help(l10n("Open in Preview", "Открыть в Просмотре"))
             } else {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(palette.placeholderBackground)
@@ -373,7 +414,7 @@ struct JournalView: View {
             }
 
             if entry.isImage {
-                GlassIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: l10n("Open in a window", "Открыть в окне"), action: { onPreviewImage(entry) })
+                GlassIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: l10n("Open in Preview", "Открыть в Просмотре"), action: { onPreviewImage(entry) })
             }
 
             GlassIconButton(
@@ -462,17 +503,40 @@ struct JournalView: View {
     private func kindTitle(_ entry: ClipboardEntry) -> String {
         switch entry.payload {
         case .text: l10n("Text", "Текст")
-        case .image: l10n("Image", "Картинка")
+        case .image: l10n("Image", "Изображение")
         case .file: l10n("File", "Файл")
         }
     }
 
     private func rowTitle(_ entry: ClipboardEntry) -> String {
-        guard entry.isImage else { return entry.title(l10n) }
-        if let size = pixelSize(of: entry) {
-            return "\(kindTitle(entry)) \(size)"
+        switch entry.payload {
+        case let .text(text):
+            // Collapse whitespace so two lines show real content, not blank lines.
+            let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            return collapsed.isEmpty ? l10n("Empty text", "Пустой текст") : collapsed
+        case .image:
+            return kindTitle(entry)
+        case .file:
+            return entry.title(l10n)
         }
-        return kindTitle(entry)
+    }
+
+    private func rowSubtitle(_ entry: ClipboardEntry) -> String {
+        let time = timeTitle(entry.createdAt)
+        switch entry.payload {
+        case .text: return time
+        case .image: return [pixelSize(of: entry), time].compactMap { $0 }.joined(separator: " · ")
+        case .file: return "\(entry.subtitle(l10n)) · \(time)"
+        }
+    }
+
+    private func sidebarWidth(in totalWidth: CGFloat) -> CGFloat {
+        clampedSidebarWidth(CGFloat(storedSidebarWidth), in: totalWidth)
+    }
+
+    private func clampedSidebarWidth(_ width: CGFloat, in totalWidth: CGFloat) -> CGFloat {
+        let upper = max(Layout.sidebarMinWidth, min(Layout.sidebarMaxWidth, totalWidth - Layout.detailMinWidth))
+        return min(max(width, Layout.sidebarMinWidth), upper)
     }
 
     private func metaTitle(_ entry: ClipboardEntry) -> String {
@@ -559,21 +623,24 @@ private struct EntryRow: View {
     let isSelected: Bool
     let isCurrent: Bool
     let palette: ThemePalette
+    let quickPasteTitle: String
+    let onQuickPaste: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 10) {
             thumb
-                .frame(width: 30, height: 30)
+                .frame(width: 44, height: 44)
                 .background(palette.placeholderBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? palette.accentText : palette.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(entry.isImage ? 1 : 2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(subtitle)
                     .font(.system(size: 11))
                     .foregroundStyle(palette.textTertiary)
@@ -581,20 +648,35 @@ private struct EntryRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if isCurrent {
-                Image(systemName: "doc.on.clipboard")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(palette.textTertiary)
-            }
-
-            if entry.isPinned {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(palette.accentText)
+            if isHovered {
+                Button(action: onQuickPaste) {
+                    Image(systemName: "return")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .background(ThemePalette.orange, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help(quickPasteTitle)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            } else {
+                VStack(spacing: 6) {
+                    if entry.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(palette.accentText)
+                    }
+                    if isCurrent {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(palette.textTertiary)
+                    }
+                }
             }
         }
         .padding(.horizontal, 8)
-        .frame(height: JournalView.Layout.rowHeight)
+        .padding(.vertical, 8)
+        .frame(minHeight: JournalView.Layout.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isSelected ? palette.accentSoft : (isHovered ? palette.controlHoverBackground : .clear))
@@ -604,10 +686,11 @@ private struct EntryRow: View {
                 Capsule()
                     .fill(ThemePalette.orange)
                     .frame(width: 3)
-                    .padding(.vertical, 9)
+                    .padding(.vertical, 12)
                     .offset(x: -6)
             }
         }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
     }
 
@@ -625,16 +708,118 @@ private struct EntryRow: View {
             if let fileIcon {
                 Image(nsImage: fileIcon)
                     .resizable()
-                    .padding(3)
+                    .padding(4)
             } else {
                 Image(systemName: "doc")
-                    .font(.system(size: 13))
+                    .font(.system(size: 16))
                     .foregroundStyle(palette.textSecondary)
             }
         case let .text(text):
             Text(String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)))
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(palette.textSecondary)
+        }
+    }
+}
+
+/// Invisible 8 pt strip over the divider: resize cursor on hover, drag changes the list width.
+private struct SidebarResizeHandle: View {
+    let onChanged: (CGFloat) -> Void
+    let onEnded: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Color.clear
+            .frame(width: 8)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                guard hovering != isHovered else { return }
+                isHovered = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { onChanged($0.translation.width) }
+                    .onEnded { _ in onEnded() }
+            )
+    }
+}
+
+/// Reports whether the enclosing list has scrolled away from the top.
+private struct ScrollOffsetObserver: NSViewRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onChange: onChange)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            context.coordinator.attach(from: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onChange = onChange
+    }
+
+    @MainActor
+    final class Coordinator {
+        var onChange: (Bool) -> Void
+        private weak var scrollView: NSScrollView?
+        private var observer: NSObjectProtocol?
+        private var lastValue = false
+
+        init(onChange: @escaping (Bool) -> Void) {
+            self.onChange = onChange
+        }
+
+        func attach(from view: NSView) {
+            guard scrollView == nil, let scrollView = Self.findScrollView(near: view) else { return }
+            self.scrollView = scrollView
+            let clipView = scrollView.contentView
+            clipView.postsBoundsChangedNotifications = true
+            observer = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: clipView,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.report()
+                }
+            }
+            report()
+        }
+
+        private func report() {
+            guard let scrollView else { return }
+            let offset = scrollView.contentView.bounds.origin.y + scrollView.contentInsets.top
+            let isScrolled = offset > 1
+            guard isScrolled != lastValue else { return }
+            lastValue = isScrolled
+            onChange(isScrolled)
+        }
+
+        private static func findScrollView(near view: NSView) -> NSScrollView? {
+            var ancestor = view.superview
+            while let current = ancestor {
+                if let scrollView = current as? NSScrollView {
+                    return scrollView
+                }
+                if let scrollView = current.subviews.lazy.compactMap({ $0 as? NSScrollView }).first {
+                    return scrollView
+                }
+                ancestor = current.superview
+            }
+            return nil
         }
     }
 }
@@ -722,20 +907,7 @@ private struct GlassIconButton: View {
     }
 }
 
-private struct GlassBackdrop: View {
-    let cornerRadius: CGFloat
-    let palette: ThemePalette
-
-    var body: some View {
-        ZStack {
-            NativeGlassEffectView(style: .regular, cornerRadius: cornerRadius)
-            palette.backdropTint
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-    }
-}
-
+/// Confirmation in the split style: frosted card, 8 pt buttons, destructive action in red.
 private struct DeleteConfirmationOverlay: View {
     let title: String
     let message: String
@@ -753,57 +925,66 @@ private struct DeleteConfirmationOverlay: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(palette.textPrimary)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "trash")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.red.opacity(0.85))
+                    .frame(width: 32, height: 32)
+                    .background(Color.red.opacity(palette.isDark ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                Text(message)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(palette.textSecondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(palette.textPrimary)
+
+                    Text(message)
+                        .font(.system(size: 12))
+                        .foregroundStyle(palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             HStack(spacing: 8) {
+                Spacer()
+
                 Button(action: onCancel) {
                     Text(l10n("Cancel", "Отмена"))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(palette.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .background(palette.controlHoverBackground.opacity(isCancelHovered ? 1 : 0.68), in: Capsule())
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(palette.textPrimary)
+                        .padding(.horizontal, 14)
+                        .frame(height: 28)
+                        .background(isCancelHovered ? palette.controlHoverBackground : palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(.easeOut(duration: 0.14)) {
-                        isCancelHovered = hovering
-                    }
-                }
+                .onHover { isCancelHovered = $0 }
 
                 Button(action: onConfirm) {
                     Text(actionTitle)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .background(Color.red.opacity(isConfirmHovered ? 0.92 : 0.82), in: Capsule())
+                        .padding(.horizontal, 14)
+                        .frame(height: 28)
+                        .background(Color.red.opacity(isConfirmHovered ? 0.95 : 0.84), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(.easeOut(duration: 0.14)) {
-                        isConfirmHovered = hovering
-                    }
-                }
+                .onHover { isConfirmHovered = $0 }
             }
         }
         .padding(16)
-        .frame(width: 270)
-        .background(palette.modalBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(width: 300)
+        .background {
+            ZStack {
+                NativeGlassEffectView(style: .regular, cornerRadius: 14)
+                palette.sidebarTint
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(palette.border, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(palette.border, lineWidth: 1)
         )
-        .shadow(color: palette.shadow(0.16), radius: 22, y: 10)
+        .shadow(color: palette.shadow(0.22), radius: 24, y: 10)
     }
 }
 
@@ -857,6 +1038,11 @@ struct ThemePalette {
     /// Soft orange behind the selected row.
     var accentSoft: Color {
         Self.orange.opacity(isDark ? 0.22 : 0.13)
+    }
+
+    /// Dim layer behind confirmation dialogs.
+    var dialogBackdrop: Color {
+        Color.black.opacity(isDark ? 0.32 : 0.16)
     }
 
     /// Translucent orange thumb of the type filter.
