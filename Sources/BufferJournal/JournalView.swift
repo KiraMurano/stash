@@ -309,14 +309,12 @@ struct JournalView: View {
 
     private static let listBottomID = "list-bottom"
 
-    /// The system draws the app icon's tile on about 71% of the image frame; the title's font
-    /// size is solved so the capital "S" (with its ~3% round overshoot) matches that tile.
+    /// Title sized by eye against the icon tile (the system draws it on ~71% of the frame);
+    /// the cap height is still used to centre "Stash" on its capitals.
     private enum Logo {
         static let iconFrame: CGFloat = 32
-        static let visibleIconHeight = iconFrame * 0.714
-        static let capHeightRatio = NSFont.systemFont(ofSize: 100, weight: .bold).capHeight / 100
-        static let fontSize = (visibleIconHeight / capHeightRatio / 1.03).rounded()
-        static let capHeight = fontSize * capHeightRatio
+        static let fontSize: CGFloat = 28
+        static let capHeight = NSFont.systemFont(ofSize: fontSize, weight: .bold).capHeight
     }
 
     private var entryList: some View {
