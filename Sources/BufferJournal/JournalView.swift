@@ -54,6 +54,7 @@ struct JournalView: View {
     @State private var query = ""
     @State private var keyboardScrollTarget: ClipboardEntry.ID?
     @FocusState private var isSearchFocused: Bool
+    @State private var isSearchEditing = false
     @State private var sidebarDragStartWidth: CGFloat?
     @AppStorage("SidebarWidth") private var storedSidebarWidth: Double = Double(Layout.sidebarWidth)
 
@@ -174,7 +175,8 @@ struct JournalView: View {
         .background(
             KeyboardMonitor(
                 onKey: handleKey,
-                onBecomeKey: { isSearchFocused = true }
+                onBecomeKey: { isSearchFocused = true },
+                onEditingChanged: { isSearchEditing = $0 }
             )
         )
     }
@@ -281,9 +283,9 @@ struct JournalView: View {
         .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(isSearchFocused ? ThemePalette.orange.opacity(0.55) : .clear, lineWidth: 1)
+                .strokeBorder(isSearchEditing ? ThemePalette.orange : .clear, lineWidth: 1.5)
         )
-        .animation(.easeOut(duration: 0.12), value: isSearchFocused)
+        .animation(.easeOut(duration: 0.12), value: isSearchEditing)
     }
 
     private var entryList: some View {
@@ -308,6 +310,14 @@ struct JournalView: View {
                 }
                 .onMove(perform: section.isPinned ? { movePinned(in: section.entries, from: $0, to: $1) } : nil)
             }
+
+            // Bottom inset so the last row does not touch the panel edge.
+            Color.clear
+                .frame(height: 8)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .moveDisabled(true)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -750,16 +760,22 @@ private struct EntryRow: View {
                 .background(palette.placeholderBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: isSelected || !entry.isText ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? palette.accentText : palette.textPrimary)
-                    .lineLimit(entry.isImage ? 1 : 2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(palette.textTertiary)
-                    .lineLimit(1)
+            Group {
+                if entry.isText {
+                    // Short text keeps its date line; text that needs two lines uses both for content.
+                    ViewThatFits(in: .horizontal) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            titleText.fixedSize(horizontal: true, vertical: false)
+                            subtitleText
+                        }
+                        titleText.lineLimit(2)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        titleText.lineLimit(entry.isImage ? 1 : 2)
+                        subtitleText
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -807,6 +823,19 @@ private struct EntryRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(.system(size: 13, weight: isSelected || !entry.isText ? .semibold : .regular))
+            .foregroundStyle(isSelected ? palette.accentText : palette.textPrimary)
+    }
+
+    private var subtitleText: some View {
+        Text(subtitle)
+            .font(.system(size: 11))
+            .foregroundStyle(palette.textTertiary)
+            .lineLimit(1)
     }
 
     @ViewBuilder
@@ -870,9 +899,10 @@ private struct SidebarResizeHandle: View {
 private struct KeyboardMonitor: NSViewRepresentable {
     let onKey: (NSEvent) -> Bool
     let onBecomeKey: () -> Void
+    let onEditingChanged: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onKey: onKey, onBecomeKey: onBecomeKey)
+        Coordinator(onKey: onKey, onBecomeKey: onBecomeKey, onEditingChanged: onEditingChanged)
     }
 
     func makeNSView(context: Context) -> NSView {
@@ -885,6 +915,7 @@ private struct KeyboardMonitor: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.onKey = onKey
         context.coordinator.onBecomeKey = onBecomeKey
+        context.coordinator.onEditingChanged = onEditingChanged
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
@@ -895,13 +926,34 @@ private struct KeyboardMonitor: NSViewRepresentable {
     final class Coordinator {
         var onKey: (NSEvent) -> Bool
         var onBecomeKey: () -> Void
+        var onEditingChanged: (Bool) -> Void
         weak var view: NSView?
         private var monitor: Any?
-        private var keyObserver: NSObjectProtocol?
+        private var observers: [NSObjectProtocol] = []
 
-        init(onKey: @escaping (NSEvent) -> Bool, onBecomeKey: @escaping () -> Void) {
+        init(onKey: @escaping (NSEvent) -> Bool, onBecomeKey: @escaping () -> Void, onEditingChanged: @escaping (Bool) -> Void) {
             self.onKey = onKey
             self.onBecomeKey = onBecomeKey
+            self.onEditingChanged = onEditingChanged
+        }
+
+        private func isOwnWindow(_ object: Any?) -> Bool {
+            guard let own = view?.window else { return false }
+            if let window = object as? NSWindow {
+                return window === own
+            }
+            return (object as? NSView)?.window === own
+        }
+
+        private func observe(_ name: Notification.Name, _ handler: @escaping @MainActor (Coordinator) -> Void) {
+            let token = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                nonisolated(unsafe) let object = notification.object
+                MainActor.assumeIsolated {
+                    guard let self, self.isOwnWindow(object) else { return }
+                    handler(self)
+                }
+            }
+            observers.append(token)
         }
 
         func start() {
@@ -920,28 +972,21 @@ private struct KeyboardMonitor: NSViewRepresentable {
                 }
                 return handled ? nil : event
             }
-            keyObserver = NotificationCenter.default.addObserver(
-                forName: NSWindow.didBecomeKeyNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                let window = ObjectIdentifier(notification.object as AnyObject)
-                MainActor.assumeIsolated {
-                    guard let self, let own = self.view?.window, ObjectIdentifier(own) == window else { return }
-                    self.onBecomeKey()
-                }
-            }
+            observe(NSWindow.didBecomeKeyNotification) { $0.onBecomeKey() }
+            observe(NSWindow.didResignKeyNotification) { $0.onEditingChanged(false) }
+            // The search field reports real editing through the field editor, which FocusState
+            // does not track reliably in a non-activating panel.
+            observe(NSControl.textDidBeginEditingNotification) { $0.onEditingChanged(true) }
+            observe(NSControl.textDidEndEditingNotification) { $0.onEditingChanged(false) }
         }
 
         func stop() {
             if let monitor {
                 NSEvent.removeMonitor(monitor)
             }
-            if let keyObserver {
-                NotificationCenter.default.removeObserver(keyObserver)
-            }
+            observers.forEach(NotificationCenter.default.removeObserver)
             monitor = nil
-            keyObserver = nil
+            observers = []
         }
     }
 }
@@ -977,8 +1022,18 @@ private struct ScrollOffsetObserver: NSViewRepresentable {
             self.onChange = onChange
         }
 
-        func attach(from view: NSView) {
-            guard scrollView == nil, let scrollView = Self.findScrollView(near: view) else { return }
+        func attach(from view: NSView, attempt: Int = 0) {
+            guard scrollView == nil else { return }
+            guard let scrollView = Self.findScrollView(near: view) else {
+                // Frames are still zero right after creation; try again once SwiftUI has laid out.
+                if attempt < 20 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak view] in
+                        guard let view else { return }
+                        self?.attach(from: view, attempt: attempt + 1)
+                    }
+                }
+                return
+            }
             self.scrollView = scrollView
             let clipView = scrollView.contentView
             clipView.postsBoundsChangedNotifications = true
@@ -1003,16 +1058,35 @@ private struct ScrollOffsetObserver: NSViewRepresentable {
             onChange(isScrolled)
         }
 
+        /// The observer is the list's background, so the list's scroll view is the one that
+        /// covers the same area of the window. Walk up and search each ancestor's subtree for it.
         private static func findScrollView(near view: NSView) -> NSScrollView? {
+            guard view.window != nil, view.bounds.width > 0, view.bounds.height > 0 else { return nil }
+            let target = view.convert(view.bounds, to: nil)
+
             var ancestor = view.superview
             while let current = ancestor {
-                if let scrollView = current as? NSScrollView {
-                    return scrollView
-                }
-                if let scrollView = current.subviews.lazy.compactMap({ $0 as? NSScrollView }).first {
-                    return scrollView
+                if let match = scrollView(in: current, matching: target) {
+                    return match
                 }
                 ancestor = current.superview
+            }
+            return nil
+        }
+
+        private static func scrollView(in root: NSView, matching target: NSRect) -> NSScrollView? {
+            for subview in root.subviews {
+                if let scrollView = subview as? NSScrollView {
+                    let frame = scrollView.convert(scrollView.bounds, to: nil)
+                    let overlap = frame.intersection(target)
+                    if !overlap.isNull, overlap.width * overlap.height >= 0.8 * target.width * target.height {
+                        return scrollView
+                    }
+                    continue
+                }
+                if let match = scrollView(in: subview, matching: target) {
+                    return match
+                }
             }
             return nil
         }
