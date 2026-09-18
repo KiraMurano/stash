@@ -1575,6 +1575,7 @@ private struct DeleteConfirmationOverlay: View {
 
     @State private var isConfirmHovered = false
     @State private var isCancelHovered = false
+    @State private var textBlockHeight: CGFloat = 40
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.solidAccents) private var solidAccents
     @Environment(\.l10n) private var l10n
@@ -1586,13 +1587,15 @@ private struct DeleteConfirmationOverlay: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
-                // Plate spans the whole text block (title + message); the text sets the height.
-                Image(systemName: "trash")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.red.opacity(0.85))
-                    .frame(width: 52)
-                    .frame(maxHeight: .infinity)
-                    .background(Color.red.opacity(palette.isDark ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // Square plate as tall as the text block (title + message), measured from the text.
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.red.opacity(palette.isDark ? 0.18 : 0.10))
+                    .frame(width: textBlockHeight, height: textBlockHeight)
+                    .overlay {
+                        Image(systemName: "trash")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Color.red.opacity(0.85))
+                    }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -1605,8 +1608,14 @@ private struct DeleteConfirmationOverlay: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear { textBlockHeight = geometry.size.height }
+                            .onChange(of: geometry.size.height) { textBlockHeight = $0 }
+                    }
+                )
             }
-            .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
                 Button(action: onCancel) {
