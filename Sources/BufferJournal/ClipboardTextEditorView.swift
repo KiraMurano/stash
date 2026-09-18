@@ -9,6 +9,7 @@ struct ClipboardTextEditorView: View {
     let onSave: (String) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.l10n) private var l10n
     @FocusState private var isEditorFocused: Bool
     @State private var text: String
     @State private var isCancelHovered = false
@@ -36,7 +37,7 @@ struct ClipboardTextEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Edit text")
+                Text(l10n("Edit text", "Редактирование текста"))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(palette.textPrimary)
 
@@ -67,7 +68,7 @@ struct ClipboardTextEditorView: View {
                 Spacer()
 
                 Button(action: onCancel) {
-                    Text("Cancel")
+                    Text(l10n("Cancel", "Отмена"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(palette.textSecondary)
                         .frame(width: 92, height: 34)
@@ -79,7 +80,7 @@ struct ClipboardTextEditorView: View {
                 Button {
                     onSave(text)
                 } label: {
-                    Text("Save")
+                    Text(l10n("Save", "Сохранить"))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 92, height: 34)
@@ -94,6 +95,7 @@ struct ClipboardTextEditorView: View {
         .frame(minWidth: 420, minHeight: 260)
         .background(palette.windowBackground)
         .preferredColorScheme(settings.themeMode.colorScheme)
+        .environment(\.l10n, settings.l10n)
         .onAppear {
             DispatchQueue.main.async {
                 isEditorFocused = true

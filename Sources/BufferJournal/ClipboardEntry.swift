@@ -100,25 +100,24 @@ struct ClipboardEntry: Codable, Identifiable, Equatable {
         pinnedOrder = try container.decodeIfPresent(Int.self, forKey: .pinnedOrder)
     }
 
-    var title: String {
+    func title(_ l10n: L10n) -> String {
         switch payload {
         case let .text(text):
             let singleLine = text
                 .replacingOccurrences(of: "\n", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return singleLine.isEmpty ? "Empty text" : singleLine
+            return singleLine.isEmpty ? l10n("Empty text", "Пустой текст") : singleLine
         case .image:
-            return "Image"
+            return l10n("Image", "Изображение")
         case let .file(_, originalName, _):
             return originalName
         }
     }
 
-    var subtitle: String {
+    func subtitle(_ l10n: L10n) -> String {
         switch payload {
         case let .text(text):
-            let count = text.count
-            return "\(count) \(count == 1 ? "character" : "characters")"
+            return l10n.characters(text.count)
         case .image:
             return DateFormatter.entryTime.string(from: createdAt)
         case let .file(_, _, byteCount):

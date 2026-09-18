@@ -5,17 +5,6 @@ enum ThemeMode: String, CaseIterable {
     case light
     case dark
 
-    var title: String {
-        switch self {
-        case .system:
-            "Auto"
-        case .light:
-            "Light"
-        case .dark:
-            "Dark"
-        }
-    }
-
     var colorScheme: ColorScheme? {
         switch self {
         case .system:
@@ -34,6 +23,7 @@ final class AppSettings: ObservableObject {
         static let pasteOnSelection = "PasteOnSelection"
         static let closeAfterSelection = "CloseAfterSelection"
         static let themeMode = "ThemeMode"
+        static let language = "Language"
     }
 
     @Published var pasteOnSelection: Bool {
@@ -54,6 +44,16 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var language: AppLanguage {
+        didSet {
+            UserDefaults.standard.set(language.rawValue, forKey: Keys.language)
+        }
+    }
+
+    var l10n: L10n {
+        L10n(language: language.resolved)
+    }
+
     init() {
         let defaults = UserDefaults.standard
 
@@ -68,5 +68,6 @@ final class AppSettings: ObservableObject {
         pasteOnSelection = defaults.bool(forKey: Keys.pasteOnSelection)
         closeAfterSelection = defaults.bool(forKey: Keys.closeAfterSelection)
         themeMode = ThemeMode(rawValue: defaults.string(forKey: Keys.themeMode) ?? "") ?? .system
+        language = AppLanguage(rawValue: defaults.string(forKey: Keys.language) ?? "") ?? .system
     }
 }

@@ -7,7 +7,7 @@ Minimal macOS clipboard history app inspired by Windows clipboard journal.
 - Global `Option+V` shortcut opens the journal.
 - Text and images are saved from the system pasteboard.
 - Clicking an item replaces the current pasteboard content.
-- Menu settings can also paste immediately after selection and close the journal after selection.
+- Menu settings can also paste immediately after selection, close the journal after selection, and switch theme and interface language (System, English, Русский).
 - History keeps up to 20 clips for 24 hours and is stored locally in `~/Library/Application Support/BufferJournal`.
 - The app runs as a menu bar accessory with a compact glass-style SwiftUI panel.
 
