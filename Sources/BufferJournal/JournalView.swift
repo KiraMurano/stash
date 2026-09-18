@@ -46,12 +46,12 @@ struct JournalView: View {
     @ObservedObject var settings: AppSettings
     let onSelect: (ClipboardEntry) -> Void
     let onEditText: (ClipboardEntry) -> Void
+    let onPreviewImage: (ClipboardEntry) -> Void
     let onClose: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var selectedID: ClipboardEntry.ID?
-    @State private var previewEntry: ClipboardEntry?
     @State private var isClearConfirmationShown = false
     @State private var entryPendingDeletion: ClipboardEntry?
     @State private var isHeaderTrashHovered = false
@@ -125,25 +125,6 @@ struct JournalView: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 .zIndex(20)
-            }
-
-            if
-                let previewEntry,
-                let previewImage = store.image(for: previewEntry)
-            {
-                ImagePreviewOverlay(
-                    image: previewImage,
-                    onPaste: {
-                        select(previewEntry)
-                    },
-                    onClose: {
-                        withAnimation(.easeOut(duration: 0.16)) {
-                            self.previewEntry = nil
-                        }
-                    }
-                )
-                .transition(.opacity.animation(.easeOut(duration: 0.16)))
-                .zIndex(25)
             }
 
             if let toastMessage {
@@ -343,9 +324,7 @@ struct JournalView: View {
                 select(entry)
             },
             onPreviewImage: {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    previewEntry = entry
-                }
+                onPreviewImage(entry)
             },
             onEditText: {
                 onEditText(entry)
@@ -651,6 +630,7 @@ private struct ClipboardEntryRow: View {
     @State private var isEditHovered = false
     @State private var isDeleteHovered = false
     @State private var isExpandHovered = false
+    @State private var isZoomHovered = false
     @State private var isExpanded = false
     @Environment(\.colorScheme) private var colorScheme
 
@@ -732,20 +712,17 @@ private struct ClipboardEntryRow: View {
                 .lineLimit(isExpanded ? nil : 3)
                 .foregroundStyle(palette.textPrimary)
                 .padding(.leading, isCurrent ? 18 : 0)
-                .padding(.trailing, 88)
+                .padding(.trailing, Self.trailingReservedWidth)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .image:
             if let image {
-                Button(action: onPreviewImage) {
-                    RoundedAspectFitImage(
-                        image: image,
-                        maxHeight: imageHeight,
-                        cornerRadius: 8
-                    )
-                }
-                .buttonStyle(.plain)
+                RoundedAspectFitImage(
+                    image: image,
+                    maxHeight: imageHeight,
+                    cornerRadius: 8
+                )
             } else {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(palette.placeholderBackground)
@@ -781,7 +758,7 @@ private struct ClipboardEntryRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.leading, isCurrent ? 18 : 0)
-            .padding(.trailing, 88)
+            .padding(.trailing, Self.trailingReservedWidth)
         }
     }
 
@@ -797,6 +774,18 @@ private struct ClipboardEntryRow: View {
                 .opacity(isHovered ? 1 : 0)
                 .allowsHitTesting(isHovered)
                 .onHover { isEditHovered = $0 }
+            }
+
+            if entry.isImage {
+                iconButton(
+                    systemName: "arrow.up.left.and.arrow.down.right",
+                    isHovered: isZoomHovered,
+                    help: "Open preview",
+                    action: onPreviewImage
+                )
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
+                .onHover { isZoomHovered = $0 }
             }
 
             iconButton(
@@ -843,6 +832,10 @@ private struct ClipboardEntryRow: View {
         .buttonStyle(.borderless)
         .help(help)
     }
+
+    /// Space kept free on the right for the single always-visible action (pin);
+    /// the other hover actions float over the content.
+    private static let trailingReservedWidth: CGFloat = 28
 
     private var rowHeight: CGFloat {
         return switch entry.payload {
@@ -919,6 +912,9 @@ private struct IconGlassBackground: View {
 
         ZStack {
             shape
+                .fill(palette.modalBackground)
+
+            shape
                 .fill(palette.iconGlassTint.opacity(isHighlighted ? 1 : 0.72))
 
             shape
@@ -939,75 +935,6 @@ private struct CardBackground: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(isSelected ? palette.borderSelected : palette.border, lineWidth: 1)
             )
-    }
-}
-
-private struct ImagePreviewOverlay: View {
-    let image: NSImage
-    let onPaste: () -> Void
-    let onClose: () -> Void
-
-    @State private var isPasteHovered = false
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var palette: ThemePalette {
-        ThemePalette(colorScheme: colorScheme)
-    }
-
-    var body: some View {
-        ZStack {
-            palette.modalBackground
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .onTapGesture(perform: onClose)
-
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onTapGesture(perform: onClose)
-
-            VStack {
-                HStack {
-                    Spacer()
-
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(palette.iconOpacity(0.76))
-                            .frame(width: 34, height: 34)
-                            .background(palette.cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .shadow(color: palette.shadow(0.10), radius: 10, y: 5)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(14)
-                }
-
-                Spacer()
-
-                Button(action: onPaste) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "clipboard")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Вставить")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(palette.textPrimary)
-                    .padding(.horizontal, 14)
-                    .frame(height: 34)
-                    .background(isPasteHovered ? palette.cardHoverBackground : palette.cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .shadow(color: palette.shadow(isPasteHovered ? 0.15 : 0.10), radius: isPasteHovered ? 16 : 11, y: 6)
-                    .scaleEffect(isPasteHovered ? 1.015 : 1)
-                }
-                .buttonStyle(.plain)
-                .padding(.bottom, 20)
-                .onHover { hovering in
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        isPasteHovered = hovering
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
