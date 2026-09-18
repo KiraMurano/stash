@@ -233,9 +233,17 @@ struct JournalView: View {
             .padding(.bottom, 8)
             .overlay(alignment: .bottom) {
                 // Shadow under the header once the list scrolls beneath it.
-                LinearGradient(colors: [palette.shadow(0.14), .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 8)
-                    .offset(y: 8)
+                LinearGradient(
+                    stops: [
+                        .init(color: palette.shadow(0.08), location: 0),
+                        .init(color: palette.shadow(0.03), location: 0.45),
+                        .init(color: palette.shadow(0), location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                    .frame(height: 20)
+                    .offset(y: 20)
                     .opacity(isListScrolled ? 1 : 0)
                     .animation(.easeOut(duration: 0.15), value: isListScrolled)
                     .allowsHitTesting(false)
@@ -779,31 +787,19 @@ private struct EntryRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if isHovered {
-                Button(action: onQuickPaste) {
-                    Image(systemName: "return")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(ThemePalette.orange, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            VStack(spacing: 6) {
+                if entry.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(palette.accentText)
                 }
-                .buttonStyle(.plain)
-                .help(quickPasteTitle)
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            } else {
-                VStack(spacing: 6) {
-                    if entry.isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(palette.accentText)
-                    }
-                    if isCurrent {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(palette.textTertiary)
-                    }
+                if isCurrent {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(palette.textTertiary)
                 }
             }
+            .opacity(isHovered ? 0 : 1)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -819,6 +815,23 @@ private struct EntryRow: View {
                     .frame(width: 3)
                     .padding(.vertical, 10)
                     .offset(x: -6)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            // Floats over the row so hovering never reflows the title.
+            if isHovered {
+                Button(action: onQuickPaste) {
+                    Image(systemName: "return")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .background(ThemePalette.orange, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .shadow(color: palette.shadow(0.18), radius: 4, y: 1)
+                }
+                .buttonStyle(.plain)
+                .help(quickPasteTitle)
+                .padding(.trailing, 8)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
