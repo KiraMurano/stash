@@ -973,12 +973,12 @@ private struct EntryRow: View {
                     }
                     rowAction(
                         entry.isPinned ? "pin.fill" : "pin",
-                        tone: entry.isPinned ? .accent : .neutral,
+                        tone: entry.isPinned ? accentTone : .neutral,
                         help: entry.isPinned ? l10n("Unpin clip", "Открепить") : l10n("Pin clip", "Закрепить"),
                         action: onTogglePin
                     )
                     rowAction("trash", tone: .destructive, help: l10n("Delete clip", "Удалить"), action: onDelete)
-                    rowAction("return", tone: .accent, help: quickPasteTitle, action: onQuickPaste)
+                    rowAction("return", tone: accentTone, help: quickPasteTitle, action: onQuickPaste)
                 }
                 .padding(.trailing, 8)
                 .transition(.opacity)
@@ -986,6 +986,10 @@ private struct EntryRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
+    }
+
+    private var accentTone: TranslucentButtonStyle.Tone {
+        isSelected ? .accentOnAccent : .accent
     }
 
     private func rowAction(
@@ -1453,6 +1457,9 @@ struct TranslucentButtonStyle: ButtonStyle {
         case neutral
         case accent
         case destructive
+        /// Accent sitting on an orange surface (the selected row): in the Stash themes it turns
+        /// white with an orange glyph; otherwise it is a regular accent.
+        case accentOnAccent
     }
 
     var tone: Tone = .neutral
@@ -1499,12 +1506,13 @@ struct TranslucentButtonStyle: ButtonStyle {
             if palette.solid {
                 switch tone {
                 case .accent: return .white
+                case .accentOnAccent: return ThemePalette.orange
                 case .destructive where isHovered: return .white
                 case .neutral, .destructive: return palette.iconOpacity(0.78)
                 }
             }
             switch tone {
-            case .accent: return palette.accentText
+            case .accent, .accentOnAccent: return palette.accentText
             case .destructive: return isHovered ? Color.red.opacity(0.9) : palette.iconOpacity(0.7)
             case .neutral: return palette.iconOpacity(isHovered ? 0.85 : 0.7)
             }
@@ -1515,6 +1523,8 @@ struct TranslucentButtonStyle: ButtonStyle {
                 switch tone {
                 case .accent:
                     return ThemePalette.darken(ThemePalette.orange, by: 0.08 * level)
+                case .accentOnAccent:
+                    return ThemePalette.darken(.white, by: 0.06 * level)
                 case .destructive where isHovered:
                     return ThemePalette.darken(ThemePalette.solidDestructive, by: 0.08 * (level - 1))
                 case .neutral, .destructive:
@@ -1522,7 +1532,7 @@ struct TranslucentButtonStyle: ButtonStyle {
                 }
             }
             switch tone {
-            case .accent:
+            case .accent, .accentOnAccent:
                 return ThemePalette.orange.opacity((palette.isDark ? 0.28 : 0.18) + 0.08 * level)
             case .destructive where isHovered:
                 return Color.red.opacity((palette.isDark ? 0.2 : 0.12) + 0.06 * (level - 1))
@@ -1733,7 +1743,7 @@ struct ThemePalette {
 
     /// Opaque grey for buttons in the Stash themes; `level` 0 rest, 1 hover, 2 pressed.
     func solidControl(_ level: Double) -> Color {
-        isDark ? Color(white: 0.23 + 0.04 * level) : Color(white: 0.93 - 0.04 * level)
+        isDark ? Color(white: 0.30 + 0.05 * level) : Color(white: 0.93 - 0.04 * level)
     }
 
     static let solidDestructive = Color(red: 0.86, green: 0.21, blue: 0.19)
