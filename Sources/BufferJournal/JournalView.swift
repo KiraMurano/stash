@@ -1527,10 +1527,8 @@ struct TranslucentButtonStyle: ButtonStyle {
                 case .accent:
                     return ThemePalette.darken(ThemePalette.orange, by: 0.08 * level)
                 case .accentOnAccent:
-                    // Dark plate in the dark look; in the light look a soft off-white like the pane.
-                    return palette.isDark
-                        ? Color(white: 0.16 + 0.05 * level)
-                        : Color(white: 0.96 - 0.04 * level)
+                    // Soft off-white plate on the orange row, in both looks.
+                    return Color(white: 0.96 - 0.04 * level)
                 case .destructive where isHovered:
                     return ThemePalette.darken(ThemePalette.solidDestructive, by: 0.08 * (level - 1))
                 case .neutral, .destructive:
