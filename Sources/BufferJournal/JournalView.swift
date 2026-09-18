@@ -331,6 +331,8 @@ struct JournalView: View {
         .scrollContentBackground(.hidden)
         .background(ScrollOffsetObserver { isListScrolled = $0 })
         .environment(\.defaultMinListRowHeight, 20)
+        // New clips arrive from the pasteboard monitor outside any transaction; animate the insert here.
+        .animation(.easeOut(duration: 0.28), value: store.entries.map(\.id))
         .onChange(of: keyboardScrollTarget) { target in
             guard let target else { return }
             proxy.scrollTo(target)
@@ -766,7 +768,9 @@ private struct EntryRow: View {
             thumb
                 .frame(width: 36, height: 36)
                 .background(palette.placeholderBackground)
+                .background(palette.sidebarTint)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .shadow(color: palette.shadow(0.18), radius: 4, y: 1)
 
             Group {
                 if entry.isText {
