@@ -13,7 +13,7 @@ Stash is a minimal macOS clipboard history app inspired by Windows clipboard jou
 
 ## Install
 
-Download `Stash-<version>.dmg` from [Releases](https://github.com/KiraMurano/stash/releases), open it and drag `Stash.app` onto the Applications folder. The app is not notarized, so on first launch right-click it and choose Open (or run `xattr -dr com.apple.quarantine /Applications/Stash.app`). Paste on Selection needs Accessibility access in System Settings → Privacy & Security.
+Download `Stash-<version>.dmg` from [Releases](https://github.com/KiraMurano/stash/releases), open it and drag `Stash.app` onto the Applications folder. The app is not notarized, so macOS blocks the first launch: click Done, then open System Settings → Privacy & Security, scroll down and click Open Anyway next to Stash. Or run `xattr -dr com.apple.quarantine /Applications/Stash.app`. Paste on Selection needs Accessibility access in System Settings → Privacy & Security.
 
 ## Build
 
