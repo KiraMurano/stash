@@ -20,6 +20,7 @@ final class JournalPanelController {
     private let settings: AppSettings
     private var panel: NSPanel?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
+    private var imagePreviewSession: TextEditWindowSession?
 
     init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings) {
         self.store = store
@@ -81,6 +82,9 @@ final class JournalPanelController {
             },
             onEditText: { [weak self] entry in
                 self?.openTextEditor(for: entry)
+            },
+            onPreviewImage: { [weak self] entry in
+                self?.openImagePreview(for: entry)
             },
             onClose: { [weak self] in
                 self?.close()
@@ -179,6 +183,66 @@ final class JournalPanelController {
 
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func openImagePreview(for entry: ClipboardEntry) {
+        guard let image = store.image(for: entry) else { return }
+
+        imagePreviewSession?.window.close()
+
+        let view = ImagePreviewView(
+            image: image,
+            settings: settings,
+            onPaste: { [weak self] in
+                self?.closeImagePreview()
+                self?.handleSelection(entry)
+            },
+            onClose: { [weak self] in
+                self?.closeImagePreview()
+            }
+        )
+
+        let window = ImagePreviewPanel(
+            contentRect: NSRect(origin: .zero, size: previewSize(for: image.size)),
+            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = entry.title
+        window.titlebarAppearsTransparent = true
+        window.contentView = NSHostingView(rootView: view)
+        window.minSize = NSSize(width: 320, height: 240)
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+        window.isFloatingPanel = true
+        window.hidesOnDeactivate = false
+        window.center()
+
+        let delegate = TextEditWindowDelegate { [weak self] in
+            self?.imagePreviewSession = nil
+        }
+        window.delegate = delegate
+        imagePreviewSession = TextEditWindowSession(window: window, delegate: delegate)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func closeImagePreview() {
+        guard let session = imagePreviewSession else { return }
+        imagePreviewSession = nil
+        session.window.close()
+    }
+
+    private func previewSize(for imageSize: NSSize) -> NSSize {
+        let bounds = (NSScreen.main?.visibleFrame.size ?? NSSize(width: 1280, height: 800))
+        let maxSize = NSSize(width: bounds.width * 0.7, height: bounds.height * 0.7)
+        let chromeHeight: CGFloat = 28
+        guard imageSize.width > 0, imageSize.height > 0 else { return NSSize(width: 640, height: 480) }
+
+        let scale = min(1, maxSize.width / imageSize.width, (maxSize.height - chromeHeight) / imageSize.height)
+        return NSSize(
+            width: max(320, imageSize.width * scale + 24),
+            height: max(240, imageSize.height * scale + 24 + chromeHeight)
+        )
     }
 
     private func closeTextEditor(for id: ClipboardEntry.ID) {
