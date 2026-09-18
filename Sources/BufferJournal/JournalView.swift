@@ -935,12 +935,12 @@ private struct EntryRow: View {
                 if entry.isPinned {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(palette.textTertiary)
+                        .foregroundStyle(isSelected ? palette.onAccentSecondary : palette.textTertiary)
                 }
                 if isCurrent {
                     Image(systemName: "doc.on.clipboard")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(palette.accentText)
+                        .foregroundStyle(isSelected && palette.solid ? .white : palette.accentText)
                 }
             }
             .opacity(isHovered ? 0 : 1)
@@ -950,10 +950,7 @@ private struct EntryRow: View {
         .frame(height: JournalView.Layout.rowHeight - 2)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? palette.selectionFill : (isHovered ? palette.controlHoverBackground : .clear))
-                // The raised card of the Stash themes.
-                .shadow(color: isSelected && palette.solid ? palette.shadow(0.18) : .clear, radius: 1, y: 1)
-                .shadow(color: isSelected && palette.solid ? palette.shadow(0.08) : .clear, radius: 5, y: 3)
+                .fill(isSelected ? palette.accentFill : (isHovered ? palette.controlHoverBackground : .clear))
         }
         // The 1 pt gap between highlights stays visual only: the hover area covers it.
         .padding(.vertical, 1)
@@ -976,12 +973,12 @@ private struct EntryRow: View {
                     }
                     rowAction(
                         entry.isPinned ? "pin.fill" : "pin",
-                        tone: entry.isPinned ? .accent : .neutral,
+                        tone: entry.isPinned ? accentTone : .neutral,
                         help: entry.isPinned ? l10n("Unpin clip", "Открепить") : l10n("Pin clip", "Закрепить"),
                         action: onTogglePin
                     )
                     rowAction("trash", tone: .destructive, help: l10n("Delete clip", "Удалить"), action: onDelete)
-                    rowAction("return", tone: .accent, help: quickPasteTitle, action: onQuickPaste)
+                    rowAction("return", tone: accentTone, help: quickPasteTitle, action: onQuickPaste)
                 }
                 .padding(.trailing, 8)
                 .transition(.opacity)
@@ -989,6 +986,10 @@ private struct EntryRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
+    }
+
+    private var accentTone: TranslucentButtonStyle.Tone {
+        isSelected ? .accentOnAccent : .accent
     }
 
     private func rowAction(
@@ -1009,13 +1010,13 @@ private struct EntryRow: View {
     private var titleText: some View {
         Text(title)
             .font(.system(size: 13, weight: entry.isText ? .regular : .semibold))
-            .foregroundStyle(isSelected ? palette.selectionText : palette.textPrimary)
+            .foregroundStyle(isSelected ? palette.onAccent : palette.textPrimary)
     }
 
     private var subtitleText: some View {
         Text(subtitle)
             .font(.system(size: 11))
-            .foregroundStyle(palette.textTertiary)
+            .foregroundStyle(isSelected ? palette.onAccentSecondary : palette.textTertiary)
             .lineLimit(1)
     }
 
@@ -1456,6 +1457,9 @@ struct TranslucentButtonStyle: ButtonStyle {
         case neutral
         case accent
         case destructive
+        /// Accent sitting on an orange surface (the selected row): in the Stash themes it turns
+        /// white with an orange glyph; otherwise it is a regular accent.
+        case accentOnAccent
     }
 
     var tone: Tone = .neutral
@@ -1502,12 +1506,13 @@ struct TranslucentButtonStyle: ButtonStyle {
             if palette.solid {
                 switch tone {
                 case .accent: return .white
+                case .accentOnAccent: return ThemePalette.orange
                 case .destructive where isHovered: return .white
                 case .neutral, .destructive: return palette.iconOpacity(0.78)
                 }
             }
             switch tone {
-            case .accent: return palette.accentText
+            case .accent, .accentOnAccent: return palette.accentText
             case .destructive: return isHovered ? Color.red.opacity(0.9) : palette.iconOpacity(0.7)
             case .neutral: return palette.iconOpacity(isHovered ? 0.85 : 0.7)
             }
@@ -1518,6 +1523,8 @@ struct TranslucentButtonStyle: ButtonStyle {
                 switch tone {
                 case .accent:
                     return ThemePalette.darken(ThemePalette.orange, by: 0.08 * level)
+                case .accentOnAccent:
+                    return ThemePalette.darken(.white, by: 0.06 * level)
                 case .destructive where isHovered:
                     return ThemePalette.darken(ThemePalette.solidDestructive, by: 0.08 * (level - 1))
                 case .neutral, .destructive:
@@ -1525,7 +1532,7 @@ struct TranslucentButtonStyle: ButtonStyle {
                 }
             }
             switch tone {
-            case .accent:
+            case .accent, .accentOnAccent:
                 return ThemePalette.orange.opacity((palette.isDark ? 0.28 : 0.18) + 0.08 * level)
             case .destructive where isHovered:
                 return Color.red.opacity((palette.isDark ? 0.2 : 0.12) + 0.06 * (level - 1))
@@ -1681,11 +1688,7 @@ struct ThemePalette {
 
     /// Frosted tint over the glass for the list pane (denser) and the preview pane (lighter).
     var sidebarTint: Color {
-        // The Stash themes grey the list pane so the white / black selection card stands out.
-        if solid {
-            return isDark ? Color(white: 0.21).opacity(0.9) : Color(white: 0.9).opacity(0.9)
-        }
-        return isDark ? Color(red: 28 / 255, green: 28 / 255, blue: 30 / 255).opacity(0.84) : Color.white.opacity(0.82)
+        isDark ? Color(red: 28 / 255, green: 28 / 255, blue: 30 / 255).opacity(0.84) : Color.white.opacity(0.82)
     }
 
     var detailTint: Color {
@@ -1719,7 +1722,7 @@ struct ThemePalette {
         solid ? Self.orange : Self.orange.opacity(isDark ? 0.28 : 0.18)
     }
 
-    /// Fill and text for orange accents that carry a label: active filter, badges.
+    /// Fill and text for orange accents that carry a label: selected row, active filter, badges.
     var accentFill: Color {
         solid ? Self.orange : accentSoft
     }
@@ -1728,16 +1731,8 @@ struct ThemePalette {
         solid ? .white : accentText
     }
 
-    /// Selected row. The Stash themes raise it as an opaque card (concept 1.4 in
-    /// .concepts/2026-09-18-stash-theme.html) so orange buttons on it never sit on orange.
-    var selectionFill: Color {
-        guard solid else { return accentSoft }
-        // White / near-black card on the greyer Stash list pane.
-        return isDark ? Color(white: 0.08) : .white
-    }
-
-    var selectionText: Color {
-        solid ? Self.orange : accentText
+    var onAccentSecondary: Color {
+        solid ? Color.white.opacity(0.78) : textTertiary
     }
 
     /// Opaque grey for buttons in the Stash themes; `level` 0 rest, 1 hover, 2 pressed.
