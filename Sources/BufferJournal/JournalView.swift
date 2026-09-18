@@ -201,7 +201,7 @@ struct JournalView: View {
                     .frame(width: Logo.iconFrame, height: Logo.iconFrame)
 
                 Text("Stash")
-                    .font(.system(size: Logo.fontSize, weight: .bold))
+                    .font(.system(size: Logo.fontSize, weight: .heavy))
                     .foregroundStyle(palette.textPrimary)
                     // Center on the capital letters, not on the line box, so "S" lines up with the icon.
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - Logo.capHeight / 2 }
@@ -314,7 +314,7 @@ struct JournalView: View {
     private enum Logo {
         static let iconFrame: CGFloat = 32
         static let fontSize: CGFloat = 28
-        static let capHeight = NSFont.systemFont(ofSize: fontSize, weight: .bold).capHeight
+        static let capHeight = NSFont.systemFont(ofSize: fontSize, weight: .heavy).capHeight
     }
 
     private var entryList: some View {
