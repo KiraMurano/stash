@@ -4,12 +4,13 @@ enum ThemeMode: String, CaseIterable {
     case system
     case light
     case dark
+    case stashAuto
     case stashLight
     case stashDark
 
     var colorScheme: ColorScheme? {
         switch self {
-        case .system:
+        case .system, .stashAuto:
             nil
         case .light, .stashLight:
             .light
@@ -20,7 +21,7 @@ enum ThemeMode: String, CaseIterable {
 
     /// Stash themes paint every orange accent and button with opaque fills instead of tints.
     var usesSolidAccents: Bool {
-        self == .stashLight || self == .stashDark
+        self == .stashAuto || self == .stashLight || self == .stashDark
     }
 }
 

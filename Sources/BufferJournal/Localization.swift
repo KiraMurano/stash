@@ -44,6 +44,7 @@ struct L10n {
         case .system: self("Auto", "Авто")
         case .light: self("Light", "Светлая")
         case .dark: self("Dark", "Тёмная")
+        case .stashAuto: "Stash Auto"
         case .stashLight: "Stash Light"
         case .stashDark: "Stash Dark"
         }
