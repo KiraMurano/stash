@@ -842,7 +842,7 @@ private struct EntryRow: View {
     var body: some View {
         HStack(spacing: 10) {
             thumb
-                .frame(width: 36, height: 36)
+                .frame(width: 42, height: 42)
                 .background(palette.placeholderBackground)
                 .background(palette.sidebarTint)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -985,7 +985,7 @@ private struct EntryRow: View {
             }
         case let .text(text):
             Text(String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)))
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(palette.textSecondary)
         }
     }
