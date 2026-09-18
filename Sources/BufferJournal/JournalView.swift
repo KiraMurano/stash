@@ -16,7 +16,7 @@ struct JournalView: View {
         static let detailMinWidth: CGFloat = 300
         static let rowHeight: CGFloat = 50
         /// Transparent strip on the right and bottom of the window for the resize grip.
-        static let gripMargin: CGFloat = 12
+        static let gripMargin: CGFloat = 4
     }
 
     private enum EntryFilter: CaseIterable, Identifiable {
@@ -171,12 +171,14 @@ struct JournalView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
-        // Transparent margin right and below the panel holds the corner resize grip outside the curve.
-        .padding(.trailing, Layout.gripMargin)
-        .padding(.bottom, Layout.gripMargin)
+        // The grip hugs the rounded corner from outside: anchored to the panel's corner square
+        // and nudged out so its strokes sit just past the curve, in a thin transparent margin.
         .overlay(alignment: .bottomTrailing) {
             WindowResizeGrip(palette: palette)
+                .offset(x: Layout.gripMargin - 1, y: Layout.gripMargin - 1)
         }
+        .padding(.trailing, Layout.gripMargin)
+        .padding(.bottom, Layout.gripMargin)
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .preferredColorScheme(settings.themeMode.colorScheme)
