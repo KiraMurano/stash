@@ -831,6 +831,8 @@ private struct EntryRow: View {
 
     private static let actionSize: CGFloat = 26
     private static let actionSpacing: CGFloat = 4
+    /// Space the pin/clipboard column and its HStack spacing take right of the text column.
+    private static let trailingColumnWidth: CGFloat = 20
 
     private var actionsWidth: CGFloat {
         let count = CGFloat(onExpand == nil ? 3 : 4)
@@ -864,6 +866,17 @@ private struct EntryRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Under the hover actions the text fades out instead of reflowing. Only the text
+            // column is masked so the thumbnail's shadow is not clipped.
+            .mask {
+                HStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: isHovered ? 24 : 0)
+                    Color.clear
+                        .frame(width: isHovered ? max(actionsWidth - Self.trailingColumnWidth, 0) : 0)
+                }
+            }
 
             VStack(spacing: 6) {
                 if entry.isPinned {
@@ -878,16 +891,6 @@ private struct EntryRow: View {
                 }
             }
             .opacity(isHovered ? 0 : 1)
-        }
-        // Under the hover actions the text fades out instead of reflowing.
-        .mask {
-            HStack(spacing: 0) {
-                Color.black
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: isHovered ? 24 : 0)
-                Color.clear
-                    .frame(width: isHovered ? actionsWidth : 0)
-            }
         }
         .padding(.horizontal, 8)
         // Fixed height: variable rows made the list re-measure while scrolling and jump.
