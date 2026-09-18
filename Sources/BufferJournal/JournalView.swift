@@ -1728,7 +1728,8 @@ struct ThemePalette {
     /// .concepts/2026-09-18-stash-theme.html) so orange buttons on it never sit on orange.
     var selectionFill: Color {
         guard solid else { return accentSoft }
-        return isDark ? Color(red: 58 / 255, green: 58 / 255, blue: 60 / 255) : .white
+        // Grey card, a step darker than the opaque buttons so they still stand out on it.
+        return isDark ? Color(white: 0.23) : Color(white: 0.88)
     }
 
     var selectionText: Color {
