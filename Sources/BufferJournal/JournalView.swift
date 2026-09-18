@@ -53,9 +53,9 @@ struct JournalView: View {
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
     @State private var isListScrolled = false
-    /// Clips seen so far, to tell freshly copied ones apart; nil until the list first appears.
-    @State private var knownIDs: Set<ClipboardEntry.ID>?
-    @State private var freshIDs: Set<ClipboardEntry.ID> = []
+    @State private var draggedPinnedID: ClipboardEntry.ID?
+    @State private var dragStartIndex = 0
+    @State private var dragTranslation: CGFloat = 0
     @State private var query = ""
     @State private var keyboardScrollTarget: KeyboardScrollTarget?
     @FocusState private var isSearchFocused: Bool
@@ -329,72 +329,59 @@ struct JournalView: View {
         static let capHeight = NSFont.systemFont(ofSize: fontSize, weight: .heavy).capHeight
     }
 
+    /// A plain scroll view with a stack of fixed-height rows. History holds at most 20 clips, so
+    /// nothing needs to be lazy; AppKit's List re-measured and re-used cells, which made scrolling
+    /// jumpy and inserts snap.
     private var entryList: some View {
         ScrollViewReader { proxy in
-        List {
-            // Headers are plain rows: List section headers on macOS are sticky and draw their own bar.
-            ForEach(sections, id: \.title) { section in
-                Text(section.title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(palette.textTertiary)
-                    .padding(.leading, 8)
-                    .padding(.top, 6)
-                    .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .leading)
-                    .id(section.title)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .moveDisabled(true)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(sections, id: \.title) { section in
+                        Text(section.title)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(palette.textTertiary)
+                            .padding(.leading, 8)
+                            .padding(.top, 6)
+                            .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .leading)
+                            .id(section.title)
 
-                ForEach(section.entries) { entry in
-                    row(entry)
+                        ForEach(section.entries) { entry in
+                            row(entry, pinned: section.isPinned ? section.entries : nil)
+                                .id(entry.id)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .opacity.combined(with: .offset(y: -10)),
+                                        removal: .opacity.combined(with: .scale(scale: 0.96))
+                                    )
+                                )
+                        }
+                    }
+
+                    Color.clear
+                        .frame(height: 8)
+                        .id(Self.listBottomID)
                 }
-                .onMove(perform: section.isPinned ? { movePinned(in: section.entries, from: $0, to: $1) } : nil)
+                .padding(.horizontal, 6)
             }
-
-            // Bottom inset so the last row does not touch the panel edge.
-            Color.clear
-                .frame(height: 8)
-                .id(Self.listBottomID)
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-                .moveDisabled(true)
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(ScrollOffsetObserver { isListScrolled = $0 })
-        .environment(\.defaultMinListRowHeight, 20)
-        // New clips arrive from the pasteboard monitor outside any transaction; animate the insert here.
-        .animation(.easeOut(duration: 0.28), value: store.entries.map(\.id))
-        .onAppear {
-            if knownIDs == nil {
-                knownIDs = Set(store.entries.map(\.id))
+            .background(ScrollOffsetObserver { isListScrolled = $0 })
+            // New clips arrive from the pasteboard monitor outside any transaction: animate inserts,
+            // removals and reorders here so rows slide apart and the new one fades in.
+            .animation(.easeOut(duration: 0.3), value: store.entries.map(\.id))
+            .onChange(of: keyboardScrollTarget) { target in
+                guard let target else { return }
+                withAnimation(.easeOut(duration: 0.18)) {
+                    switch target {
+                    case let .entry(id): proxy.scrollTo(id)
+                    case .top: if let first = sections.first { proxy.scrollTo(first.title, anchor: .top) }
+                    case .bottom: proxy.scrollTo(Self.listBottomID, anchor: .bottom)
+                    }
+                }
+                keyboardScrollTarget = nil
             }
-        }
-        .onChange(of: store.entries.map(\.id)) { ids in
-            let current = Set(ids)
-            let added = current.subtracting(knownIDs ?? current)
-            knownIDs = current
-            guard !added.isEmpty else { return }
-            freshIDs.formUnion(added)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                freshIDs.subtract(added)
-            }
-        }
-        .onChange(of: keyboardScrollTarget) { target in
-            guard let target else { return }
-            switch target {
-            case let .entry(id): proxy.scrollTo(id)
-            case .top: if let first = sections.first { proxy.scrollTo(first.title, anchor: .top) }
-            case .bottom: proxy.scrollTo(Self.listBottomID, anchor: .bottom)
-            }
-            keyboardScrollTarget = nil
-        }
         }
     }
 
-    private func row(_ entry: ClipboardEntry) -> some View {
+    private func row(_ entry: ClipboardEntry, pinned: [ClipboardEntry]?) -> some View {
         EntryRow(
             entry: entry,
             thumbnail: store.thumbnail(for: entry),
@@ -408,12 +395,12 @@ struct JournalView: View {
             onQuickPaste: { select(entry) },
             onExpand: expandAction(for: entry),
             onTogglePin: { togglePin(entry) },
-            onDelete: { entryPendingDeletion = entry },
-            isFresh: freshIDs.contains(entry.id)
+            onDelete: { entryPendingDeletion = entry }
         )
-        .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
+        .offset(y: draggedPinnedID == entry.id ? draggedRowOffset(in: pinned ?? []) : 0)
+        .shadow(color: draggedPinnedID == entry.id ? palette.shadow(0.18) : .clear, radius: 10, y: 4)
+        .zIndex(draggedPinnedID == entry.id ? 1 : 0)
+        .gesture(pinnedDragGesture(for: entry, in: pinned ?? []), including: pinned == nil ? .subviews : .all)
         .contentShape(Rectangle())
         .onTapGesture {
             selectedID = entry.id
@@ -634,18 +621,40 @@ struct JournalView: View {
         return result
     }
 
-    private func movePinned(in entries: [ClipboardEntry], from source: IndexSet, to destination: Int) {
-        guard let sourceIndex = source.first, entries.indices.contains(sourceIndex) else { return }
-        let sourceID = entries[sourceIndex].id
+    // MARK: Pinned drag
 
-        if destination >= entries.count {
-            guard let last = entries.last, last.id != sourceID else { return }
-            store.movePinnedEntry(sourceID: sourceID, to: last.id, afterTarget: true)
-        } else {
-            let target = entries[destination]
-            guard target.id != sourceID else { return }
-            store.movePinnedEntry(sourceID: sourceID, to: target.id, afterTarget: false)
-        }
+    /// Rows have one fixed height, so the drop slot is the start index plus whole rows dragged.
+    private func pinnedDragGesture(for entry: ClipboardEntry, in pinned: [ClipboardEntry]) -> some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                if draggedPinnedID == nil {
+                    draggedPinnedID = entry.id
+                    dragStartIndex = pinned.firstIndex { $0.id == entry.id } ?? 0
+                }
+                guard draggedPinnedID == entry.id else { return }
+                dragTranslation = value.translation.height
+
+                guard let current = pinned.firstIndex(where: { $0.id == entry.id }) else { return }
+                let slots = Int((dragTranslation / Layout.rowHeight).rounded())
+                let target = min(max(dragStartIndex + slots, 0), pinned.count - 1)
+                guard target != current else { return }
+                withAnimation(.easeOut(duration: 0.18)) {
+                    store.movePinnedEntry(sourceID: entry.id, to: pinned[target].id, afterTarget: target > current)
+                }
+            }
+            .onEnded { _ in
+                withAnimation(.easeOut(duration: 0.2)) {
+                    draggedPinnedID = nil
+                    dragTranslation = 0
+                }
+            }
+    }
+
+    /// The dragged row follows the pointer; once it has moved slots in the data, the layout already
+    /// shifted it, so subtract those whole rows.
+    private func draggedRowOffset(in pinned: [ClipboardEntry]) -> CGFloat {
+        guard let id = draggedPinnedID, let current = pinned.firstIndex(where: { $0.id == id }) else { return 0 }
+        return dragTranslation - CGFloat(current - dragStartIndex) * Layout.rowHeight
     }
 
     private func kindTitle(_ entry: ClipboardEntry) -> String {
@@ -846,45 +855,9 @@ private struct EntryRow: View {
     let onExpand: (() -> Void)?
     let onTogglePin: () -> Void
     let onDelete: () -> Void
-    let isFresh: Bool
 
     @Environment(\.l10n) private var l10n
     @State private var isHovered = false
-    @State private var isRevealed: Bool
-
-    init(
-        entry: ClipboardEntry,
-        thumbnail: NSImage?,
-        fileIcon: NSImage?,
-        title: String,
-        subtitle: String,
-        isSelected: Bool,
-        isCurrent: Bool,
-        palette: ThemePalette,
-        quickPasteTitle: String,
-        onQuickPaste: @escaping () -> Void,
-        onExpand: (() -> Void)?,
-        onTogglePin: @escaping () -> Void,
-        onDelete: @escaping () -> Void,
-        isFresh: Bool
-    ) {
-        self.entry = entry
-        self.thumbnail = thumbnail
-        self.fileIcon = fileIcon
-        self.title = title
-        self.subtitle = subtitle
-        self.isSelected = isSelected
-        self.isCurrent = isCurrent
-        self.palette = palette
-        self.quickPasteTitle = quickPasteTitle
-        self.onQuickPaste = onQuickPaste
-        self.onExpand = onExpand
-        self.onTogglePin = onTogglePin
-        self.onDelete = onDelete
-        self.isFresh = isFresh
-        // A freshly copied clip starts hidden and fades in once it is on screen.
-        _isRevealed = State(initialValue: !isFresh)
-    }
 
     private static let actionSize: CGFloat = 26
     private static let actionSpacing: CGFloat = 4
@@ -990,18 +963,6 @@ private struct EntryRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
-        .opacity(isRevealed ? 1 : 0)
-        .offset(y: isRevealed ? 0 : -8)
-        .scaleEffect(isRevealed ? 1 : 0.97, anchor: .top)
-        .onAppear {
-            guard !isRevealed else { return }
-            // Next runloop, so the hidden state renders first and the change animates.
-            DispatchQueue.main.async {
-                withAnimation(.easeOut(duration: 0.35)) {
-                    isRevealed = true
-                }
-            }
-        }
     }
 
     private func rowAction(
@@ -1274,7 +1235,8 @@ private struct KeyboardMonitor: NSViewRepresentable {
     }
 }
 
-/// Reports whether the enclosing list has scrolled away from the top.
+/// Reports whether the enclosing scroll view has scrolled away from the top. SwiftUI geometry
+/// preferences inside a macOS ScrollView do not update while scrolling, so watch the clip view.
 private struct ScrollOffsetObserver: NSViewRepresentable {
     let onChange: (Bool) -> Void
 
