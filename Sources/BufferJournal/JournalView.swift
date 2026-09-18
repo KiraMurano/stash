@@ -950,7 +950,7 @@ private struct EntryRow: View {
         .frame(height: JournalView.Layout.rowHeight - 2)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? palette.accentFill : (isHovered ? palette.rowHoverBackground : .clear))
+                .fill(isSelected ? palette.accentFill : (isHovered ? palette.controlHoverBackground : .clear))
         }
         // The 1 pt gap between highlights stays visual only: the hover area covers it.
         .padding(.vertical, 1)
@@ -1733,12 +1733,6 @@ struct ThemePalette {
 
     var onAccentSecondary: Color {
         solid ? Color.white.opacity(0.78) : textTertiary
-    }
-
-    /// Row hover. In the Stash themes buttons are opaque grey, so the hover tint is much fainter
-    /// to keep them standing out.
-    var rowHoverBackground: Color {
-        solid ? iconOpacity(isDark ? 0.035 : 0.025) : controlHoverBackground
     }
 
     /// Opaque grey for buttons in the Stash themes; `level` 0 rest, 1 hover, 2 pressed.
