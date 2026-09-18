@@ -58,6 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for themeMode in ThemeMode.allCases {
             let item = menuItem(l10n.themeName(themeMode), action: #selector(selectTheme))
             item.representedObject = themeMode.rawValue
+            if themeMode == .stashLight {
+                themeMenu.addItem(NSMenuItem.separator())
+            }
             themeMenu.addItem(item)
             themeItems[themeMode] = item
         }
