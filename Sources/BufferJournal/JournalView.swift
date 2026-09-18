@@ -105,6 +105,7 @@ struct JournalView: View {
                         }
                         .overlay(alignment: .trailing) {
                             SidebarResizeHandle(
+                                palette: palette,
                                 onChanged: { translation in
                                     let start = sidebarDragStartWidth ?? width
                                     sidebarDragStartWidth = start
@@ -121,6 +122,11 @@ struct JournalView: View {
                         .background(palette.detailTint)
                 }
             }
+
+            WindowResizeGrip(palette: palette)
+                .padding(7)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .zIndex(10)
 
             if isClearConfirmationShown || entryPendingDeletion != nil {
                 ZStack {
@@ -558,7 +564,8 @@ struct JournalView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, 12)
+        .padding(.trailing, 22)
         .padding(.vertical, 10)
         .overlay(alignment: .top) {
             palette.separator.frame(height: 1)
@@ -915,15 +922,24 @@ private struct EntryRow: View {
 
 /// Invisible 8 pt strip over the divider: resize cursor on hover, drag changes the list width.
 private struct SidebarResizeHandle: View {
+    let palette: ThemePalette
     let onChanged: (CGFloat) -> Void
     let onEnded: () -> Void
 
     @State private var isHovered = false
+    @State private var isDragging = false
 
     var body: some View {
         Color.clear
             .frame(width: 8)
             .frame(maxHeight: .infinity)
+            .overlay {
+                // Grab mark on the divider; turns orange while hovered or dragged.
+                Capsule()
+                    .fill(isHovered || isDragging ? ThemePalette.orange : palette.iconOpacity(0.22))
+                    .frame(width: 4, height: 32)
+                    .animation(.easeOut(duration: 0.12), value: isHovered || isDragging)
+            }
             .contentShape(Rectangle())
             .onHover { hovering in
                 guard hovering != isHovered else { return }
@@ -936,9 +952,79 @@ private struct SidebarResizeHandle: View {
             }
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged { onChanged($0.translation.width) }
-                    .onEnded { _ in onEnded() }
+                    .onChanged {
+                        isDragging = true
+                        onChanged($0.translation.width)
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        onEnded()
+                    }
             )
+    }
+}
+
+/// Bottom-right grip: two diagonal strokes over an AppKit view that resizes the borderless panel,
+/// keeping its top-left corner in place.
+private struct WindowResizeGrip: View {
+    let palette: ThemePalette
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            path.move(to: CGPoint(x: size.width, y: size.height * 0.2))
+            path.addLine(to: CGPoint(x: size.width * 0.2, y: size.height))
+            path.move(to: CGPoint(x: size.width, y: size.height * 0.6))
+            path.addLine(to: CGPoint(x: size.width * 0.6, y: size.height))
+            context.stroke(
+                path,
+                with: .color(isHovered ? ThemePalette.orange : palette.iconOpacity(0.32)),
+                style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
+            )
+        }
+        .frame(width: 11, height: 11)
+        .padding(3)
+        .background(WindowResizeArea())
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+}
+
+private struct WindowResizeArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        GripView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class GripView: NSView {
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        override func resetCursorRects() {
+            if #available(macOS 15.0, *) {
+                addCursorRect(bounds, cursor: .frameResize(position: .bottomRight, directions: .all))
+            } else {
+                addCursorRect(bounds, cursor: .crosshair)
+            }
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            guard let window else { return }
+            let startMouse = NSEvent.mouseLocation
+            let startFrame = window.frame
+
+            while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]), next.type != .leftMouseUp {
+                let mouse = NSEvent.mouseLocation
+                let width = max(startFrame.width + mouse.x - startMouse.x, window.minSize.width)
+                let height = max(startFrame.height - (mouse.y - startMouse.y), window.minSize.height)
+                window.setFrame(
+                    NSRect(x: startFrame.minX, y: startFrame.maxY - height, width: width, height: height),
+                    display: true
+                )
+            }
+        }
     }
 }
 
