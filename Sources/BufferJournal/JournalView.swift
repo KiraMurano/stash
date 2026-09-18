@@ -176,8 +176,8 @@ struct JournalView: View {
         // The grip hugs the rounded corner from outside: anchored to the panel's corner square
         // and nudged out so its strokes sit just past the curve, in a thin transparent margin.
         .overlay(alignment: .bottomTrailing) {
-            WindowResizeGrip(palette: palette)
-                .offset(x: Layout.gripMargin - 1, y: Layout.gripMargin - 1)
+            WindowResizeGrip(palette: palette, cornerRadius: Layout.cornerRadius, margin: Layout.gripMargin)
+                .offset(x: Layout.gripMargin, y: Layout.gripMargin)
         }
         .padding(.trailing, Layout.gripMargin)
         .padding(.bottom, Layout.gripMargin)
@@ -971,25 +971,38 @@ private struct SidebarResizeHandle: View {
 /// keeping its top-left corner in place.
 private struct WindowResizeGrip: View {
     let palette: ThemePalette
+    let cornerRadius: CGFloat
+    let margin: CGFloat
 
     @State private var isHovered = false
 
+    private static let size: CGFloat = 30
+    /// Stroke centre sits 3.5 pt outside the edge: half the 4 pt stroke plus a 1.5 pt gap.
+    private static let gap: CGFloat = 3.5
+
     var body: some View {
         Canvas { context, size in
+            // One arc concentric with the panel's rounded corner, just outside its edge.
+            // The panel corner sits `margin` in from the canvas's bottom-right.
+            let corner = CGPoint(x: size.width - margin, y: size.height - margin)
+            let center = CGPoint(x: corner.x - cornerRadius, y: corner.y - cornerRadius)
             var path = Path()
-            path.move(to: CGPoint(x: size.width, y: size.height * 0.2))
-            path.addLine(to: CGPoint(x: size.width * 0.2, y: size.height))
-            path.move(to: CGPoint(x: size.width, y: size.height * 0.6))
-            path.addLine(to: CGPoint(x: size.width * 0.6, y: size.height))
+            path.addArc(
+                center: center,
+                radius: cornerRadius + Self.gap,
+                startAngle: .degrees(20),
+                endAngle: .degrees(70),
+                clockwise: false
+            )
+            // Same look as the divider's grab mark: 4 pt, round caps, grey that turns orange.
             context.stroke(
                 path,
-                with: .color(isHovered ? ThemePalette.orange : palette.iconOpacity(0.32)),
-                style: StrokeStyle(lineWidth: 1.6, lineCap: .round)
+                with: .color(isHovered ? ThemePalette.orange : palette.iconOpacity(0.22)),
+                style: StrokeStyle(lineWidth: 4, lineCap: .round)
             )
         }
-        .frame(width: 9, height: 9)
-        .padding(2)
-        // Near-transparent fill so the grip's whole square takes clicks in the transparent margin.
+        .frame(width: Self.size, height: Self.size)
+        // Near-transparent fill so the whole square takes clicks in the transparent margin.
         .background(Color.black.opacity(0.001))
         .background(WindowResizeArea())
         .onHover { isHovered = $0 }
