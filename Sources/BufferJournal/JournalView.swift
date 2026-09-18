@@ -361,7 +361,9 @@ struct JournalView: View {
                         .frame(height: 8)
                         .id(Self.listBottomID)
                 }
-                .padding(.horizontal, 6)
+                // 10 pt keeps the selection bar (drawn 6 pt left of a row) off the pane's edge.
+                .padding(.horizontal, 10)
+                .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
             }
             .background(ScrollOffsetObserver { isListScrolled = $0 })
             // New clips arrive from the pasteboard monitor outside any transaction: animate inserts,
@@ -488,17 +490,25 @@ struct JournalView: View {
         switch entry.payload {
         case let .text(text):
             ScrollView {
-                Text(text)
-                    .font(.system(size: 13))
-                    .lineSpacing(3)
-                    .foregroundStyle(palette.textPrimary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    // Insets live inside the scroll view so the scroller gets its own lane on the right.
-                    .padding(.leading, 16)
-                    .padding(.trailing, 22)
-                    .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
+                // One Text per line in a lazy stack: a long clip no longer lays out as a single
+                // huge block, so it scrolls as smoothly as the list. Selection works within a line.
+                LazyVStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(text.components(separatedBy: .newlines).enumerated()), id: \.offset) { _, line in
+                        Text(line.isEmpty ? " " : line)
+                            .font(.system(size: 13))
+                            .lineSpacing(3)
+                            .foregroundStyle(palette.textPrimary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                // Insets live inside the scroll view so the scroller gets its own lane on the right.
+                .padding(.leading, 16)
+                .padding(.trailing, 22)
+                .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
             }
+            // A new clip starts at the top instead of keeping the previous clip's scroll position.
+            .id(entry.id)
 
         case .image:
             if let image = store.image(for: entry) {
@@ -1747,7 +1757,10 @@ private struct ScrollBarAppearanceSetter: NSViewRepresentable {
         let scrollerAppearanceName: NSAppearance.Name = colorScheme == .dark ? .darkAqua : .aqua
         let scrollerAppearance = NSAppearance(named: scrollerAppearanceName)
         let knobStyle: NSScroller.KnobStyle = colorScheme == .dark ? .light : .dark
+        // Thin overlay scrollers that only show while scrolling, even when the system setting
+        // (or an attached mouse) asks for always-visible legacy scrollers.
         scrollView.scrollerStyle = .overlay
+        scrollView.autohidesScrollers = true
         scrollView.verticalScroller?.appearance = scrollerAppearance
         scrollView.horizontalScroller?.appearance = scrollerAppearance
         scrollView.verticalScroller?.knobStyle = knobStyle
