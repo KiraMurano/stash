@@ -770,7 +770,7 @@ private struct EntryRow: View {
                 .background(palette.placeholderBackground)
                 .background(palette.sidebarTint)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: palette.shadow(0.18), radius: 4, y: 1)
+                .shadow(color: palette.shadow(0.22), radius: 1.5, y: 1)
 
             Group {
                 if entry.isText {
