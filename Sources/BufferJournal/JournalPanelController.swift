@@ -5,13 +5,18 @@ import SwiftUI
 @MainActor
 final class JournalPanelController {
     private enum Constants {
-        static let size = NSSize(width: JournalView.Layout.width, height: JournalView.Layout.height)
-        static let cornerRadius: CGFloat = 28
+        static let size = NSSize(
+            width: JournalView.Layout.width + JournalView.Layout.gripMargin,
+            height: JournalView.Layout.height + JournalView.Layout.gripMargin
+        )
         static let savedOriginXKey = "JournalPanelOriginX"
         static let savedOriginYKey = "JournalPanelOriginY"
         static let savedWidthKey = "JournalPanelWidth"
         static let savedHeightKey = "JournalPanelHeight"
-        static let minSize = NSSize(width: JournalView.Layout.minWidth, height: JournalView.Layout.minHeight)
+        static let minSize = NSSize(
+            width: JournalView.Layout.minWidth + JournalView.Layout.gripMargin,
+            height: JournalView.Layout.minHeight + JournalView.Layout.gripMargin
+        )
     }
 
     private let store: ClipboardHistoryStore
@@ -93,9 +98,8 @@ final class JournalPanelController {
 
         let hostingView = FirstMouseHostingView(rootView: contentView)
         hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = Constants.cornerRadius
-        hostingView.layer?.cornerCurve = CALayerCornerCurve.continuous
-        hostingView.layer?.masksToBounds = true
+        // The view clips itself to the rounded panel; the transparent margin must stay unclipped for the grip.
+        hostingView.layer?.masksToBounds = false
         hostingView.layer?.borderColor = nil
         hostingView.layer?.borderWidth = 0
 
