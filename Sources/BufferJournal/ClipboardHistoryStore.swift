@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 
 @MainActor
 final class ClipboardHistoryStore: ObservableObject {
@@ -17,6 +18,8 @@ final class ClipboardHistoryStore: ObservableObject {
     private let historyURL: URL
     private var imageCache: [UUID: NSImage] = [:]
     private var thumbnailCache: [UUID: NSImage] = [:]
+    private var thumbnailsInFlight: Set<UUID> = []
+    private var pixelSizeCache: [UUID: CGSize] = [:]
     private var fileIconCache: [UUID: NSImage] = [:]
     private var pruneTimer: Timer?
 
@@ -118,49 +121,75 @@ final class ClipboardHistoryStore: ObservableObject {
         return image
     }
 
-    /// Small aspect-filled copy for list rows, rendered once. Drawing the full image into a
-    /// 36 pt thumbnail on every scroll frame made the list stutter.
-    func thumbnail(for entry: ClipboardEntry, side: CGFloat = 72) -> NSImage? {
+    /// Row thumbnail. Returns the cached one, or nil while it is being made off the main thread;
+    /// the store publishes a change when it is ready. Decoding full images on the main thread
+    /// while rows scrolled in made the list jump.
+    func thumbnail(for entry: ClipboardEntry) -> NSImage? {
         if let cached = thumbnailCache[entry.id] {
             return cached
         }
+        requestThumbnail(for: entry)
+        return nil
+    }
 
+    /// Pixel size read from the image file's header, without decoding the image.
+    func pixelSize(for entry: ClipboardEntry) -> CGSize? {
+        if let cached = pixelSizeCache[entry.id] {
+            return cached
+        }
+        guard let url = imageURL(for: entry), let size = Self.pixelSize(at: url) else { return nil }
+        pixelSizeCache[entry.id] = size
+        return size
+    }
+
+    private func requestThumbnail(for entry: ClipboardEntry) {
         guard
-            let image = image(for: entry),
-            image.size.width > 0, image.size.height > 0,
-            let rep = NSBitmapImageRep(
-                bitmapDataPlanes: nil,
-                pixelsWide: Int(side),
-                pixelsHigh: Int(side),
-                bitsPerSample: 8,
-                samplesPerPixel: 4,
-                hasAlpha: true,
-                isPlanar: false,
-                colorSpaceName: .deviceRGB,
-                bytesPerRow: 0,
-                bitsPerPixel: 0
-            )
+            !thumbnailsInFlight.contains(entry.id),
+            let url = imageURL(for: entry)
+        else {
+            return
+        }
+
+        let id = entry.id
+        // Enough pixels on the short side for a 42 pt square at 2x after aspect-fill cropping.
+        let shortSide = 96.0
+        let size = pixelSize(for: entry) ?? CGSize(width: shortSide, height: shortSide)
+        let aspect = max(size.width, size.height) / max(min(size.width, size.height), 1)
+        let maxPixel = Int(min(shortSide * aspect, 1024))
+        thumbnailsInFlight.insert(id)
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let cgImage = Self.makeThumbnail(at: url, maxPixel: maxPixel)
+            await MainActor.run {
+                guard let self else { return }
+                self.thumbnailsInFlight.remove(id)
+                guard let cgImage, self.entries.contains(where: { $0.id == id }) else { return }
+                self.thumbnailCache[id] = NSImage(cgImage: cgImage, size: .zero)
+                self.objectWillChange.send()
+            }
+        }
+    }
+
+    nonisolated private static func makeThumbnail(at url: URL, maxPixel: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
+    nonisolated private static func pixelSize(at url: URL) -> CGSize? {
+        guard
+            let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+            let width = properties[kCGImagePropertyPixelWidth] as? Int,
+            let height = properties[kCGImagePropertyPixelHeight] as? Int
         else {
             return nil
         }
-
-        let scale = max(side / image.size.width, side / image.size.height)
-        let drawSize = NSSize(width: image.size.width * scale, height: image.size.height * scale)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        NSGraphicsContext.current?.imageInterpolation = .high
-        image.draw(
-            in: NSRect(x: (side - drawSize.width) / 2, y: (side - drawSize.height) / 2, width: drawSize.width, height: drawSize.height),
-            from: .zero,
-            operation: .copy,
-            fraction: 1
-        )
-        NSGraphicsContext.restoreGraphicsState()
-
-        let thumbnail = NSImage(size: NSSize(width: side / 2, height: side / 2))
-        thumbnail.addRepresentation(rep)
-        thumbnailCache[entry.id] = thumbnail
-        return thumbnail
+        return CGSize(width: width, height: height)
     }
 
     func fileIcon(for entry: ClipboardEntry) -> NSImage? {
@@ -177,6 +206,7 @@ final class ClipboardHistoryStore: ObservableObject {
     private func forgetCachedImages(for id: UUID) {
         imageCache[id] = nil
         thumbnailCache[id] = nil
+        pixelSizeCache[id] = nil
         fileIconCache[id] = nil
     }
 

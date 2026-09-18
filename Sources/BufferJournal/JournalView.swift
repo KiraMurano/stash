@@ -345,7 +345,6 @@ struct JournalView: View {
 
                 ForEach(section.entries) { entry in
                     row(entry)
-                        .id(entry.id)
                 }
                 .onMove(perform: section.isPinned ? { movePinned(in: section.entries, from: $0, to: $1) } : nil)
             }
@@ -444,7 +443,7 @@ struct JournalView: View {
 
                 stage(for: entry)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, entry.isText ? 0 : 16)
                     .padding(.vertical, 12)
 
                 HStack(spacing: 12) {
@@ -489,6 +488,9 @@ struct JournalView: View {
                     .foregroundStyle(palette.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // Insets live inside the scroll view so the scroller gets its own lane on the right.
+                    .padding(.leading, 16)
+                    .padding(.trailing, 22)
                     .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
             }
 
@@ -687,8 +689,8 @@ struct JournalView: View {
     }
 
     private func pixelSize(of entry: ClipboardEntry) -> String? {
-        guard let rep = store.image(for: entry)?.representations.first, rep.pixelsWide > 0 else { return nil }
-        return "\(rep.pixelsWide)×\(rep.pixelsHigh)"
+        guard let size = store.pixelSize(for: entry) else { return nil }
+        return "\(Int(size.width))×\(Int(size.height))"
     }
 
     private func timeTitle(_ date: Date) -> String {
