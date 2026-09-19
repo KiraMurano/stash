@@ -343,7 +343,12 @@ final class JournalPanelController {
             let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
             if
                 let visibleFrame = screen?.visibleFrame,
-                let origin = PanelPlacement.origin(anchor: anchor, panelSize: panel.frame.size, visibleFrame: visibleFrame)
+                let origin = PanelPlacement.origin(
+                    anchor: anchor,
+                    panelSize: panel.frame.size,
+                    visibleFrame: visibleFrame,
+                    bottomInset: JournalView.Layout.gripMargin
+                )
             {
                 panel.setFrameOrigin(origin)
                 return

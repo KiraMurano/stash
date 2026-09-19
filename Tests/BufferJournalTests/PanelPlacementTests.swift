@@ -11,13 +11,23 @@ struct PanelPlacementTests {
         let caret = CGRect(x: 300, y: 700, width: 1, height: 16)
         let origin = PanelPlacement.origin(anchor: caret, panelSize: panel, visibleFrame: screen)
         // Top of the panel is a gap below the caret, left edge follows it.
-        #expect(origin == NSPoint(x: 300, y: 700 - 8 - 444))
+        #expect(origin == NSPoint(x: 300, y: caret.minY - PanelPlacement.gap - panel.height))
     }
 
     @Test func movesAboveTheCaretWithoutRoomBelow() {
         let caret = CGRect(x: 300, y: 200, width: 1, height: 16)
         let origin = PanelPlacement.origin(anchor: caret, panelSize: panel, visibleFrame: screen)
-        #expect(origin == NSPoint(x: 300, y: 200 + 16 + 8))
+        #expect(origin == NSPoint(x: 300, y: caret.maxY + PanelPlacement.gap))
+    }
+
+    @Test func aTransparentBottomEdgeKeepsTheGapEven() throws {
+        let caret = CGRect(x: 300, y: 200, width: 1, height: 16)
+        // The panel carries a 4 pt transparent strip under it, so it sits 4 pt lower and the
+        // visible gap above the caret matches the one below it.
+        let origin = try #require(
+            PanelPlacement.origin(anchor: caret, panelSize: panel, visibleFrame: screen, bottomInset: 4)
+        )
+        #expect(origin.y == caret.maxY + PanelPlacement.gap - 4)
     }
 
     @Test func givesUpWhenItFitsNeitherWay() {
