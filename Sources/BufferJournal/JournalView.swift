@@ -657,33 +657,15 @@ struct JournalView: View {
     }
 
     private func kindTitle(_ entry: ClipboardEntry) -> String {
-        switch entry.payload {
-        case .text: l10n("Text", "Текст")
-        case .image: l10n("Image", "Изображение")
-        case .file: l10n("File", "Файл")
-        }
+        ClipLabels.kindTitle(entry, l10n)
     }
 
     private func rowTitle(_ entry: ClipboardEntry) -> String {
-        switch entry.payload {
-        case let .text(text):
-            // Collapse whitespace so two lines show real content, not blank lines.
-            let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-            return collapsed.isEmpty ? l10n("Empty text", "Пустой текст") : collapsed
-        case .image:
-            return kindTitle(entry)
-        case .file:
-            return entry.title(l10n)
-        }
+        ClipLabels.rowTitle(entry, l10n)
     }
 
     private func rowSubtitle(_ entry: ClipboardEntry) -> String {
-        let time = timeTitle(entry.createdAt)
-        switch entry.payload {
-        case .text: return time
-        case .image: return [pixelSize(of: entry), time].compactMap { $0 }.joined(separator: " · ")
-        case .file: return "\(entry.subtitle(l10n)) · \(time)"
-        }
+        ClipLabels.rowSubtitle(entry, pixelSize: store.pixelSize(for: entry), l10n)
     }
 
     private func sidebarWidth(in totalWidth: CGFloat) -> CGFloat {
@@ -716,20 +698,11 @@ struct JournalView: View {
     }
 
     private func pixelSize(of entry: ClipboardEntry) -> String? {
-        guard let size = store.pixelSize(for: entry) else { return nil }
-        return "\(Int(size.width))×\(Int(size.height))"
+        store.pixelSize(for: entry).map(ClipLabels.pixelSizeTitle)
     }
 
     private func timeTitle(_ date: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            return DateFormatter.entryTime.string(from: date)
-        }
-        if calendar.isDateInYesterday(date) {
-            return l10n("yesterday", "вчера") + ", " + DateFormatter.entryTime.string(from: date)
-        }
-        let locale = Locale(identifier: settings.language.resolved == .russian ? "ru_RU" : "en_US")
-        return date.formatted(.dateTime.day().month(.abbreviated).locale(locale))
+        ClipLabels.timeTitle(date, l10n)
     }
 
     private var emptyStateMessage: String {
