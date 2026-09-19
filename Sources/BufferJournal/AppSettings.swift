@@ -71,8 +71,10 @@ final class AppSettings: ObservableObject {
             defaults.set(true, forKey: Keys.interceptKeys)
         }
 
+        // On by default: the panel closes after a paste, like Win+V, and Return goes back to the
+        // user's text right away. Those who have run Stash before keep their own choice.
         if defaults.object(forKey: Keys.closeAfterSelection) == nil {
-            defaults.set(false, forKey: Keys.closeAfterSelection)
+            defaults.set(true, forKey: Keys.closeAfterSelection)
         }
 
         interceptKeys = defaults.bool(forKey: Keys.interceptKeys)
