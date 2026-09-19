@@ -1060,7 +1060,7 @@ enum OnboardingSlides {
             )
         ),
         OnboardingSlide(
-            kind: .settings, duration: 4.6, loops: true,
+            kind: .settings, duration: 5.4, loops: true,
             word: Localized(en: "SETTINGS", ru: "НАСТРОЙКИ"),
             text: Localized(
                 en: "The Stash icon in the menu bar opens settings: paste and close on selection, theme and language. Tutorial replays this tour.",
@@ -4787,7 +4787,7 @@ git commit -m "Tutorial scene: search"
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
 - Produces: `SettingsScene(time:)`, `SettingsScene.duration`, `SettingsScene.size`, `SettingsScene.State`, `SettingsScene.state(at: SceneTime) -> State`.
 - Consumes: `StatusMenuTitles` (Task 10), `L10n.themeName(_:)`.
-- Produces: `SettingsScene.menuOrigin`, `menuWidth`, `submenuWidth`, `submenuOrigin`, `rowHeight`, `separatorHeight`, `menuPadding`, `frame(of:)` — геометрия меню для тестов.
+- Produces: `SettingsScene.menuOrigin`, `menuWidth`, `submenuWidth`, `submenuOrigin`, `rowHeight`, `separatorHeight`, `menuPadding`, `frame(of:)`, `iconClicks`, `itemClicks`, `blinkOff`, `menuCloses` — геометрия и моменты для тестов.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -4806,8 +4806,27 @@ struct SettingsSceneTests {
         #expect(end.menuOpen)
         #expect(end.iconHighlighted)
         #expect(end.highlighted == .tutorial)
-        let onTheme = SettingsScene.state(at: SceneTime(t: 2.3, rewind: 0))
+        #expect(end.closeChecked)
+        let onTheme = SettingsScene.state(at: SceneTime(t: 3.1, rewind: 0))
         #expect(onTheme.highlighted == .theme)
+    }
+
+    @Test func clickingCloseAfterSelectionBlinksClosesAndTicksIt() {
+        let click = SettingsScene.itemClicks[0]
+        let ripple = SettingsScene.state(at: SceneTime(t: click + 0.01, rewind: 0)).ripple
+        #expect(ripple.map { SettingsScene.frame(of: .closeAfterSelection).contains($0.center) } == true)
+        let blink = SettingsScene.state(at: SceneTime(t: click + 0.09, rewind: 0))
+        #expect(blink.menuOpen && blink.highlighted == nil)
+        #expect(SettingsScene.state(at: SceneTime(t: click + 0.15, rewind: 0)).highlighted == .closeAfterSelection)
+        let closed = SettingsScene.state(at: SceneTime(t: SettingsScene.menuCloses + 0.05, rewind: 0))
+        #expect(!closed.menuOpen && closed.closeChecked)
+        let reopened = SettingsScene.state(at: SceneTime(t: SettingsScene.iconClicks[1] + 0.1, rewind: 0))
+        #expect(reopened.menuOpen && reopened.closeChecked)
+    }
+
+    @Test func tutorialIsClickedAtTheEnd() {
+        let ripple = SettingsScene.state(at: SceneTime(t: SettingsScene.itemClicks[1] + 0.01, rewind: 0)).ripple
+        #expect(ripple.map { SettingsScene.frame(of: .tutorial).contains($0.center) } == true)
     }
 
     @Test func theSubmenuOpensToTheRightInsideTheScene() {
@@ -4836,7 +4855,7 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 
 - [ ] **Step 3: Сцена**
 
-Сверху правый край строки меню — только трей: слева значок Stash (настоящий ресурс `StatusIcon` в своих 14 × 18 pt; в тестах — запасной символ, как в `AppDelegate`), справа системные значки и часы. Указатель жмёт значок (0,9 с): значок подсвечен, под ним выпадает меню в составе из Task 10. Указатель идёт по «Вставлять при выборе» (с галочкой) и «Закрывать после выбора», встаёт на «Тему» — справа открывается подменю тем с галочкой у Stash Auto (1,9–2,6 с) — и поднимается к «Обучению» (2,7–3,2 с). Подсветка — системный акцент, и она всегда у пункта под указателем, как в настоящем меню. По пунктам сцена не кликает: клик закрыл бы меню. Меню открыто по флагу, а не по плавной дорожке: на возврате круга оно закрывается сразу, и указатель по дороге к началу ничего не подсвечивает.
+Сверху правый край строки меню — только трей: слева значок Stash (настоящий ресурс `StatusIcon` в своих 14 × 18 pt; в тестах — запасной символ, как в `AppDelegate`), справа системные значки и часы. Указатель жмёт значок (0,9 с): значок подсвечен, под ним выпадает меню в составе из Task 10. Указатель проходит по «Вставлять при выборе» (с галочкой) и жмёт «Закрывать после выбора» (1,6 с): как в macOS, пункт на 0,06 с гаснет и снова загорается, и меню закрывается (1,8 с). Указатель снова жмёт значок (2,3 с) — у «Закрывать после выбора» теперь галочка. Указатель встаёт на «Тему» — справа открывается подменю тем с галочкой у Stash Auto, — поднимается к «Обучению» и жмёт его (3,95 с), пункт так же мигает. Подсветка — системный акцент, и она всегда у пункта под указателем, как в настоящем меню. Меню открыто по флагу, а не по плавной дорожке: на возврате круга оно закрывается сразу, и указатель по дороге к началу ничего не подсвечивает.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/SettingsScene.swift`:
 
@@ -4844,11 +4863,11 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 import AppKit
 import SwiftUI
 
-/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon; the menu drops down under it and
-/// the arrow walks over the settings, rests on Theme to open its submenu on the right, and ends on
-/// Tutorial.
+/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon and then "Close After Selection":
+/// like a real menu, the item blinks and the menu closes. The arrow opens it again, and the item now
+/// has its check. It rests on Theme to open the submenu on the right and ends clicking Tutorial.
 struct SettingsScene: View {
-    static let duration = 4.6
+    static let duration = 5.4
     /// The tray end of the menu bar, the menu under the Stash icon and the theme submenu beside it.
     static let size = CGSize(width: 380, height: 280)
 
@@ -4862,6 +4881,8 @@ struct SettingsScene: View {
         var iconHighlighted: Bool
         var menuOpen: Bool
         var highlighted: Item?
+        /// "Close After Selection" has been switched on.
+        var closeChecked: Bool
     }
 
     // Geometry, in scene points. The Stash icon opens the tray; a real menu hangs from its status
@@ -4898,33 +4919,45 @@ struct SettingsScene: View {
         CGPoint(x: menuOrigin.x + 90, y: frame(of: item).midY)
     }
 
-    private static let click = 0.9
+    // Clicks: the icon, "Close After Selection", the icon again, Tutorial.
+    static let iconClicks = [0.9, 2.3]
+    static let itemClicks = [1.6, 3.95]
+    /// A clicked item goes dark for a moment and lights up again before the menu acts, as in macOS.
+    static let blinkOff = 0.06...0.12
+    /// The menu closes after the first item's blink.
+    static let menuCloses = 1.8
 
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 300, y: 262))
             .to(statusIcon, at: 0.3, until: 0.8)
-            .to(center(of: .pasteOnSelection), at: 1.2, until: 1.45)
-            .to(center(of: .closeAfterSelection), at: 1.5, until: 1.65)
-            .to(center(of: .theme), at: 1.75, until: 1.9)
-            .to(center(of: .tutorial), at: 2.7, until: 3.2),
+            .to(center(of: .pasteOnSelection), at: 1.15, until: 1.35)
+            .to(center(of: .closeAfterSelection), at: 1.38, until: 1.5)
+            .to(statusIcon, at: 1.95, until: 2.2)
+            .to(center(of: .closeAfterSelection), at: 2.45, until: 2.7)
+            .to(center(of: .theme), at: 2.75, until: 2.9)
+            .to(center(of: .tutorial), at: 3.4, until: 3.8),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
-        clicks: [click]
+        clicks: (iconClicks + itemClicks).sorted()
     )
-    private static let iconHighlighted = Track(false).set(true, at: click)
-    private static let menuOpen = Track(false).set(true, at: click + 0.05)
+    private static let iconHighlighted = Track(false).set(true, at: iconClicks[0]).set(false, at: menuCloses).set(true, at: iconClicks[1])
+    private static let menuOpen = Track(false).set(true, at: iconClicks[0] + 0.05).set(false, at: menuCloses).set(true, at: iconClicks[1] + 0.05)
+    private static let closeChecked = Track(false).set(true, at: menuCloses)
 
     static func state(at time: SceneTime) -> State {
         let cursor = cursor.state(at: time)
         let menuOpen = menuOpen.value(at: time)
-        // Like a real menu, the highlight is whatever item is under the arrow. While the loop goes
-        // back to its start the menu is closed, so the arrow passing over it lights nothing up.
-        let highlighted = menuOpen ? Item.allCases.first { frame(of: $0).contains(cursor.tip) } : nil
+        // Like a real menu, the highlight is whatever item is under the arrow, except while a clicked
+        // item blinks. While the loop goes back to its start the menu is closed, so the arrow passing
+        // over it lights nothing up.
+        let blinking = time.rewind == 0 && itemClicks.contains { blinkOff.contains(time.t - $0) }
+        let highlighted = menuOpen && !blinking ? Item.allCases.first { frame(of: $0).contains(cursor.tip) } : nil
         return State(
             cursor: cursor,
             ripple: Self.cursor.ripple(at: time),
             iconHighlighted: iconHighlighted.value(at: time),
             menuOpen: menuOpen,
-            highlighted: highlighted
+            highlighted: highlighted,
+            closeChecked: closeChecked.value(at: time)
         )
     }
 
@@ -5014,7 +5047,8 @@ struct SettingsScene: View {
         return VStack(spacing: 0) {
             ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
                 if let row {
-                    menuRow(title: title(of: row, titles), checked: row == .pasteOnSelection, submenu: row == .theme || row == .language,
+                    menuRow(title: title(of: row, titles), checked: row == .pasteOnSelection || (row == .closeAfterSelection && state.closeChecked),
+                            submenu: row == .theme || row == .language,
                             shortcut: row == .quit ? "⌘Q" : nil, highlighted: state.highlighted == row, palette: palette)
                 } else {
                     separator(palette: palette)
@@ -5140,7 +5174,7 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-settings-mid-ru-light.png` — меню под значком, «Тема» подсвечена, справа подменю с «✓ Stash Auto». `scene-settings-end-ru-light.png` — подменю закрыто, подсвечено «Обучение», галочка у «Вставлять при выборе».
+Проверка вручную: `scene-settings-mid-ru-light.png` (2,16 с) — меню закрыто после клика, указатель на пути к значку. `scene-settings-end-ru-light.png` — меню под значком, подсвечено «Обучение», галочки у «Вставлять при выборе» и «Закрывать после выбора».
 
 - [ ] **Step 7: Коммит**
 
