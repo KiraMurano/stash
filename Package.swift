@@ -14,6 +14,11 @@ let package = Package(
         .executableTarget(
             name: "BufferJournal",
             path: "Sources/BufferJournal"
+        ),
+        .testTarget(
+            name: "BufferJournalTests",
+            dependencies: ["BufferJournal"],
+            path: "Tests/BufferJournalTests"
         )
     ]
 )
