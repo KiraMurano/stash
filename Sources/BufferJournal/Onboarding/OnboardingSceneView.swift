@@ -24,7 +24,7 @@ struct OnboardingSceneView: View {
         case .hero: nil
         case .hotKey: HotKeyScene.size
         case .paste: PasteScene.size
-        case .pin: OnboardingLayout.sceneSize
+        case .pin: PinScene.size
         case .images: OnboardingLayout.sceneSize
         case .keys: OnboardingLayout.sceneSize
         case .settings: OnboardingLayout.sceneSize
@@ -52,7 +52,7 @@ struct OnboardingSceneView: View {
         case .hero: HeroScene(time: time, area: area)
         case .hotKey: HotKeyScene(time: time)
         case .paste: PasteScene(time: time)
-        case .pin: Color.clear
+        case .pin: PinScene(time: time)
         case .images: Color.clear
         case .keys: Color.clear
         case .settings: Color.clear
