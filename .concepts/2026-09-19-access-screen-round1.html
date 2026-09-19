@@ -1,0 +1,290 @@
+<meta charset="utf-8">
+<title>2026-09-19 Экран доступа — раунд 1</title>
+<!--
+  Концепт (навык visual-prototype), раунд 1.
+  Вопрос: экран доступа со значком слева от заголовка и подзаголовка, текстом по левому краю
+  и полоской слева у нижней подсказки — куда встают кнопка и подсказка, какого цвета полоска.
+  Источник: Sources/BufferJournal/AccessScreen.swift, ThemePalette и TranslucentButtonStyle,
+  GlassIconButton, DeleteConfirmationOverlay в Sources/BufferJournal/JournalView.swift,
+  дерево feature/journal-without-focus@9c47656 (рабочая копия пользователя, без незакоммиченных правок).
+  Шрифт: system-ui (SF Pro на macOS, приложение берёт .system()); высота строки 1.19 кегля — приближение
+  к SwiftUI Text. Стекло панели приближено backdrop-filter поверх обоев. Значки — настоящие SF Symbols
+  accessibility (20 и 22 pt, semibold) и xmark (12 pt, semibold), отрисованные NSImage в 3x и встроенные как data:.
+-->
+<style>
+  /* ── 1. Токены проекта: ThemePalette (JournalView.swift), значения дословно ── */
+  :root { --orange: rgb(244,106,37); }
+  .cx-light {
+    --wallpaper: linear-gradient(135deg,#9fb9dc 0%,#cdb6dc 45%,#eecbab 100%);
+    --sidebar: rgba(255,255,255,.82);
+    --text-1: rgba(0,0,0,.86); --text-2: rgba(0,0,0,.58); --text-3: rgba(0,0,0,.38);
+    --accent-text: rgb(217,86,26);
+    --accent-soft: rgba(244,106,37,.13);
+    --accent-tint: rgba(244,106,37,.18);
+    --icon-22: rgba(0,0,0,.22); --icon-70: rgba(0,0,0,.70); --icon-78: rgba(0,0,0,.78);
+    --neutral-tint: rgba(0,0,0,.06);
+    --solid-control: rgb(237,237,237);
+    --control-shadow: 0 1px 1px rgba(0,0,0,.28);
+    --panel-edge: rgba(0,0,0,.10);
+  }
+  .cx-dark {
+    --wallpaper: linear-gradient(135deg,#1f2c47 0%,#3b2548 50%,#4b3026 100%);
+    --sidebar: rgba(28,28,30,.84);
+    --text-1: rgba(255,255,255,.90); --text-2: rgba(255,255,255,.58); --text-3: rgba(255,255,255,.38);
+    --accent-text: rgb(255,138,76);
+    --accent-soft: rgba(244,106,37,.22);
+    --accent-tint: rgba(244,106,37,.28);
+    --icon-22: rgba(255,255,255,.22); --icon-70: rgba(255,255,255,.70); --icon-78: rgba(255,255,255,.78);
+    --neutral-tint: rgba(255,255,255,.10);
+    --solid-control: rgb(77,77,77);
+    --control-shadow: 0 1px 1px rgba(0,0,0,.41);
+    --panel-edge: rgba(255,255,255,.11);
+  }
+
+  /* ── 2. Шрифты: системный, файл не встраивается ── */
+
+  /* ── 3. Каркас страницы, все классы с cx- ── */
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 14px/1.45 system-ui, sans-serif; color: #1a1a1a; background: #f4f4f2; }
+  .cx-header h1 { margin: 0 0 6px; font-size: 22px; }
+  .cx-header p, .cx-header ol { margin: 4px 0; color: #555; max-width: 1000px; }
+  .cx-header code { font-size: 12px; background: #e8e8e4; padding: 1px 4px; border-radius: 4px; }
+  .cx-controls { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center;
+    margin: 16px -24px; padding: 10px 24px; background: #f4f4f2ee; backdrop-filter: blur(6px); border-bottom: 1px solid #ddd; }
+  .cx-control { display: flex; gap: 4px; align-items: center; }
+  .cx-control > span { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #777; margin-right: 4px; }
+  .cx-control button { font: inherit; font-size: 12px; padding: 3px 9px; border: 1px solid #ccc; border-radius: 99px; background: #fff; cursor: pointer; }
+  .cx-control button[aria-pressed="true"] { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+  .cx-block { margin: 28px 0 40px; }
+  .cx-block > h2 { font-size: 17px; margin: 0 0 12px; }
+  .cx-frames { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  .cx-variant { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
+  .cx-variant > h3 { margin: 0; font-size: 14px; }
+  .cx-variant > .cx-caption { margin: 0; max-width: 560px; color: #555; font-size: 13px; }
+  .cx-pair { display: flex; gap: 12px; flex-wrap: wrap; }
+  .cx-frame { display: flex; flex-direction: column; gap: 6px; }
+  .cx-frame > .cx-theme-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .06em; }
+  .cx-screen { padding: 18px; border-radius: 14px; background: var(--wallpaper); width: max-content; }
+  .cx-readout { font-size: 12px; color: #444; font-variant-numeric: tabular-nums; max-width: 640px; }
+  .cx-readout .cx-bad { color: #b3261e; font-weight: 600; }
+  .cx-verdict { margin-top: 16px; padding: 12px 16px; background: #fff; border-left: 3px solid #1a1a1a; max-width: 900px; }
+
+  /* ── 4. Макет: AccessScreen, значения из кода ── */
+  .mock-panel { position: relative; display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
+    background: var(--sidebar); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    box-shadow: 0 0 0 .5px var(--panel-edge), 0 18px 40px rgba(0,0,0,.28);
+    font-family: system-ui, -apple-system, sans-serif; color: var(--text-1); }
+  .mock-top { display: flex; justify-content: flex-end; padding: 10px 10px 0 0; }
+  .mock-close { width: 28px; height: 28px; border: 0; border-radius: 8px; display: grid; place-items: center; padding: 0;
+    background: var(--neutral-tint); color: var(--icon-70); }
+  .is-solid .mock-close { background: var(--solid-control); color: var(--icon-78); box-shadow: var(--control-shadow); }
+  .mock-center { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; }
+  .mock-column { width: min(360px, calc(100% - 48px)); display: flex; flex-direction: column; align-items: flex-start; }
+  .mock-column.is-centered { align-items: center; text-align: center; }
+  .mock-sym { display: block; background: currentColor; -webkit-mask: var(--sym) center / contain no-repeat; mask: var(--sym) center / contain no-repeat; }
+  .mock-xmark { width: 13px; height: 12px; --sym: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACcAAAAkCAYAAAAKNyObAAAAAXNSR0IArs4c6QAAAGxlWElmTU0AKgAAAAgABAEaAAUAAAABAAAAPgEbAAUAAAABAAAARgEoAAMAAAABAAIAAIdpAAQAAAABAAAATgAAAAAAAADYAAAAAQAAANgAAAABAAKgAgAEAAAAAQAAACegAwAEAAAAAQAAACQAAAAArZm4FgAAAAlwSFlzAAAhOAAAITgBRZYxYAAAAahJREFUWAntlz1LA0EQhoPiB2qhv1SwFQsbsVTQTvTsBY02YpNY2Ul+hPZiqYg+ExxYltt17m72UpiBN7O7mdt5bvaDZDCY27wCs6/ABgin6BkdoXXkaUtMdoBk/jO0hcx2SOR3oEfaXoACdh3MLXnOkdnuiQzhpO0BWAcmc0/MZATuoBhO+mPUtoIpMJlXVspsC0ReIi/AHNgteZbNZL+BXoDuYPoiXQGLgYWAFZ2mS1wcrC1gb2BNAXsHswJuEhhfsLodWp1KTWz1ckgqpElD/5YYHzLe+LrgmVaWAwxhpd1LxeK3sADOBExBV2i8oLha0pclbvRrg3g3y51KhR2Tbc0to3EiC5gCjvoEFLAbpMlD/5oYHzNevIK5isnmX0UVCoG1PWK8GOBfYHqP5U5xEUArGMWZmgBeIK1a6F0BBSy1x3L3WHHAtmDT8vFRDLArWDFAL7AigLvMGm5ibef2mIKkfG6Jj1MP1Y0/MKhA6ruAaY4U4EQDLH4/gvMA07x1gCf6ZewX4wH6T+gLfSL5/7qNPpCHyUrcoXckua/QHpJcc/sfFfgBt2ZFuc1834EAAAAASUVORK5CYII=); }
+  .mock-access20 { width: 24px; height: 24px; --sym: url(data:image/png;base64,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); }
+  .mock-access22 { width: 27px; height: 27px; --sym: url(data:image/png;base64,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); }
+  .mock-plate { flex: none; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); }
+  .is-solid .mock-plate { background: var(--orange); color: #fff; }
+  .mock-plate.is-fixed { width: 44px; height: 44px; border-radius: 12px; }
+  .mock-plate.is-square { border-radius: 10px; }
+  .mock-head { display: flex; gap: 12px; align-items: flex-start; width: 100%; }
+  .mock-texts { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+  .mock-title { font-size: 15px; font-weight: 600; line-height: 1.19; color: var(--text-1); }
+  .mock-message { font-size: 13px; line-height: 1.19; color: var(--text-2); }
+  .mock-button { font: 600 12px/1 system-ui, -apple-system, sans-serif; height: 32px; padding: 0 16px; border: 0; border-radius: 8px;
+    background: var(--accent-tint); color: var(--accent-text); }
+  .is-solid .mock-button { background: var(--orange); color: #fff; box-shadow: var(--control-shadow); }
+  .mock-hint { font-size: 11px; line-height: 1.19; color: var(--text-3); }
+  .mock-hint.has-stripe { position: relative; padding-left: 13px; }
+  .mock-hint.has-stripe::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 1.5px; background: var(--stripe); }
+  .stripe-grey { --stripe: var(--icon-22); }
+  .stripe-orange { --stripe: var(--orange); }
+</style>
+
+<header class="cx-header">
+  <h1>Экран доступа: значок слева, текст по левому краю</h1>
+  <p>Вопрос: при значке слева от заголовка и подзаголовка и тексте по левому краю — куда встают кнопка и подсказка с полоской (блок 1) и какого цвета полоска (блок 2).</p>
+  <p>Токены: <code>ThemePalette</code>, <code>TranslucentButtonStyle</code>, <code>GlassIconButton</code> в <code>Sources/BufferJournal/JournalView.swift</code> · Экран: <code>Sources/BufferJournal/AccessScreen.swift</code> · Дерево: <code>feature/journal-without-focus@9c47656</code> · Шрифт: системный (SF Pro), высота строки приближена.</p>
+  <p>Всё помещается при любом размере панели и языке: на 560×360 запас по высоте не меньше 95 pt. Колонка везде 360 pt.</p>
+  <p>Значок в новых вариантах — квадратная плашка высотой с текст рядом, скругление 10, символ 20 pt, как в диалоге «Удалить клип?». Отступы: значок—текст 12, заголовок—подзаголовок 4, текст—кнопка 16, кнопка—подсказка 14, полоска 3 pt и 10 pt до текста. «Сейчас» — то, что в сборке, для сравнения.</p>
+</header>
+
+<div class="cx-controls" id="cx-controls"></div>
+
+<section class="cx-block" id="cx-block-1">
+  <h2>1. Куда встают кнопка и подсказка</h2>
+  <div class="cx-frames"></div>
+  <div class="cx-verdict">
+    <strong>Рекомендую 1.1 — значок, кнопка и полоска стоят на одном левом крае, как значок и кнопки в диалоге «Удалить клип?», и экран читается одной колонкой сверху вниз.</strong>
+  </div>
+</section>
+
+<section class="cx-block" id="cx-block-2">
+  <h2>2. Цвет полоски у подсказки (раскладка 1.1)</h2>
+  <div class="cx-frames"></div>
+  <div class="cx-verdict">
+    <strong>Рекомендую 2.1 — подсказка второстепенна: оранжевым на экране уже отмечены значок и единственная кнопка, а оранжевая полоска в журнале значит «выбрано».</strong>
+  </div>
+</section>
+
+<script>
+/* ── Состояние: один объект, все кадры рисуются из него ── */
+const STATE = { theme: 'light', accents: 'solid', lang: 'ru', size: '640' };
+
+const CONTROLS = [
+  { key: 'theme', label: 'Тема', options: [['light', 'Светлая'], ['dark', 'Тёмная'], ['both', 'Обе']] },
+  { key: 'accents', label: 'Акценты', options: [['solid', 'Темы Stash'], ['tint', 'Авто / Светлая / Тёмная']] },
+  { key: 'lang', label: 'Язык', options: [['ru', 'Русский'], ['en', 'English']] },
+  { key: 'size', label: 'Панель', options: [['560', '560×360 (минимум)'], ['640', '640×440'], ['900', '900×600']] },
+];
+
+const SIZES = { '560': [560, 360], '640': [640, 440], '900': [900, 600] };
+
+const TEXT = {
+  ru: {
+    title: 'Stash нужен Универсальный доступ',
+    message: 'Stash вставляет клип, нажимая ⌘V за вас. Без Универсального доступа macOS этого не разрешит.',
+    button: 'Открыть настройки',
+    hint: 'Stash уже в списке и включён, а экран не уходит? После обновления macOS считает Stash новым приложением. Удалите его из списка кнопкой «−» и снова нажмите «Открыть настройки».',
+  },
+  en: {
+    title: 'Stash needs Accessibility access',
+    message: 'Stash pastes by pressing ⌘V for you. macOS won’t allow it without Accessibility access.',
+    button: 'Open Settings',
+    hint: 'Stash is already in the list and switched on, but this screen stays? After an update macOS treats Stash as a new app. Remove it from the list with “−” and click Open Settings again.',
+  },
+};
+
+const BLOCKS = [
+  {
+    id: 'cx-block-1',
+    variants: [
+      { id: 'Сейчас', name: 'в сборке', caption: 'Для сравнения: всё по центру, значок над заголовком, подсказка без полоски.',
+        render: s => panel(s, 'current') },
+      { id: '1.1', name: 'общий левый край', caption: 'Кнопка и подсказка начинаются от левого края значка. Плюс: одна вертикаль — значок, кнопка, полоска, как в диалоге «Удалить клип?», где кнопки под значком. Цена: кнопка и подсказка шире текста над ними, значок не выделяет колонку.',
+        render: s => panel(s, 'edge', 'stripe-grey') },
+      { id: '1.2', name: 'колонка текста', caption: 'Значок висит слева, кнопка и подсказка встают под заголовок. Плюс: весь текст в одной колонке, как в системных предупреждениях macOS. Цена: под значком пусто, колонка на 65 pt уже — в английском подсказка занимает 4 строки вместо 3.',
+        render: s => panel(s, 'column', 'stripe-grey') },
+    ],
+  },
+  {
+    id: 'cx-block-2',
+    variants: [
+      { id: '2.1', name: 'серая полоска', caption: 'Серая, как метка на разделителе списка в покое (iconOpacity 0.22). Плюс: подсказка читается как примечание. Цена: на светлом стекле полоска тихая.',
+        render: s => panel(s, 'edge', 'stripe-grey') },
+      { id: '2.2', name: 'оранжевая полоска', caption: 'Оранжевая, как полоска выбранной строки в журнале. Плюс: подсказку легко найти. Цена: третье оранжевое пятно на экране, и в журнале этот знак значит «выбрано».',
+        render: s => panel(s, 'edge', 'stripe-orange') },
+    ],
+  },
+];
+
+/* ── Макет AccessScreen ── */
+function panel(s, layout, stripe = '') {
+  const t = TEXT[s.lang];
+  const [w, h] = SIZES[s.size];
+  let column;
+  if (layout === 'current') {
+    column = `<div class="mock-column is-centered">
+        <div class="mock-plate is-fixed"><i class="mock-sym mock-access22"></i></div>
+        <div class="mock-title" style="margin-top:14px">${t.title}</div>
+        <div class="mock-message" style="margin-top:6px">${t.message}</div>
+        <button class="mock-button" style="margin-top:16px">${t.button}</button>
+        <div class="mock-hint" style="margin-top:14px">${t.hint}</div>
+      </div>`;
+  } else {
+    const indent = layout === 'column' ? ' mock-indent' : '';
+    column = `<div class="mock-column">
+        <div class="mock-head">
+          <div class="mock-plate is-square"><i class="mock-sym mock-access20"></i></div>
+          <div class="mock-texts">
+            <div class="mock-title">${t.title}</div>
+            <div class="mock-message">${t.message}</div>
+          </div>
+        </div>
+        <button class="mock-button${indent}" style="margin-top:16px">${t.button}</button>
+        <div class="mock-hint has-stripe ${stripe}${indent}" style="margin-top:14px">${t.hint}</div>
+      </div>`;
+  }
+  return `<div class="mock-panel ${s.accents === 'solid' ? 'is-solid' : ''}" style="width:${w}px;height:${h}px">
+      <div class="mock-top"><button class="mock-close"><i class="mock-sym mock-xmark"></i></button></div>
+      <div class="mock-center">${column}</div>
+    </div>`;
+}
+
+/* Плашка — квадрат высотой с текст рядом; в 1.2 кнопка и подсказка сдвигаются на ширину плашки и зазор. */
+function layoutPass(el) {
+  const plate = el.querySelector('.mock-plate.is-square');
+  if (!plate) return;
+  const texts = el.querySelector('.mock-texts');
+  plate.style.width = plate.style.height = '0px';
+  const side = texts.getBoundingClientRect().height;
+  plate.style.width = plate.style.height = side + 'px';
+  for (const node of el.querySelectorAll('.mock-indent')) {
+    node.style.marginLeft = (side + 12) + 'px';
+    node.style.width = `calc(100% - ${side + 12}px)`;
+  }
+}
+
+/* Показания: всё меряется по отрисованному DOM. */
+function measure(el) {
+  const p = el.querySelector('.mock-panel').getBoundingClientRect();
+  const top = el.querySelector('.mock-top').getBoundingClientRect();
+  const col = el.querySelector('.mock-column').getBoundingClientRect();
+  const plate = el.querySelector('.mock-plate').getBoundingClientRect();
+  const hint = el.querySelector('.mock-hint');
+  const lines = Math.round(hint.getBoundingClientRect().height / (11 * 1.19));
+  const spare = Math.round(p.height - top.height - col.height);
+  const spareText = spare < 0 ? `<span class="cx-bad">не влезает на ${-spare} pt</span>` : `запас по высоте ${spare} pt`;
+  return `Значок ${Math.round(plate.width)}×${Math.round(plate.height)} · колонка ${Math.round(col.width)} pt · подсказка ${lines} стр. · ${spareText}`;
+}
+
+/* ── Каркас ── */
+function renderControls() {
+  const bar = document.getElementById('cx-controls');
+  bar.innerHTML = '';
+  for (const c of CONTROLS) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cx-control';
+    wrap.innerHTML = `<span>${c.label}</span>`;
+    for (const [value, text] of c.options) {
+      const btn = document.createElement('button');
+      btn.textContent = text;
+      btn.setAttribute('aria-pressed', String(STATE[c.key] === value));
+      btn.onclick = () => { STATE[c.key] = value; renderControls(); render(); };
+      wrap.append(btn);
+    }
+    bar.append(wrap);
+  }
+}
+
+function render() {
+  const themes = STATE.theme === 'both' ? ['light', 'dark'] : [STATE.theme];
+  for (const block of BLOCKS) {
+    const host = document.querySelector(`#${block.id} .cx-frames`);
+    host.innerHTML = block.variants.map(v => `
+      <div class="cx-variant">
+        <h3>${v.id} ${v.name}</h3>
+        <p class="cx-caption">${v.caption}</p>
+        <div class="cx-pair">${themes.map(th => `
+          <div class="cx-frame">
+            ${themes.length > 1 ? `<span class="cx-theme-label">${th === 'light' ? 'светлая' : 'тёмная'}</span>` : ''}
+            <div class="cx-screen cx-${th}">${v.render(STATE)}</div>
+            <div class="cx-readout"></div>
+          </div>`).join('')}
+        </div>
+      </div>`).join('');
+    requestAnimationFrame(() => {
+      for (const frame of host.querySelectorAll('.cx-frame')) {
+        const el = frame.querySelector('.cx-screen');
+        layoutPass(el);
+        frame.querySelector('.cx-readout').innerHTML = measure(el);
+      }
+    });
+  }
+}
+
+renderControls();
+document.fonts.ready.then(render); /* мерить до загрузки шрифтов — правдоподобные, но неверные числа */
+</script>
