@@ -4381,7 +4381,7 @@ Expected: FAIL: ошибка сборки `cannot find 'ImagesScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Кусок журнала 1:1: слева фильтр типов и строки — текст, картинка, PDF; справа превью текста. Указатель жмёт «Картинки» (1,0 с): полозок переезжает за 0,22 с, в списке две картинки, первая выбрана, справа её превью. Указатель жмёт на картинку (2,3 с) — поверх открывается окно «Просмотр».
+Кусок журнала 1:1: слева список шириной 270 pt — фильтр типов помещается целиком — и строки: текст, картинка, PDF; справа превью текста. Указатель жмёт «Картинки» (1,0 с): полозок переезжает за 0,22 с, в списке две картинки, первая выбрана, справа её превью. Указатель жмёт на картинку (2,3 с) — поверх открывается окно «Просмотр».
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/ImagesScene.swift`:
 
@@ -4392,8 +4392,10 @@ import SwiftUI
 /// the list keeps the two images and shows the first; a click on it opens Preview.
 struct ImagesScene: View {
     static let duration = 4.2
-    /// A piece of the journal at full size: the list pane and the preview pane.
-    static let size = CGSize(width: 480, height: 240)
+    /// A piece of the journal at full size: the list pane, wide enough for the whole filter, and
+    /// the preview pane.
+    static let size = CGSize(width: 520, height: 240)
+    static let listWidth: CGFloat = 270
 
     struct State: Equatable {
         var cursor: CursorState
@@ -4404,10 +4406,10 @@ struct ImagesScene: View {
         var preview: Double
     }
 
-    /// Centre of the "Images" segment: filter x 10…210, four segments of 49 pt after a 2 pt inset.
-    static let imagesSegment = CGPoint(x: 134, y: 24)
-    /// The picture in the preview pane.
-    static let picture = CGPoint(x: 351, y: 112)
+    /// Centre of the "Images" segment: filter x 10…260, four segments of 61.5 pt after a 2 pt inset.
+    static let imagesSegment = CGPoint(x: 166, y: 24)
+    /// The picture in the preview pane, which runs from x 270 to 520.
+    static let picture = CGPoint(x: 395, y: 112)
 
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 300, y: 236))
@@ -4463,7 +4465,7 @@ struct ImagesScene: View {
                     .padding(.horizontal, 10)
                     Spacer(minLength: 0)
                 }
-                .frame(width: 220)
+                .frame(width: Self.listWidth)
                 .background(palette.listSurface)
                 .overlay(alignment: .trailing) {
                     palette.separator.frame(width: 1)
@@ -4484,7 +4486,7 @@ struct ImagesScene: View {
             .frame(width: 340, height: 212)
             .scaleEffect(0.96 + 0.04 * state.preview)
             .opacity(state.preview)
-            .offset(x: 70, y: 14)
+            .offset(x: 90, y: 14)
 
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
@@ -4543,7 +4545,7 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-images-mid-ru-light.png` — фильтр на «Картинки», две картинки, первая оранжевая, справа пейзаж и кнопки. `scene-images-end-ru-light.png` — поверх окно «Просмотр» с пейзажем, указатель на картинке.
+Проверка вручную: `scene-images-mid-ru-light.png` — фильтр на «Картинки», слово помещается в свой сегмент целиком; две картинки, первая оранжевая, справа пейзаж и кнопки. `scene-images-end-ru-light.png` — поверх окно «Просмотр» с пейзажем, указатель на картинке.
 
 - [ ] **Step 7: Коммит**
 
@@ -4785,6 +4787,7 @@ git commit -m "Tutorial scene: search"
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
 - Produces: `SettingsScene(time:)`, `SettingsScene.duration`, `SettingsScene.size`, `SettingsScene.State`, `SettingsScene.state(at: SceneTime) -> State`.
 - Consumes: `StatusMenuTitles` (Task 10), `L10n.themeName(_:)`.
+- Produces: `SettingsScene.menuOrigin`, `menuWidth`, `submenuWidth`, `submenuOrigin`, `rowHeight`, `separatorHeight`, `menuPadding`, `frame(of:)` — геометрия меню для тестов.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -4800,11 +4803,28 @@ import Testing
 struct SettingsSceneTests {
     @Test func settingsEndsOnTutorialWithTheMenuOpen() {
         let end = SettingsScene.state(at: .end(of: SettingsScene.duration))
-        #expect(end.menu == 1)
+        #expect(end.menuOpen)
         #expect(end.iconHighlighted)
         #expect(end.highlighted == .tutorial)
         let onTheme = SettingsScene.state(at: SceneTime(t: 2.3, rewind: 0))
         #expect(onTheme.highlighted == .theme)
+    }
+
+    @Test func theSubmenuOpensToTheRightInsideTheScene() {
+        let submenu = SettingsScene.submenuOrigin
+        #expect(submenu.x >= SettingsScene.menuOrigin.x + SettingsScene.menuWidth - 8)
+        #expect(submenu.x + SettingsScene.submenuWidth <= SettingsScene.size.width)
+        // Seven rows and a separator, with the menu's padding.
+        let height = 6 * SettingsScene.rowHeight + SettingsScene.separatorHeight + 2 * SettingsScene.menuPadding
+        #expect(submenu.y + height <= SettingsScene.size.height)
+    }
+
+    @Test func nothingLightsUpWhileTheLoopGoesBack() {
+        for rewind in stride(from: 0.05, through: 1, by: 0.05) {
+            let state = SettingsScene.state(at: SceneTime(t: SettingsScene.duration, rewind: rewind))
+            #expect(!state.menuOpen)
+            #expect(state.highlighted == nil)
+        }
     }
 }
 ```
@@ -4816,7 +4836,7 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 
 - [ ] **Step 3: Сцена**
 
-Сверху строка меню macOS, справа значок Stash (настоящий ресурс `StatusIcon`, в тестах — запасной символ, как в `AppDelegate`). Указатель жмёт значок (0,9 с): значок подсвечен, выпадает меню в составе из Task 10. Указатель идёт по «Вставлять при выборе» (с галочкой) и «Закрывать после выбора», встаёт на «Тему» — слева открывается подменю тем с галочкой у Stash Auto (1,9–2,6 с) — и поднимается к «Обучению» (2,7–3,2 с). Подсветка — системный акцент, и она всегда у пункта под указателем, как в настоящем меню. По пунктам сцена не кликает: клик закрыл бы меню.
+Сверху правый край строки меню — только трей: слева значок Stash (настоящий ресурс `StatusIcon` в своих 14 × 18 pt; в тестах — запасной символ, как в `AppDelegate`), справа системные значки и часы. Указатель жмёт значок (0,9 с): значок подсвечен, под ним выпадает меню в составе из Task 10. Указатель идёт по «Вставлять при выборе» (с галочкой) и «Закрывать после выбора», встаёт на «Тему» — справа открывается подменю тем с галочкой у Stash Auto (1,9–2,6 с) — и поднимается к «Обучению» (2,7–3,2 с). Подсветка — системный акцент, и она всегда у пункта под указателем, как в настоящем меню. По пунктам сцена не кликает: клик закрыл бы меню. Меню открыто по флагу, а не по плавной дорожке: на возврате круга оно закрывается сразу, и указатель по дороге к началу ничего не подсвечивает.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/SettingsScene.swift`:
 
@@ -4824,12 +4844,13 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 import AppKit
 import SwiftUI
 
-/// НАСТРОЙКИ: the arrow clicks the Stash icon in the menu bar; the menu drops down and the arrow
-/// walks over the settings, rests on Theme to open its submenu, and ends on Tutorial.
+/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon; the menu drops down under it and
+/// the arrow walks over the settings, rests on Theme to open its submenu on the right, and ends on
+/// Tutorial.
 struct SettingsScene: View {
     static let duration = 4.6
-    /// A strip of the menu bar and the menu that drops from it.
-    static let size = CGSize(width: 400, height: 240)
+    /// The tray end of the menu bar, the menu under the Stash icon and the theme submenu beside it.
+    static let size = CGSize(width: 380, height: 280)
 
     enum Item: CaseIterable, Equatable, Sendable {
         case openStash, tutorial, pasteOnSelection, closeAfterSelection, theme, language, clearHistory, quit
@@ -4839,17 +4860,16 @@ struct SettingsScene: View {
         var cursor: CursorState
         var ripple: ClickRipple?
         var iconHighlighted: Bool
-        /// 0…1: the menu appearing.
-        var menu: Double
+        var menuOpen: Bool
         var highlighted: Item?
     }
 
-    // Geometry, in scene points. The status items on the right have fixed widths (icon 26, Wi-Fi 22,
-    // battery 30, clock 40, 10 apart, 14 from the edge), so the Stash icon's centre is known. Like
-    // a real menu, this one starts under the icon unless it would run off the screen.
-    static let statusIcon = CGPoint(x: 251, y: 12)
-    static let menuOrigin = CGPoint(x: 186, y: 26)
+    // Geometry, in scene points. The Stash icon opens the tray; a real menu hangs from its status
+    // item's left edge, and a submenu opens to the right when there is room.
+    static let statusIcon = CGPoint(x: 25, y: 12)
+    static let menuOrigin = CGPoint(x: 8, y: 26)
     static let menuWidth: CGFloat = 210
+    static let submenuWidth: CGFloat = 150
     static let rowHeight: CGFloat = 22
     static let separatorHeight: CGFloat = 9
     static let menuPadding: CGFloat = 5
@@ -4869,6 +4889,11 @@ struct SettingsScene: View {
         return .zero
     }
 
+    /// The submenu's top-left corner: just over the menu's right edge, its first item level with Theme.
+    static var submenuOrigin: CGPoint {
+        CGPoint(x: menuOrigin.x + menuWidth - 4, y: frame(of: .theme).minY - menuPadding)
+    }
+
     private static func center(of item: Item) -> CGPoint {
         CGPoint(x: menuOrigin.x + 90, y: frame(of: item).midY)
     }
@@ -4876,7 +4901,7 @@ struct SettingsScene: View {
     private static let click = 0.9
 
     private static let cursor = CursorTrack(
-        tip: Track(CGPoint(x: 330, y: 200))
+        tip: Track(CGPoint(x: 300, y: 262))
             .to(statusIcon, at: 0.3, until: 0.8)
             .to(center(of: .pasteOnSelection), at: 1.2, until: 1.45)
             .to(center(of: .closeAfterSelection), at: 1.5, until: 1.65)
@@ -4886,18 +4911,19 @@ struct SettingsScene: View {
         clicks: [click]
     )
     private static let iconHighlighted = Track(false).set(true, at: click)
-    private static let menu = Track(0.0).to(1, at: click + 0.05, until: click + 0.15, .easeOut)
+    private static let menuOpen = Track(false).set(true, at: click + 0.05)
 
     static func state(at time: SceneTime) -> State {
         let cursor = cursor.state(at: time)
-        let menu = menu.value(at: time)
-        // Like a real menu, the highlight is whatever item is under the arrow.
-        let highlighted = menu > 0 ? Item.allCases.first { frame(of: $0).contains(cursor.tip) } : nil
+        let menuOpen = menuOpen.value(at: time)
+        // Like a real menu, the highlight is whatever item is under the arrow. While the loop goes
+        // back to its start the menu is closed, so the arrow passing over it lights nothing up.
+        let highlighted = menuOpen ? Item.allCases.first { frame(of: $0).contains(cursor.tip) } : nil
         return State(
             cursor: cursor,
             ripple: Self.cursor.ripple(at: time),
             iconHighlighted: iconHighlighted.value(at: time),
-            menu: menu,
+            menuOpen: menuOpen,
             highlighted: highlighted
         )
     }
@@ -4914,15 +4940,18 @@ struct SettingsScene: View {
         ZStack(alignment: .topLeading) {
             menuBar(state, palette: palette)
 
-            if state.highlighted == .theme {
-                // No room on the right, so the submenu opens to the left and shifts up to fit.
-                themeSubmenu(palette: palette)
-                    .offset(x: 38, y: 85)
-            }
+            Group {
+                menuPanel(state, palette: palette)
+                    .offset(x: Self.menuOrigin.x, y: Self.menuOrigin.y)
 
-            menuPanel(state, palette: palette)
-                .opacity(state.menu)
-                .offset(x: Self.menuOrigin.x, y: Self.menuOrigin.y)
+                if state.highlighted == .theme {
+                    themeSubmenu(palette: palette)
+                        .offset(x: Self.submenuOrigin.x, y: Self.submenuOrigin.y)
+                }
+            }
+            .opacity(state.menuOpen ? 1 : 0)
+            // Menus appear and vanish quickly, as in macOS.
+            .animation(.easeOut(duration: 0.12), value: state.menuOpen)
 
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
@@ -4932,32 +4961,29 @@ struct SettingsScene: View {
 
     // MARK: Menu bar
 
+    /// Only the tray: the Stash icon, then the system's own items at the right end.
     private func menuBar(_ state: State, palette: ThemePalette) -> some View {
         ZStack {
-            HStack(spacing: 16) {
-                Text("Finder").fontWeight(.bold)
-                Text(l10n("File", "Файл"))
-                Text(l10n("Edit", "Правка"))
-                Text(l10n("View", "Вид"))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            statusIcon
+                .frame(width: 26, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(palette.textPrimary.opacity(state.iconHighlighted ? 0.14 : 0))
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 10) {
-                statusIcon
-                    .frame(width: 26, height: 20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(palette.textPrimary.opacity(state.iconHighlighted ? 0.14 : 0))
-                    )
                 Image(systemName: "wifi").frame(width: 22)
                 Image(systemName: "battery.75").frame(width: 30)
+                Image(systemName: "switch.2").frame(width: 22)
                 Text("14:02").frame(width: 40)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .font(.system(size: 12))
         .foregroundStyle(palette.textPrimary)
-        .padding(.horizontal, 14)
+        .padding(.leading, 12)
+        .padding(.trailing, 14)
         .frame(width: Self.size.width, height: 24)
         .background(menuBackground)
         .overlay(alignment: .bottom) {
@@ -4965,14 +4991,12 @@ struct SettingsScene: View {
         }
     }
 
-    /// The real menu bar icon of Stash, with the app's own fallback.
+    /// The real menu bar icon of Stash at its own 14 × 18 pt, with the app's own fallback.
     private var statusIcon: some View {
         Group {
             if let icon = Bundle.main.image(forResource: "StatusIcon") {
                 Image(nsImage: icon)
                     .renderingMode(.template)
-                    .resizable()
-                    .frame(width: 16, height: 16)
             } else {
                 Image(systemName: "doc.on.clipboard")
             }
@@ -4993,10 +5017,7 @@ struct SettingsScene: View {
                     menuRow(title: title(of: row, titles), checked: row == .pasteOnSelection, submenu: row == .theme || row == .language,
                             shortcut: row == .quit ? "⌘Q" : nil, highlighted: state.highlighted == row, palette: palette)
                 } else {
-                    palette.separator
-                        .frame(height: 1)
-                        .padding(.horizontal, 10)
-                        .frame(height: Self.separatorHeight)
+                    separator(palette: palette)
                 }
             }
         }
@@ -5012,16 +5033,20 @@ struct SettingsScene: View {
                 if let mode {
                     menuRow(title: l10n.themeName(mode), checked: mode == .stashAuto, submenu: false, shortcut: nil, highlighted: false, palette: palette)
                 } else {
-                    palette.separator
-                        .frame(height: 1)
-                        .padding(.horizontal, 10)
-                        .frame(height: Self.separatorHeight)
+                    separator(palette: palette)
                 }
             }
         }
         .padding(.vertical, Self.menuPadding)
-        .frame(width: 150)
+        .frame(width: Self.submenuWidth)
         .background(menuSurface(palette: palette))
+    }
+
+    private func separator(palette: ThemePalette) -> some View {
+        palette.separator
+            .frame(height: 1)
+            .padding(.horizontal, 10)
+            .frame(height: Self.separatorHeight)
     }
 
     private func menuRow(title: String, checked: Bool, submenu: Bool, shortcut: String?, highlighted: Bool, palette: ThemePalette) -> some View {
@@ -5115,7 +5140,7 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-settings-mid-ru-light.png` — меню открыто, «Тема» подсвечена, слева подменю с «✓ Stash Auto». `scene-settings-end-ru-light.png` — подменю закрыто, подсвечено «Обучение», галочка у «Вставлять при выборе».
+Проверка вручную: `scene-settings-mid-ru-light.png` — меню под значком, «Тема» подсвечена, справа подменю с «✓ Stash Auto». `scene-settings-end-ru-light.png` — подменю закрыто, подсвечено «Обучение», галочка у «Вставлять при выборе».
 
 - [ ] **Step 7: Коммит**
 
