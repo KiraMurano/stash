@@ -28,9 +28,18 @@ enum ThemeMode: String, CaseIterable {
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Keys {
+        static let interceptKeys = "InterceptKeys"
         static let closeAfterSelection = "CloseAfterSelection"
         static let themeMode = "ThemeMode"
         static let language = "Language"
+    }
+
+    /// While the journal is open it takes Up, Down, Return and Esc from the app underneath.
+    /// Turned off, the journal is worked with the mouse and every key stays with that app.
+    @Published var interceptKeys: Bool {
+        didSet {
+            UserDefaults.standard.set(interceptKeys, forKey: Keys.interceptKeys)
+        }
     }
 
     @Published var closeAfterSelection: Bool {
@@ -58,10 +67,15 @@ final class AppSettings: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
 
+        if defaults.object(forKey: Keys.interceptKeys) == nil {
+            defaults.set(true, forKey: Keys.interceptKeys)
+        }
+
         if defaults.object(forKey: Keys.closeAfterSelection) == nil {
             defaults.set(false, forKey: Keys.closeAfterSelection)
         }
 
+        interceptKeys = defaults.bool(forKey: Keys.interceptKeys)
         closeAfterSelection = defaults.bool(forKey: Keys.closeAfterSelection)
         themeMode = ThemeMode(rawValue: defaults.string(forKey: Keys.themeMode) ?? "") ?? .system
         language = AppLanguage(rawValue: defaults.string(forKey: Keys.language) ?? "") ?? .system

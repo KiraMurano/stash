@@ -40,10 +40,11 @@ enum JournalKeyAction: Equatable {
 /// system key-repeat rate.
 @MainActor
 final class JournalKeys {
-    /// Listen only while the journal is on screen, Stash is not the active app (its clip editor
-    /// needs these keys) and the menu bar menu is closed (its items are walked with the arrows).
-    nonisolated static func shouldListen(panelVisible: Bool, journalShown: Bool, stashActive: Bool, menuOpen: Bool) -> Bool {
-        panelVisible && journalShown && !stashActive && !menuOpen
+    /// Listen only while Intercept Keys is on, the journal is on screen, Stash is not the active
+    /// app (its clip editor needs these keys) and no menu of Stash is open (menus are walked with
+    /// the arrows). Turned off, every key stays with the app the user is typing in.
+    nonisolated static func shouldListen(intercepts: Bool, panelVisible: Bool, journalShown: Bool, stashActive: Bool, menuOpen: Bool) -> Bool {
+        intercepts && panelVisible && journalShown && !stashActive && !menuOpen
     }
 
     let events = PassthroughSubject<JournalKey, Never>()

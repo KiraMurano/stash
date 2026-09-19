@@ -149,8 +149,14 @@ final class JournalPanelController {
         updateKeys()
     }
 
+    /// Called when Intercept Keys is switched in the menu: it takes effect at once.
+    func interceptKeysChanged() {
+        updateKeys()
+    }
+
     private func updateKeys() {
         keys.isListening = JournalKeys.shouldListen(
+            intercepts: settings.interceptKeys,
             panelVisible: isPanelVisible,
             journalShown: access.isGranted,
             stashActive: NSApp.isActive,

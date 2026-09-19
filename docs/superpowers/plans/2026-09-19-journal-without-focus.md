@@ -2309,3 +2309,36 @@ git commit -m "Require Accessibility access with an access screen in the panel" 
 
 Run: `swift build && swift test && Scripts/build_app.sh`
 Expected: `Build complete!` без предупреждений, 13 тестов в трёх наборах проходят, `.build/Stash.app` собран.
+
+---
+
+### Task 9: Настройка «Перехватывать клавиши»
+
+После первой сборки выяснилось: пока панель открыта, Return достаётся журналу, и держать её открытой во время работы с текстом нельзя (замечание пользователя).
+
+**Files:**
+- Modify: `Sources/BufferJournal/AppSettings.swift`, `AppDelegate.swift`, `JournalKeys.swift`, `JournalPanelController.swift`, `README.md`
+- Test: `Tests/BufferJournalTests/JournalKeysTests.swift`
+- Modify: спека — «Как пришли к решению», «Клавиши», «Меню значка», «Устройство», «Тесты»
+
+**Interfaces:**
+- Produces: `AppSettings.interceptKeys` (ключ `InterceptKeys`, по умолчанию `true`); `JournalKeys.shouldListen(intercepts:panelVisible:journalShown:stashActive:menuOpen:)`; `JournalPanelController.interceptKeysChanged()`.
+
+- [ ] **Step 1: Настройка и пункт меню**
+
+`AppSettings`: `@Published var interceptKeys` с записью в `UserDefaults` по ключу `InterceptKeys`, значение по умолчанию `true` ставится в `init`, как у `closeAfterSelection`.
+
+`AppDelegate`: пункт «Перехватывать клавиши» / «Intercept Keys» под «Закрывать после выбора»; `toggleInterceptKeys()` переключает настройку, обновляет галочки и зовёт `panelController.interceptKeysChanged()`; галочка — в `updateSettingsMenuState()`.
+
+- [ ] **Step 2: Правило хоткеев**
+
+`JournalKeys.shouldListen` получает первым параметром `intercepts: Bool`: `intercepts && panelVisible && journalShown && !stashActive && !menuOpen`. `JournalPanelController.updateKeys()` передаёт `settings.interceptKeys`, а `interceptKeysChanged()` просто зовёт `updateKeys()`, поэтому переключение действует сразу.
+
+- [ ] **Step 3: Тест**
+
+В `JournalKeysTests` во все вызовы добавляется `intercepts: true`, и появляется `staysOutOfTheWayWithInterceptKeysOff`: с `intercepts: false` хоткеи не слушаются даже при видимой панели с журналом.
+
+- [ ] **Step 4: Сборка, тесты, коммит**
+
+Run: `swift build && swift test && Scripts/build_app.sh`
+Expected: `Build complete!` без предупреждений, 14 тестов в трёх наборах проходят.

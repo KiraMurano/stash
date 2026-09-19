@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
     private var statusItem: NSStatusItem!
+    private var interceptKeysItem: NSMenuItem!
     private var closeAfterSelectionItem: NSMenuItem!
     private var themeItems: [ThemeMode: NSMenuItem] = [:]
     private var languageItems: [AppLanguage: NSMenuItem] = [:]
@@ -64,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         closeAfterSelectionItem = menuItem(l10n("Close After Selection", "Закрывать после выбора"), action: #selector(toggleCloseAfterSelection))
         menu.addItem(closeAfterSelectionItem)
+
+        interceptKeysItem = menuItem(l10n("Intercept Keys", "Перехватывать клавиши"), action: #selector(toggleInterceptKeys))
+        menu.addItem(interceptKeysItem)
 
         let themeItem = NSMenuItem(title: l10n("Theme", "Тема"), action: nil, keyEquivalent: "")
         let themeMenu = NSMenu()
@@ -121,6 +125,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateSettingsMenuState()
     }
 
+    @objc private func toggleInterceptKeys() {
+        settings.interceptKeys.toggle()
+        updateSettingsMenuState()
+        panelController.interceptKeysChanged()
+    }
+
     @objc private func selectTheme(_ sender: NSMenuItem) {
         guard
             let rawValue = sender.representedObject as? String,
@@ -151,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateSettingsMenuState() {
         closeAfterSelectionItem?.state = settings.closeAfterSelection ? .on : .off
+        interceptKeysItem?.state = settings.interceptKeys ? .on : .off
         for (themeMode, item) in themeItems {
             item.state = settings.themeMode == themeMode ? .on : .off
         }
