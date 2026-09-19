@@ -2,94 +2,69 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Сториз-обучение внутри панели журнала: восемь слайдов с живыми сценами из настоящих деталей Stash, показ при первом запуске и пункт «Обучение» в меню значка.
+**Goal:** Сториз-обучение внутри панели журнала: восемь слайдов с живыми сценами из настоящих деталей Stash, показ при первом запуске, пункт «Обучение» в меню значка. Последний слайд просит Универсальный доступ, и он же показывается один, когда обучение уже видели, а доступа нет.
 
-**Architecture:** Обучение — слой `OnboardingView` поверх `JournalView`; им управляет `OnboardingController`: показ, набор слайдов, клавиши, отметка «увидено» в `UserDefaults`. Сцены — SwiftUI-виды на своих холстах по содержимому, карточка обнимает холст; состояние сцены — чистая функция времени (`Track`, `CursorTrack`, `SceneLoop`), кадры даёт `TimelineView`. Всё, что в сцене изображает Stash, — настоящие виды журнала (`EntryRow`, `TypeSegmentedControl`, `ToastOverlay`, кнопки, палитра), которые план выносит из `JournalView.swift` в `Components/`.
+**Architecture:** Обучение — слой `OnboardingView` поверх `JournalView`; им управляет `OnboardingController`: показ, набор слайдов, клавиши, отметка «увидено» в `UserDefaults`. Доступ берётся из готового `AccessGate`. Сцены — SwiftUI-виды на своих холстах по содержимому, карточка обнимает холст; состояние сцены — чистая функция времени (`Track`, `CursorTrack`, `SceneLoop`), кадры даёт `TimelineView`. Всё, что в сцене изображает Stash, — настоящие виды журнала (`EntryRow`, `TypeSegmentedControl`, `ToastOverlay`, кнопки, палитра), которые план выносит из `JournalView.swift` в `Components/`. Клавиши обучения приходят теми же глобальными хоткеями, что и клавиши журнала: `JournalKeys` получает режимы.
 
-**Tech Stack:** Swift 6 (swift-tools-version 6.0, строгая конкурентность), SwiftUI + AppKit, SwiftPM, Swift Testing (Xcode 26), macOS 13+.
+**Tech Stack:** Swift 6 (swift-tools-version 6.0, строгая конкурентность), SwiftUI + AppKit, Carbon (`RegisterEventHotKey`), SwiftPM, Swift Testing (Xcode 26), macOS 13+.
 
 ## Global Constraints
 
-- Спека: `docs/superpowers/specs/2026-09-19-onboarding-stories-design.md`. Концепт: `.concepts/2026-09-18-onboarding.html`, вариант 1.3.
+- Спека: `docs/superpowers/specs/2026-09-19-onboarding-stories-design.md` (переработана 2026-09-20). Концепты: `.concepts/2026-09-18-onboarding.html`, вариант 1.3; экран доступа — `.concepts/2026-09-19-access-screen.html`.
+- Отправная точка: `main` после коммита `cdfa4a3`. Работа «журнал без фокуса» уже в коде: поиска нет, панель не ключевая, клавиши приходят хоткеями, Универсальный доступ обязателен, панель открывается у точки ввода.
 - Система — от macOS 13: нет `UnitCurve`, `onChange` — старой формы `onChange(of:perform:)`; то, что появилось в macOS 14, — только через `#available`.
-- Swift 6: всё, что трогает AppKit, `NSImage` и кэши картинок, живёт на главном акторе.
+- Swift 6: всё, что трогает AppKit, `NSImage` и кэши картинок, живёт на главном акторе. Колбэки Carbon, `Timer` и `NotificationCenter` входят в актор через `MainActor.assumeIsolated`.
 - Комментарии в коде и коммиты — по-английски, как в репозитории.
 - Слова и тексты слайдов — дословно из спеки; в коде они появляются в Task 5 и больше не меняются.
-- После каждой задачи: `swift build` и `swift test`. С Task 9 — снимки: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`. Приложение: `Scripts/build_app.sh` → `.build/Stash.app`.
-- Тестовая сборка делит с установленным Stash настройки (домен `local.buffer-journal`) и папку истории. Установленный Stash на время проверки закрыть.
-- Разрешение Универсального доступа выдаёт и снимает только пользователь.
-- Весь код ниже собран и проверен: задачи проиграны по порядку на чистой копии репозитория, после каждой `swift build` и `swift test` проходят.
+- После каждой задачи: `swift build` и `swift test`. Тестовая цель `BufferJournalTests` уже есть, в ней 20 тестов. С Task 9 — снимки: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`. Приложение: `Scripts/build_app.sh` → `.build/Stash.app`.
+- Тестовая сборка делит с установленным Stash настройки (домен `local.buffer-journal`) и папку истории. Установленный Stash на время проверки закрыть: ⌥V может держать только одна копия.
+- Разрешение Универсального доступа выдаёт и снимает только пользователь. Сборка подписана ad-hoc, поэтому каждой новой сборке доступ нужен заново: старую строку Stash удалить кнопкой «−» и добавить новую.
+- **Код этого плана не проигран на чистой копии**, в отличие от прежнего плана обучения: он собран по спеке и по нынешнему коду. Исполнитель после каждой задачи гоняет `swift build` и `swift test` и правит расхождения по месту, не дожидаясь конца плана.
+- Нумерация задач сохранена от прежнего плана, чтобы сравнение было простым. Изменилось наполнение: Task 17 — сцена «КЛАВИШИ» вместо сцены «ПОИСК», задачи 1–3, 5, 8–11, 13, 14, 18–20 переписаны под новый код, задачи 4, 6, 7, 12, 15, 16 перенесены как были.
 
 ## Карта файлов
 
 | Файл | Ответственность |
 |---|---|
-| `Package.swift` | тестовая цель `BufferJournalTests` |
-| `Sources/BufferJournal/Components/ClipLabels.swift` | подписи строк и правило поиска, общие для журнала и сцен |
+| `Sources/BufferJournal/Components/ClipLabels.swift` | подписи строк, общие для журнала и сцен |
 | `Sources/BufferJournal/Components/EntryRow.swift`, `TypeSegmentedControl.swift`, `TranslucentButtonStyle.swift`, `GlassIconButton.swift`, `ToastOverlay.swift`, `ThemePalette.swift`, `WindowDragHandle.swift` | виды журнала, вынесенные без изменений; у `EntryRow` — `hoverOverride` |
-| `Sources/BufferJournal/Components/EntryThumb.swift`, `SearchFieldChrome.swift`, `SectionHeader.swift` | миниатюра строки, рамка поля поиска, заголовок раздела — для журнала и сцен |
+| `Sources/BufferJournal/Components/EntryThumb.swift`, `SectionHeader.swift` | миниатюра строки и заголовок раздела — для журнала и сцен |
 | `Sources/BufferJournal/AppSettings.swift` | `init(defaults:)`, тема по умолчанию Stash Auto |
 | `Sources/BufferJournal/Onboarding/OnboardingSlides.swift` | восемь слайдов и правило, когда нужен «ДОСТУП» |
 | `Sources/BufferJournal/Onboarding/OnboardingLayout.swift` | масштаб сцены, карточка по сцене, логотип первого слайда |
 | `Sources/BufferJournal/Onboarding/SceneEngine.swift` | кривые, дорожки, круг, указатель — время сцены в состояние |
-| `Sources/BufferJournal/Onboarding/AccessibilityAccess.swift` | есть ли разрешение и как его попросить |
-| `Sources/BufferJournal/Onboarding/OnboardingController.swift` | показ, слайды, клавиши, «увидено» |
+| `Sources/BufferJournal/Onboarding/OnboardingController.swift` | показ, слайды, клавиши, «увидено», одиночный показ слайда «ДОСТУП» |
 | `Sources/BufferJournal/Onboarding/SceneClock.swift` | часы сцены на `TimelineView` |
 | `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` | какая сцена на слайде, её холст и как он встаёт в карточку |
-| `Sources/BufferJournal/Onboarding/OnboardingChrome.swift`, `OnboardingView.swift` | рамка обучения: цвета, кнопки, полосы, каркас |
+| `Sources/BufferJournal/Onboarding/OnboardingChrome.swift`, `OnboardingView.swift` | рамка обучения: цвета, кнопки, полосы, каркас, одиночный вид слайда «ДОСТУП» |
 | `Sources/BufferJournal/Onboarding/Scenes/SceneKit.swift`, `DemoClips.swift`, `DemoDetailPane.swift`, `JournalMiniature.swift` | детали сцен и демо-клипы |
-| `Sources/BufferJournal/Onboarding/Scenes/*Scene.swift` | восемь сцен |
-| `Sources/BufferJournal/JournalView.swift`, `JournalPanelController.swift`, `AppDelegate.swift`, `Localization.swift`, `README.md` | подключение: слой, клавиши, показ при запуске, пункт меню |
+| `Sources/BufferJournal/Onboarding/Scenes/*Scene.swift` | восемь сцен, среди них `KeysScene` |
+| `Sources/BufferJournal/JournalKeys.swift` | режимы клавиш: журнал, обучение, ничего |
+| `Sources/BufferJournal/JournalView.swift`, `JournalPanelController.swift`, `AppDelegate.swift`, `README.md` | подключение: слой, клавиши, показ при запуске, пункт меню |
+| `Sources/BufferJournal/AccessScreen.swift` | удаляется: его место занимает слайд «ДОСТУП» |
+| `Sources/BufferJournal/AccessibilityAccess.swift` | уже есть: `AccessibilityAccess` и `AccessGate`, обучение берёт готовое |
 | `Tests/BufferJournalTests/…` | логика, стоп-кадры сцен, снимки PNG |
 
 ---
 
-### Task 1: Тестовая цель и подписи строк в одном месте
+---
+
+### Task 1: Подписи строк в одном месте
+
+Тестовая цель `BufferJournalTests` уже есть в `Package.swift` (работа «журнал без фокуса»), и в ней 20 тестов: `JournalKeyActionTests`, `JournalKeysTests`, `AccessGateTests`, `PanelPlacementTests`. Создавать её не нужно — задача только добавляет свой файл тестов. Поиска в журнале нет, поэтому правила `matches` в `ClipLabels` тоже нет: переезжают одни подписи строк.
 
 **Files:**
-- Modify: `Package.swift` — тестовая цель `BufferJournalTests`
 - Create: `Sources/BufferJournal/Components/ClipLabels.swift`
-- Modify: `Sources/BufferJournal/JournalView.swift` — `kindTitle`, `rowTitle`, `rowSubtitle`, `pixelSize(of:)`, `timeTitle`, `matches` зовут `ClipLabels`
+- Modify: `Sources/BufferJournal/JournalView.swift` — `kindTitle`, `rowTitle`, `rowSubtitle`, `pixelSize(of:)`, `timeTitle` зовут `ClipLabels`
 - Test: `Tests/BufferJournalTests/ClipLabelsTests.swift`
+- `Package.swift` не меняется.
 
 **Interfaces:**
-- Produces: тестовая цель `BufferJournalTests` на Swift Testing (`import Testing`, `@testable import BufferJournal`), запуск — `swift test`.
-- Produces: `enum ClipLabels` — `kindTitle(_ entry: ClipboardEntry, _ l10n: L10n) -> String`, `rowTitle(_:_:) -> String`, `rowSubtitle(_ entry:, pixelSize: CGSize?, _ l10n:, now: Date = Date()) -> String`, `pixelSizeTitle(_ size: CGSize) -> String`, `timeTitle(_ date: Date, _ l10n: L10n, now: Date = Date()) -> String`, `matches(_ entry:, _ needle: String, pixelSize: CGSize?, _ l10n:) -> Bool`.
+- Consumes: `ClipboardEntry` (`title(_:)`, `subtitle(_:)`, `payload`, `createdAt`), `L10n`, `DateFormatter.entryTime`, `ClipboardHistoryStore.pixelSize(for:)`, тестовая цель `BufferJournalTests` (`import Testing`, `@testable import BufferJournal`).
+- Produces: `enum ClipLabels` — `kindTitle(_ entry: ClipboardEntry, _ l10n: L10n) -> String`, `rowTitle(_ entry: ClipboardEntry, _ l10n: L10n) -> String`, `rowSubtitle(_ entry: ClipboardEntry, pixelSize: CGSize?, _ l10n: L10n, now: Date = Date()) -> String`, `pixelSizeTitle(_ size: CGSize) -> String`, `timeTitle(_ date: Date, _ l10n: L10n, now: Date = Date()) -> String`.
+- Removes: ничего. `matches` в `ClipLabels` не появляется — в журнале поиска нет.
 
-- [ ] **Step 1: Тестовая цель**
-
-Заменить `Package.swift` целиком. Тестировать исполняемую цель SwiftPM умеет: `@testable import BufferJournal` работает, `@main` не мешает.
-
-Создать `Package.swift`:
-
-```swift
-// swift-tools-version: 6.0
-
-import PackageDescription
-
-let package = Package(
-    name: "BufferJournal",
-    platforms: [
-        .macOS(.v13)
-    ],
-    products: [
-        .executable(name: "BufferJournal", targets: ["BufferJournal"])
-    ],
-    targets: [
-        .executableTarget(
-            name: "BufferJournal",
-            path: "Sources/BufferJournal"
-        ),
-        .testTarget(
-            name: "BufferJournalTests",
-            dependencies: ["BufferJournal"],
-            path: "Tests/BufferJournalTests"
-        )
-    ]
-)
-```
-
-- [ ] **Step 2: Тест**
+- [ ] **Step 1: Тест**
 
 Создать `Tests/BufferJournalTests/ClipLabelsTests.swift`:
 
@@ -105,7 +80,12 @@ struct ClipLabelsTests {
     private let now = Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: Date())!
 
     private func entry(_ payload: ClipboardPayload, minutesAgo: Double = 30) -> ClipboardEntry {
-        ClipboardEntry(id: UUID(), payload: payload, createdAt: now.addingTimeInterval(-minutesAgo * 60), fingerprint: "test")
+        ClipboardEntry(
+            id: UUID(),
+            payload: payload,
+            createdAt: now.addingTimeInterval(-minutesAgo * 60),
+            fingerprint: "test"
+        )
     }
 
     @Test func imageRowIsTitledByKindAndSubtitledBySizeAndTime() {
@@ -132,29 +112,17 @@ struct ClipLabelsTests {
         let old = entry(.text("x"), minutesAgo: 24 * 60)
         #expect(ClipLabels.timeTitle(old.createdAt, en, now: now).hasPrefix("yesterday, "))
     }
-
-    @Test func searchMatchesLikeTheJournal() {
-        let invoice = entry(.text("Инвойс № 1042 за сентябрь"))
-        let image = entry(.image(filename: "x.png"))
-        let contract = entry(.file(storedFilename: "a", originalName: "Договор аренды.pdf", byteCount: 10))
-        let size = CGSize(width: 1200, height: 800)
-        #expect(ClipLabels.matches(invoice, "инв", pixelSize: nil, ru))
-        #expect(ClipLabels.matches(image, "и", pixelSize: size, ru))
-        #expect(!ClipLabels.matches(image, "ин", pixelSize: size, ru))
-        #expect(ClipLabels.matches(image, "1200", pixelSize: size, ru))
-        #expect(!ClipLabels.matches(contract, "и", pixelSize: nil, ru))
-    }
 }
 ```
 
-- [ ] **Step 3: Запустить — падает**
+- [ ] **Step 2: Запустить — падает**
 
 Run: `swift test --filter ClipLabelsTests`
 Expected: FAIL: ошибка сборки `cannot find 'ClipLabels' in scope`.
 
-- [ ] **Step 4: Код**
+- [ ] **Step 3: Код**
 
-Функции — дословно из `JournalView.swift`, только `pixelSize` приходит параметром, а «сегодня» можно подставить в тестах.
+Функции — дословно из `JournalView.swift`, только `pixelSize` приходит параметром, а «сегодня» можно подставить в тестах. Локаль берётся из `l10n.language`: в журнале это тот же язык, что `settings.language.resolved`, потому что `l10n` там и есть `settings.l10n`.
 
 Создать `Sources/BufferJournal/Components/ClipLabels.swift`:
 
@@ -162,8 +130,8 @@ Expected: FAIL: ошибка сборки `cannot find 'ClipLabels' in scope`.
 import CoreGraphics
 import Foundation
 
-/// How journal rows are titled and searched. The journal and the tutorial scenes both use it,
-/// so a scene's rows read exactly like the real ones.
+/// How journal rows are titled. The journal and the tutorial scenes both use it, so a scene's
+/// rows read exactly like the real ones.
 enum ClipLabels {
     static func kindTitle(_ entry: ClipboardEntry, _ l10n: L10n) -> String {
         switch entry.payload {
@@ -203,6 +171,7 @@ enum ClipLabels {
         "\(Int(size.width))×\(Int(size.height))"
     }
 
+    /// `now` is today for the journal; tests pass their own so the day boundary is not the clock's.
     static func timeTitle(_ date: Date, _ l10n: L10n, now: Date = Date()) -> String {
         let calendar = Calendar.current
         if calendar.isDate(date, inSameDayAs: now) {
@@ -214,27 +183,19 @@ enum ClipLabels {
         let locale = Locale(identifier: l10n.language == .russian ? "ru_RU" : "en_US")
         return date.formatted(.dateTime.day().month(.abbreviated).locale(locale))
     }
-
-    /// Search: text by content, images by kind and pixel size, files by name; case and accents ignored.
-    static func matches(_ entry: ClipboardEntry, _ needle: String, pixelSize: CGSize?, _ l10n: L10n) -> Bool {
-        let haystack: String = switch entry.payload {
-        case let .text(text): text
-        case .image: kindTitle(entry, l10n) + " " + (pixelSize.map(pixelSizeTitle) ?? "")
-        case .file: entry.title(l10n)
-        }
-        return haystack.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
-    }
 }
 ```
 
-- [ ] **Step 5: Запустить — проходит**
+`L10n.language` — это `ResolvedLanguage`, у него нет `Equatable` по объявлению, но это `enum` без ассоциированных значений, так что `==` синтезируется.
+
+- [ ] **Step 4: Запустить — проходит**
 
 Run: `swift test --filter ClipLabelsTests`
-Expected: PASS: 5 тестов.
+Expected: PASS: 4 теста.
 
-- [ ] **Step 6: Журнал зовёт ClipLabels**
+- [ ] **Step 5: Журнал зовёт ClipLabels**
 
-Три замены в `Sources/BufferJournal/JournalView.swift`; остальной журнал продолжает звать свои обёртки.
+Две замены в `Sources/BufferJournal/JournalView.swift`; остальной журнал продолжает звать свои обёртки (`metaTitle` зовёт `pixelSize(of:)`, строки — `rowTitle`/`rowSubtitle`).
 
 В `Sources/BufferJournal/JournalView.swift` заменить:
 
@@ -319,49 +280,35 @@ Expected: PASS: 5 тестов.
     }
 ```
 
-В `Sources/BufferJournal/JournalView.swift` заменить:
+Обёртки остаются: `kindTitle(_:)` зовёт шапка превью (`Text(entry.isFile ? entry.title(l10n) : kindTitle(entry))`), `pixelSize(of:)` — `metaTitle(_:)`, `timeTitle(_:)` — шапка превью (`Text("· \(timeTitle(entry.createdAt))")`).
 
-```swift
-    private func matches(_ entry: ClipboardEntry, _ needle: String) -> Bool {
-        let haystack: String = switch entry.payload {
-        case let .text(text): text
-        case .image: kindTitle(entry) + " " + (pixelSize(of: entry) ?? "")
-        case .file: entry.title(l10n)
-        }
-        return haystack.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
-    }
-```
-
-на:
-
-```swift
-    private func matches(_ entry: ClipboardEntry, _ needle: String) -> Bool {
-        ClipLabels.matches(entry, needle, pixelSize: store.pixelSize(for: entry), l10n)
-    }
-```
-
-- [ ] **Step 7: Сборка и все тесты**
+- [ ] **Step 6: Сборка и все тесты**
 
 Run: `swift build && swift test`
-Expected: `Build complete!`, все тесты PASS.
+Expected: `Build complete!`, PASS: 24 теста (20 прежних и 4 новых).
 
-- [ ] **Step 8: Коммит**
+- [ ] **Step 7: Коммит**
 
 ```bash
-git add Package.swift Sources/BufferJournal/Components/ClipLabels.swift Sources/BufferJournal/JournalView.swift Tests/BufferJournalTests/ClipLabelsTests.swift
-git commit -m "Add a test target and share row labels with the tutorial" -m "Row titles, subtitles, times and search matching move from JournalView into
-ClipLabels, so the tutorial's demo rows read exactly like the journal's."
+git add Sources/BufferJournal/Components/ClipLabels.swift Sources/BufferJournal/JournalView.swift Tests/BufferJournalTests/ClipLabelsTests.swift
+git commit -m "Share the journal's row labels with the tutorial" -m "Row titles, subtitles and times move from JournalView into ClipLabels, so the
+tutorial's demo rows read exactly like the journal's."
 ```
 
+---
 
 ### Task 2: Общие виды журнала — в свои файлы
+
+`GlassIconButton`, `TranslucentButtonStyle`, `ThemePalette` и `WindowDragHandle` в текущем коде уже `internal` (их зовёт `AccessScreen.swift`), так что снимать `private` нужно только у `EntryRow`, `TypeSegmentedControl` и `ToastOverlay`. Переезжают все семь: сценам обучения нужны файлы, а не только видимость.
 
 **Files:**
 - Create: `Sources/BufferJournal/Components/EntryRow.swift`, `TypeSegmentedControl.swift`, `TranslucentButtonStyle.swift`, `GlassIconButton.swift`, `ToastOverlay.swift`, `ThemePalette.swift`, `WindowDragHandle.swift` — перенос без изменений
 - Modify: `Sources/BufferJournal/JournalView.swift` — эти объявления уходят, два `MARK` переименованы
 
 **Interfaces:**
-- Produces: `EntryRow`, `TypeSegmentedControl`, `GlassIconButton`, `ToastOverlay`, `WindowDragHandle` видны всему модулю (было `private`), инициализаторы прежние. `ThemePalette` и `TranslucentButtonStyle` переезжают как есть.
+- Consumes: `JournalView.Layout.rowHeight` (зовёт `EntryRow`), `ClipboardEntry`, `L10n`, `EnvironmentValues.solidAccents`.
+- Produces: `EntryRow`, `TypeSegmentedControl`, `ToastOverlay` видны всему модулю (было `private`), инициализаторы прежние. `ThemePalette`, `TranslucentButtonStyle`, `GlassIconButton` и `WindowDragHandle` переезжают как есть, видимость не меняется.
+- Removes: те же объявления из `JournalView.swift`; поведение нигде не меняется.
 
 - [ ] **Step 1: Перенос скриптом**
 
@@ -384,10 +331,10 @@ MOVES = [
     ("private struct EntryRow: View {", "EntryRow.swift"),
     ("private struct TypeSegmentedControl: View {", "TypeSegmentedControl.swift"),
     ("struct TranslucentButtonStyle: ButtonStyle {", "TranslucentButtonStyle.swift"),
-    ("private struct GlassIconButton: View {", "GlassIconButton.swift"),
+    ("struct GlassIconButton: View {", "GlassIconButton.swift"),
     ("private struct ToastOverlay: View {", "ToastOverlay.swift"),
     ("struct ThemePalette {", "ThemePalette.swift"),
-    ("private struct WindowDragHandle: NSViewRepresentable {", "WindowDragHandle.swift"),
+    ("struct WindowDragHandle: NSViewRepresentable {", "WindowDragHandle.swift"),
 ]
 
 lines = SOURCE.read_text().split("\n")
@@ -418,12 +365,19 @@ SOURCE.write_text(text)
 
 Запустить из корня репозитория: `python3 /tmp/move_components.py`
 
+Порядок в `MOVES` совпадает с порядком объявлений в файле, и каждая строка взята дословно: `EntryRow`, `TypeSegmentedControl` и `ToastOverlay` объявлены с `private`, остальные четыре — без. Под `// MARK: - Row` после переноса остаются `SidebarResizeHandle`, `WindowResizeGrip`, `WindowResizeArea`, `EdgeShadow`, `ScrollEdges` и `ScrollOffsetObserver` — отсюда «Window chrome»; под `// MARK: - Controls` остаются `DeleteConfirmationOverlay` и `ScrollBarAppearanceSetter` — отсюда «Overlays».
+
 - [ ] **Step 2: Сборка и тесты**
 
-Run: `swift build && swift test`
-Expected: Скрипт печатает `moved 7 declarations; …`. `Build complete!`, все тесты PASS.
+Run: `python3 /tmp/move_components.py && swift build && swift test`
+Expected: скрипт печатает `moved 7 declarations; …`; `Build complete!`, PASS: 24 теста.
 
-- [ ] **Step 3: Коммит**
+- [ ] **Step 3: Проверить, что ничего не потеряли**
+
+Run: `git diff --stat && grep -rn "struct EntryRow\|struct ThemePalette\|struct WindowDragHandle" Sources/BufferJournal`
+Expected: в `JournalView.swift` только удаления; каждое из трёх имён объявлено ровно один раз и в `Components/`.
+
+- [ ] **Step 4: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Components Sources/BufferJournal/JournalView.swift
@@ -432,23 +386,27 @@ the toast, the palette and the drag handle get their own files, unchanged except
 for dropping private, so the tutorial's scenes can use them."
 ```
 
+---
 
-### Task 3: Детали для сцен: миниатюра, поле поиска, заголовок раздела, наведение строки
+### Task 3: Детали для сцен: миниатюра, заголовок раздела, наведение строки
+
+Поля поиска в журнале нет, поэтому `SearchFieldChrome` не создаётся — ни здесь, ни дальше в плане. Остаются два вида и наведение строки снаружи.
 
 **Files:**
-- Create: `Sources/BufferJournal/Components/EntryThumb.swift`, `SearchFieldChrome.swift`, `SectionHeader.swift`
+- Create: `Sources/BufferJournal/Components/EntryThumb.swift`, `Sources/BufferJournal/Components/SectionHeader.swift`
 - Modify: `Sources/BufferJournal/Components/EntryRow.swift` — `hoverOverride`, миниатюра через `EntryThumb`
-- Modify: `Sources/BufferJournal/JournalView.swift` — заголовки разделов и поле поиска через новые виды
+- Modify: `Sources/BufferJournal/JournalView.swift` — заголовки разделов через `SectionHeader`
 
 **Interfaces:**
+- Consumes: `ThemePalette` (`placeholderBackground`, `sidebarTint`, `controlShadow`, `controlShadowRadius`, `textSecondary`, `textTertiary`), `ClipboardEntry`.
 - Produces: `EntryThumb(entry:thumbnail:fileIcon:palette:)` — плитка 42 pt.
-- Produces: `SearchFieldChrome(palette:isEditing:showsClear:clearHelp:onClear:field:)` — рамка поля, содержимое — замыкание.
-- Produces: `SectionHeader(title:palette:)`.
+- Produces: `SectionHeader(title:palette:)` — «Закреплённые», «Сегодня» и остальные заголовки между группами строк.
 - Produces: `EntryRow(…, onDelete:, hoverOverride: Bool? = nil)` — последний параметр необязательный, журнал его не передаёт.
+- Removes: `EntryRow.thumb` (переехал в `EntryThumb`), `@State private var isHovered` (стал `isMouseOver` плюс вычисляемое `isHovered`).
 
-- [ ] **Step 1: Три вида**
+- [ ] **Step 1: Два вида**
 
-Код — дословно из `EntryRow.thumb`, `JournalView.searchField` и заголовка раздела в `JournalView.entryList`.
+Код — дословно из `EntryRow.thumb` и заголовка раздела в `JournalView.entryList`.
 
 Создать `Sources/BufferJournal/Components/EntryThumb.swift`:
 
@@ -501,51 +459,6 @@ struct EntryThumb: View {
 }
 ```
 
-Создать `Sources/BufferJournal/Components/SearchFieldChrome.swift`:
-
-```swift
-import SwiftUI
-
-/// The search field's frame: magnifier, grey plate, orange ring while editing, and a clear button
-/// once there is a query. The journal puts a real TextField inside; the tutorial puts typed text.
-struct SearchFieldChrome<Field: View>: View {
-    let palette: ThemePalette
-    let isEditing: Bool
-    let showsClear: Bool
-    let clearHelp: String
-    let onClear: () -> Void
-    @ViewBuilder let field: () -> Field
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(palette.textTertiary)
-
-            field()
-
-            if showsClear {
-                Button(action: onClear) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(palette.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .help(clearHelp)
-            }
-        }
-        .padding(.horizontal, 9)
-        .frame(height: 30)
-        .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(isEditing ? ThemePalette.orange : .clear, lineWidth: 1.5)
-        )
-        .animation(.easeOut(duration: 0.12), value: isEditing)
-    }
-}
-```
-
 Создать `Sources/BufferJournal/Components/SectionHeader.swift`:
 
 ```swift
@@ -569,7 +482,7 @@ struct SectionHeader: View {
 
 - [ ] **Step 2: Строка берёт наведение снаружи**
 
-Четыре замены в `Sources/BufferJournal/Components/EntryRow.swift`. Все чтения `isHovered` остаются: теперь это вычисляемое свойство.
+Четыре замены в `Sources/BufferJournal/Components/EntryRow.swift` (файл появился в Task 2; строки внутри него те же, что были в `JournalView.swift`). Все чтения `isHovered` остаются: теперь это вычисляемое свойство.
 
 В `Sources/BufferJournal/Components/EntryRow.swift` заменить:
 
@@ -627,7 +540,7 @@ struct SectionHeader: View {
 В `Sources/BufferJournal/Components/EntryRow.swift` заменить:
 
 ```swift
-
+    }
 
     @ViewBuilder
     private var thumb: some View {
@@ -661,11 +574,13 @@ struct SectionHeader: View {
 на:
 
 ```swift
-
+    }
 }
 ```
 
-- [ ] **Step 3: Журнал на новых видах**
+Так `subtitleText` остаётся последним свойством, а `}` в нулевой колонке закрывает `EntryRow`.
+
+- [ ] **Step 3: Журнал на новом заголовке**
 
 В `Sources/BufferJournal/JournalView.swift` заменить:
 
@@ -686,90 +601,37 @@ struct SectionHeader: View {
                             .id(section.title)
 ```
 
-В `Sources/BufferJournal/JournalView.swift` заменить:
-
-```swift
-    private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(palette.textTertiary)
-
-            TextField(l10n("Search", "Поиск"), text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(palette.textPrimary)
-                .focused($isSearchFocused)
-
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(palette.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .help(l10n("Clear search", "Очистить поиск"))
-            }
-        }
-        .padding(.horizontal, 9)
-        .frame(height: 30)
-        .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(isSearchEditing ? ThemePalette.orange : .clear, lineWidth: 1.5)
-        )
-        .animation(.easeOut(duration: 0.12), value: isSearchEditing)
-    }
-```
-
-на:
-
-```swift
-    private var searchField: some View {
-        SearchFieldChrome(
-            palette: palette,
-            isEditing: isSearchEditing,
-            showsClear: !query.isEmpty,
-            clearHelp: l10n("Clear search", "Очистить поиск"),
-            onClear: { query = "" }
-        ) {
-            TextField(l10n("Search", "Поиск"), text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(palette.textPrimary)
-                .focused($isSearchFocused)
-        }
-    }
-```
-
 - [ ] **Step 4: Сборка и тесты**
 
 Run: `swift build && swift test`
-Expected: `Build complete!`, все тесты PASS.
+Expected: `Build complete!`, PASS: 24 теста.
 
 - [ ] **Step 5: Журнал не изменился**
 
-Проверка вручную: Собрать `Scripts/build_app.sh`, открыть `.build/Stash.app`, нажать ⌥V. Наведение на строку показывает кнопки, поле поиска подсвечивается оранжевым, заголовки «Сегодня» и «Закреплённые» на месте — всё как до задачи. Установленный Stash на время проверки закрыть: у сборок общие настройки и история.
+Проверка вручную: собрать `Scripts/build_app.sh`, открыть `.build/Stash.app`, нажать ⌥V. Наведение на строку показывает кнопки и гасит текст под ними, миниатюры и их тени на месте, заголовки «Сегодня» и «Закреплённые» стоят как прежде. Установленный Stash на время проверки закрыть: у сборок общие настройки и история.
 
 - [ ] **Step 6: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Components Sources/BufferJournal/JournalView.swift
-git commit -m "Split out the row thumbnail, search field frame and section header" -m "Rows also take a hover override, so a tutorial scene can show hover without
+git commit -m "Split out the row thumbnail and the section header" -m "Rows also take a hover override, so a tutorial scene can show hover without
 a mouse. The journal looks and behaves the same."
 ```
 
+---
 
 ### Task 4: Stash Auto — тема по умолчанию
+
+Настройки `AppSettings` в текущем коде — `openAtCaret`, `interceptKeys`, `closeAfterSelection`, `themeMode`, `language`; «Вставлять при выборе» (`pasteOnSelection`) удалена вместе с работой «журнал без фокуса», и в заменах её нет.
 
 **Files:**
 - Modify: `Sources/BufferJournal/AppSettings.swift` — `init(defaults:)`, тема по умолчанию `.stashAuto`
 - Test: `Tests/BufferJournalTests/AppSettingsTests.swift`
 
 **Interfaces:**
-- Produces: `AppSettings(defaults: UserDefaults = .standard)` — вызовы без параметра не меняются.
+- Consumes: `ThemeMode`, `AppLanguage`.
+- Produces: `AppSettings(defaults: UserDefaults = .standard)` — вызовы без параметра (`AppDelegate`) не меняются.
+- Removes: обращения к `UserDefaults.standard` из `didSet` — вместо них хранимое свойство `defaults`.
 
 - [ ] **Step 1: Тест**
 
@@ -808,6 +670,8 @@ struct AppSettingsTests {
 }
 ```
 
+`ThemeMode` — `enum` без ассоциированных значений, `==` синтезируется; свой домен у каждого теста, чтобы настройки установленного Stash не мешали.
+
 - [ ] **Step 2: Запустить — падает**
 
 Run: `swift test --filter AppSettingsTests`
@@ -820,9 +684,19 @@ Expected: FAIL: ошибка сборки `extra argument 'defaults' in call`.
 В `Sources/BufferJournal/AppSettings.swift` заменить:
 
 ```swift
-    @Published var pasteOnSelection: Bool {
+    /// The panel opens next to the text cursor of the app the user is typing in, like Win+V.
+    /// Turned off, it opens where it was left, as before.
+    @Published var openAtCaret: Bool {
         didSet {
-            UserDefaults.standard.set(pasteOnSelection, forKey: Keys.pasteOnSelection)
+            UserDefaults.standard.set(openAtCaret, forKey: Keys.openAtCaret)
+        }
+    }
+
+    /// While the journal is open it takes Up, Down, Return and Esc from the app underneath.
+    /// Turned off, the journal is worked with the mouse and every key stays with that app.
+    @Published var interceptKeys: Bool {
+        didSet {
+            UserDefaults.standard.set(interceptKeys, forKey: Keys.interceptKeys)
         }
     }
 
@@ -848,11 +722,22 @@ Expected: FAIL: ошибка сборки `extra argument 'defaults' in call`.
 на:
 
 ```swift
+    /// Tests hand in their own domain; the app takes the standard one.
     private let defaults: UserDefaults
 
-    @Published var pasteOnSelection: Bool {
+    /// The panel opens next to the text cursor of the app the user is typing in, like Win+V.
+    /// Turned off, it opens where it was left, as before.
+    @Published var openAtCaret: Bool {
         didSet {
-            defaults.set(pasteOnSelection, forKey: Keys.pasteOnSelection)
+            defaults.set(openAtCaret, forKey: Keys.openAtCaret)
+        }
+    }
+
+    /// While the journal is open it takes Up, Down, Return and Esc from the app underneath.
+    /// Turned off, the journal is worked with the mouse and every key stays with that app.
+    @Published var interceptKeys: Bool {
+        didSet {
+            defaults.set(interceptKeys, forKey: Keys.interceptKeys)
         }
     }
 
@@ -881,7 +766,7 @@ Expected: FAIL: ошибка сборки `extra argument 'defaults' in call`.
     init() {
         let defaults = UserDefaults.standard
 
-        if defaults
+        if defaults.object(forKey: Keys.openAtCaret) == nil {
 ```
 
 на:
@@ -890,7 +775,7 @@ Expected: FAIL: ошибка сборки `extra argument 'defaults' in call`.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        if defaults
+        if defaults.object(forKey: Keys.openAtCaret) == nil {
 ```
 
 В `Sources/BufferJournal/AppSettings.swift` заменить:
@@ -911,13 +796,19 @@ Expected: FAIL: ошибка сборки `extra argument 'defaults' in call`.
 Run: `swift test --filter AppSettingsTests`
 Expected: PASS: 3 теста.
 
-- [ ] **Step 5: Коммит**
+- [ ] **Step 5: Сборка и все тесты**
+
+Run: `swift build && swift test`
+Expected: `Build complete!`, PASS: 27 тестов (20 прежних, 4 из Task 1 и 3 новых).
+
+- [ ] **Step 6: Коммит**
 
 ```bash
 git add Sources/BufferJournal/AppSettings.swift Tests/BufferJournalTests/AppSettingsTests.swift
 git commit -m "Default to Stash Auto when no theme was picked" -m "Settings also take their UserDefaults from outside, for tests."
 ```
 
+---
 
 ### Task 5: Слайды
 
@@ -926,10 +817,12 @@ git commit -m "Default to Stash Auto when no theme was picked" -m "Settings also
 - Test: `Tests/BufferJournalTests/OnboardingSlidesTests.swift`
 
 **Interfaces:**
-- Produces: `enum OnboardingSceneKind: String, CaseIterable` — `hero, hotKey, paste, pin, images, search, settings, access`.
-- Produces: `struct Localized { en, ru; callAsFunction(_ l10n: L10n) -> String }`.
-- Produces: `struct OnboardingSlide: Identifiable` — `kind`, `duration: Double`, `loops: Bool`, `word: Localized` (на первом слайде — видимый заголовок «ПРИВЕТ, ЭТО», у остальных — заголовок для VoiceOver), `text: Localized`, `id == kind`.
-- Produces: `OnboardingSlides.all` (8 слайдов по спеке) и `OnboardingSlides.visible(includeAccess: Bool) -> [OnboardingSlide]`.
+- Consumes: `L10n` (`Sources/BufferJournal/Localization.swift`) — двухъязычный поиск строк.
+- Produces: `enum OnboardingSceneKind: String, CaseIterable, Sendable` — `hero, hotKey, paste, pin, images, keys, settings, access`.
+- Produces: `struct Localized: Equatable, Sendable` — `en`, `ru`, `callAsFunction(_ l10n: L10n) -> String`.
+- Produces: `struct OnboardingSlide: Identifiable, Equatable, Sendable` — `kind`, `duration: Double`, `loops: Bool`, `word: Localized` (на первом слайде — видимый заголовок «ПРИВЕТ, ЭТО», у остальных — заголовок карточки для VoiceOver), `text: Localized`, `id == kind`.
+- Produces: `OnboardingSlides.all` (восемь слайдов по спеке), `OnboardingSlides.accessSlide` (слайд «ДОСТУП» отдельно — для одиночного показа в Task 8), `static func slides(hasAccess: Bool) -> [OnboardingSlide]`.
+- Removes: —
 
 - [ ] **Step 1: Тест**
 
@@ -941,10 +834,19 @@ import Testing
 
 struct OnboardingSlidesTests {
     @Test func slidesComeInTheSpecOrderWithAccessLast() {
-        #expect(OnboardingSlides.all.map(\.kind) == [.hero, .hotKey, .paste, .pin, .images, .search, .settings, .access])
+        #expect(OnboardingSlides.all.map(\.kind) == [.hero, .hotKey, .paste, .pin, .images, .keys, .settings, .access])
     }
 
-    @Test func wordsAreCapitalsAndTextsFitThreeLines() {
+    @Test func theSixthSlideIsAboutKeys() {
+        let sixth = OnboardingSlides.all[5]
+        #expect(sixth.kind == .keys)
+        #expect(sixth.word.ru == "КЛАВИШИ")
+        #expect(sixth.word.en == "KEYS")
+    }
+
+    /// The spec keeps every text within 140 characters, so it takes at most three lines on a
+    /// 560 × 360 panel and the block under the card never eats the card's room.
+    @Test func wordsAreCapitalsAndTextsStayShort() {
         for slide in OnboardingSlides.all {
             #expect(slide.word.en == slide.word.en.uppercased())
             #expect(slide.word.ru == slide.word.ru.uppercased())
@@ -957,10 +859,21 @@ struct OnboardingSlidesTests {
         #expect(OnboardingSlides.all.filter { !$0.loops }.map(\.kind) == [.hero])
     }
 
-    @Test func theAccessSlideIsOptional() {
-        #expect(OnboardingSlides.visible(includeAccess: true).count == 8)
-        let without = OnboardingSlides.visible(includeAccess: false)
-        #expect(without.map(\.kind) == [.hero, .hotKey, .paste, .pin, .images, .search, .settings])
+    @Test func theAccessSlideIsOnlyForThoseWithoutAccess() {
+        #expect(OnboardingSlides.slides(hasAccess: false).count == 8)
+        #expect(OnboardingSlides.slides(hasAccess: false).last?.kind == .access)
+
+        let withAccess = OnboardingSlides.slides(hasAccess: true)
+        #expect(withAccess.map(\.kind) == [.hero, .hotKey, .paste, .pin, .images, .keys, .settings])
+    }
+
+    @Test func theAccessSlideStandsAlone() {
+        #expect(OnboardingSlides.accessSlide.kind == .access)
+        #expect(OnboardingSlides.all.last == OnboardingSlides.accessSlide)
+    }
+
+    @Test func aSlideIsIdentifiedByItsScene() {
+        #expect(OnboardingSlides.all.map(\.id) == OnboardingSceneKind.allCases)
     }
 }
 ```
@@ -981,7 +894,7 @@ import Foundation
 
 /// The scene a slide plays; also the slide's identity.
 enum OnboardingSceneKind: String, CaseIterable, Sendable {
-    case hero, hotKey, paste, pin, images, search, settings, access
+    case hero, hotKey, paste, pin, images, keys, settings, access
 }
 
 /// A string in both interface languages.
@@ -996,8 +909,8 @@ struct Localized: Equatable, Sendable {
 
 struct OnboardingSlide: Identifiable, Equatable, Sendable {
     let kind: OnboardingSceneKind
-    /// Scene length with its end hold, seconds. A looping scene then spends
-    /// `SceneLoop.returnTime + SceneLoop.pauseTime` getting back to its first frame.
+    /// Scene length with its end hold, seconds. A looping scene then spends 0.5 s getting back to
+    /// its first frame and 0.25 s paused there.
     let duration: Double
     /// The first slide plays once and stays assembled; the others loop.
     let loops: Bool
@@ -1009,6 +922,17 @@ struct OnboardingSlide: Identifiable, Equatable, Sendable {
 }
 
 enum OnboardingSlides {
+    /// The access slide, kept apart because it also shows on its own: the tutorial was seen, but
+    /// Stash still has no Accessibility access.
+    static let accessSlide = OnboardingSlide(
+        kind: .access, duration: 3.0, loops: true,
+        word: Localized(en: "ACCESS", ru: "ДОСТУП"),
+        text: Localized(
+            en: "Stash pastes by pressing ⌘V for you. macOS won't allow it without Accessibility access.",
+            ru: "Stash вставляет клип, нажимая ⌘V за вас. Без Универсального доступа macOS этого не разрешит."
+        )
+    )
+
     /// Words and texts are the spec's, verbatim:
     /// docs/superpowers/specs/2026-09-19-onboarding-stories-design.md, "Слайды".
     static let all: [OnboardingSlide] = [
@@ -1032,8 +956,8 @@ enum OnboardingSlides {
             kind: .paste, duration: 3.6, loops: true,
             word: Localized(en: "PASTE", ru: "ВСТАВКА"),
             text: Localized(
-                en: "Hover a clip and click the orange arrow — it's pasted right where your cursor was. Double-click or Return does the same.",
-                ru: "Наведите указатель на клип и нажмите оранжевую стрелку — он вставится туда, где стоял курсор. Двойной клик и Return делают то же самое."
+                en: "Hover a clip and click the orange arrow: it lands where your cursor was and the journal closes. Double-click or Return does the same.",
+                ru: "Наведите на клип и нажмите оранжевую стрелку: клип встанет туда, где стоял курсор, а журнал закроется. Двойной клик и Return — тоже."
             )
         ),
         OnboardingSlide(
@@ -1053,35 +977,28 @@ enum OnboardingSlides {
             )
         ),
         OnboardingSlide(
-            kind: .search, duration: 4.2, loops: true,
-            word: Localized(en: "SEARCH", ru: "ПОИСК"),
+            kind: .keys, duration: 4.2, loops: true,
+            word: Localized(en: "KEYS", ru: "КЛАВИШИ"),
             text: Localized(
-                en: "Don't scroll — start typing, and only matching clips stay. ↑↓ select, Return pastes, Esc clears the search.",
-                ru: "Не листайте — начните печатать, и останутся только подходящие клипы. Стрелки ↑↓ выбирают, Return вставляет, Esc очищает поиск."
+                en: "The journal never takes the keyboard: keep typing and your letters go to your text. ↑↓ pick a clip, Return pastes, Esc closes.",
+                ru: "Журнал не забирает клавиатуру: печатайте дальше, буквы идут в ваш текст. ↑ и ↓ выбирают клип, Return вставляет, Esc закрывает."
             )
         ),
         OnboardingSlide(
             kind: .settings, duration: 4.7, loops: true,
             word: Localized(en: "SETTINGS", ru: "НАСТРОЙКИ"),
             text: Localized(
-                en: "The Stash icon in the menu bar opens settings: paste and close on selection, theme and language. Tutorial replays this tour.",
-                ru: "Значок Stash в строке меню открывает настройки: вставку и закрытие журнала при выборе, тему и язык. «Обучение» покажет этот рассказ снова."
+                en: "The Stash icon in the menu bar opens settings: closing after a paste, the keys, opening at the cursor, theme and language, and Tutorial.",
+                ru: "Значок Stash в строке меню открывает настройки: закрытие после вставки, клавиши журнала, открытие у курсора, тему и язык. Там же «Обучение»."
             )
         ),
-        OnboardingSlide(
-            kind: .access, duration: 3.0, loops: true,
-            word: Localized(en: "ACCESS", ru: "ДОСТУП"),
-            text: Localized(
-                en: "Stash pastes by pressing ⌘V for you. Turn it on in Accessibility settings, or clips will only be copied.",
-                ru: "Stash вставляет клип, нажимая ⌘V за вас. Для этого включите его в Универсальном доступе, иначе клип только скопируется."
-            )
-        ),
+        accessSlide,
     ]
 
-    /// The access slide is only for people who need it: paste on selection is on and Stash may
-    /// not press ⌘V yet.
-    static func visible(includeAccess: Bool) -> [OnboardingSlide] {
-        includeAccess ? all : all.filter { $0.kind != .access }
+    /// The access slide is only for those who need it: without Accessibility access the journal
+    /// does not work at all. The set is taken once, when the tutorial opens.
+    static func slides(hasAccess: Bool) -> [OnboardingSlide] {
+        hasAccess ? all.filter { $0.kind != .access } : all
     }
 }
 ```
@@ -1089,15 +1006,16 @@ enum OnboardingSlides {
 - [ ] **Step 4: Запустить — проходит**
 
 Run: `swift test --filter OnboardingSlidesTests`
-Expected: PASS: 4 теста.
+Expected: PASS: 7 тестов.
 
 - [ ] **Step 5: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding/OnboardingSlides.swift Tests/BufferJournalTests/OnboardingSlidesTests.swift
-git commit -m "Tutorial slides: words, texts and durations"
+git commit -m "Tutorial slides: words, texts and durations" -m "The access slide joins the set only without Accessibility access, and stands apart because it also shows on its own."
 ```
 
+---
 
 ### Task 6: Раскладка: масштаб сцены, карточка по сцене, логотип
 
@@ -1256,6 +1174,7 @@ git add Sources/BufferJournal/Onboarding/OnboardingLayout.swift Tests/BufferJour
 git commit -m "Tutorial layout: scene scale, card size, the hero lockup and its title"
 ```
 
+---
 
 ### Task 7: Движок сцен: кривые, дорожки, круг, указатель
 
@@ -1611,18 +1530,21 @@ git add Sources/BufferJournal/Onboarding/SceneEngine.swift Tests/BufferJournalTe
 git commit -m "Scene engine: curves, tracks, loops and the cursor"
 ```
 
+---
 
 ### Task 8: Контроллер обучения и доступ
 
 **Files:**
-- Create: `Sources/BufferJournal/Onboarding/AccessibilityAccess.swift`, `Sources/BufferJournal/Onboarding/OnboardingController.swift`
-- Test: `Tests/BufferJournalTests/OnboardingControllerTests.swift` (в нём же `FakeAccess` для следующих тестов)
+- Create: `Sources/BufferJournal/Onboarding/OnboardingController.swift`
+- Test: `Tests/BufferJournalTests/OnboardingControllerTests.swift` (в нём же `FakeAccessGate` для тестов следующих задач)
 
 **Interfaces:**
-- Consumes: `OnboardingSlides.visible(includeAccess:)` (Task 5).
-- Produces: `@MainActor protocol AccessibilityAccess: AnyObject { var isTrusted: Bool; func requestAndOpenSettings() }`, `SystemAccessibilityAccess`.
-- Produces: `OnboardingController(defaults:access:pasteOnSelection:)`; `@Published private(set)` — `isPresented`, `slides`, `index`, `run`, `hasAccess`; `isReplay`, `shouldShowOnLaunch`, `slide`, `isLast`; `present(replay:)`, `next()`, `back()`, `primaryAction()`, `close()`, `restartScene()`, `requestAccess()`, `refreshAccess()`, `handleKey(_ keyCode: UInt16) -> Bool`; `currentVersion = 1`, `seenVersionKey = "OnboardingSeenVersion"`.
-- Produces (тесты): `FakeAccess(trusted:)` — `isTrusted` меняется, `requests` считает нажатия кнопки.
+- Consumes: `OnboardingSlides.slides(hasAccess:)`, `OnboardingSlides.accessSlide`, `OnboardingSlide` (Task 5).
+- Consumes: `AccessGate` и `AccessibilityAccess` из `Sources/BufferJournal/AccessibilityAccess.swift` — готовые, новых не создаём: `isGranted`, `refresh()`, `request()`, `setPolling(_:)`. Проверку раз в секунду уже держит `JournalPanelController` (`access.setPolling(isPanelVisible)`), контроллер обучения её не трогает.
+- Consumes: `JournalKey` из `Sources/BufferJournal/JournalKeys.swift` — сейчас `up, down, enter, escape`.
+- Produces: `@MainActor final class OnboardingController: ObservableObject`, `init(defaults: UserDefaults = .standard, access: AccessGate)`; `@Published private(set)` — `isPresented`, `slides`, `index`, `run`; `private(set) var isReplay`, `private(set) var isAccessOnly`; `shouldShowOnLaunch`, `slide`, `isLast`; `present(replay:)`, `presentAccessOnly()`, `next()`, `back()`, `primaryAction()`, `close()`, `restartScene()`, `requestAccess()`, `handleKey(_ key: JournalKey) -> Bool`; `static let currentVersion = 1`, `static let seenVersionKey = "OnboardingSeenVersion"`.
+- Produces (тесты): `FakeAccessGate(granted:)` — `granted` меняется, `requests` считает запросы, `gate: AccessGate` для контроллера и для видов в Task 9 и дальше.
+- Removes: —
 
 - [ ] **Step 1: Тест**
 
@@ -1633,22 +1555,28 @@ import Foundation
 import Testing
 @testable import BufferJournal
 
+/// A stand-in for the system permission behind a real `AccessGate`.
 @MainActor
-final class FakeAccess: AccessibilityAccess {
-    var isTrusted: Bool
+final class FakeAccessGate {
+    var granted: Bool
     private(set) var requests = 0
 
-    init(trusted: Bool) {
-        isTrusted = trusted
-    }
+    /// Built on first use so the gate reads `granted` as the test set it.
+    private(set) lazy var gate = AccessGate(
+        access: AccessibilityAccess(
+            isGranted: { [unowned self] in granted },
+            request: { [unowned self] in requests += 1 }
+        )
+    )
 
-    func requestAndOpenSettings() {
-        requests += 1
+    init(granted: Bool) {
+        self.granted = granted
     }
 }
 
 @MainActor
 struct OnboardingControllerTests {
+    /// A fresh domain per test: Swift Testing makes a new instance for each one.
     private let defaults: UserDefaults = {
         let name = "OnboardingControllerTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -1656,9 +1584,9 @@ struct OnboardingControllerTests {
         return defaults
     }()
 
-    private func make(trusted: Bool = true, paste: Bool = true) -> (OnboardingController, FakeAccess) {
-        let access = FakeAccess(trusted: trusted)
-        return (OnboardingController(defaults: defaults, access: access, pasteOnSelection: { paste }), access)
+    private func make(granted: Bool = true) -> (OnboardingController, FakeAccessGate) {
+        let access = FakeAccessGate(granted: granted)
+        return (OnboardingController(defaults: defaults, access: access.gate), access)
     }
 
     @Test func showsOnFirstLaunchUntilClosed() {
@@ -1694,28 +1622,26 @@ struct OnboardingControllerTests {
         #expect(!controller.shouldShowOnLaunch)
     }
 
-    @Test func theAccessSlideIsOnlyForThoseWhoNeedIt() {
-        let (untrusted, _) = make(trusted: false, paste: true)
-        untrusted.present(replay: false)
-        #expect(untrusted.slides.count == 8)
-        #expect(untrusted.slides.last?.kind == .access)
+    @Test func theAccessSlideIsOnlyForThoseWithoutAccess() {
+        let (without, _) = make(granted: false)
+        without.present(replay: false)
+        #expect(without.slides.count == 8)
+        #expect(without.slides.last?.kind == .access)
+        #expect(!without.isAccessOnly)
 
-        let (trusted, _) = make(trusted: true, paste: true)
-        trusted.present(replay: false)
-        #expect(trusted.slides.count == 7)
-
-        let (noPaste, _) = make(trusted: false, paste: false)
-        noPaste.present(replay: false)
-        #expect(noPaste.slides.count == 7)
+        let (with, _) = make(granted: true)
+        with.present(replay: false)
+        #expect(with.slides.count == 7)
+        #expect(with.slides.last?.kind == .settings)
     }
 
-    @Test func theSlideSetStaysWhileOpenAndAccessIsNoticed() {
-        let (controller, access) = make(trusted: false)
+    @Test func theSlideSetStaysWhileOpen() {
+        let (controller, access) = make(granted: false)
         controller.present(replay: false)
-        access.isTrusted = true
-        controller.refreshAccess()
-        #expect(controller.hasAccess)
+        access.granted = true
+        access.gate.refresh()
         #expect(controller.slides.count == 8)
+        #expect(controller.slides.last?.kind == .access)
     }
 
     @Test func slidesStayInBoundsAndEveryEntryRestartsTheScene() {
@@ -1729,6 +1655,8 @@ struct OnboardingControllerTests {
         #expect(controller.isLast)
         #expect(controller.isPresented)
         #expect(controller.run == run + controller.slides.count - 1)
+        controller.back()
+        #expect(controller.index == controller.slides.count - 2)
     }
 
     @Test func startOnTheLastSlideCloses() {
@@ -1740,24 +1668,88 @@ struct OnboardingControllerTests {
         #expect(!controller.isPresented)
     }
 
-    @Test func keysDriveTheTutorialAndOthersAreSwallowed() {
-        let (controller, _) = make()
-        #expect(!controller.handleKey(124))
-        controller.present(replay: false)
-        #expect(controller.handleKey(124))
-        #expect(controller.index == 1)
-        #expect(controller.handleKey(0))
-        #expect(controller.index == 1)
-        #expect(controller.handleKey(123))
-        #expect(controller.index == 0)
-        #expect(controller.handleKey(53))
+    @Test func theAccessScreenShowsOnItsOwnWithoutRecordingAnything() {
+        let (controller, _) = make(granted: false)
+        controller.presentAccessOnly()
+        #expect(controller.isPresented)
+        #expect(controller.isAccessOnly)
+        #expect(controller.slides.map(\.kind) == [.access])
+        #expect(controller.isLast)
+        controller.close()
+        #expect(controller.shouldShowOnLaunch)
+        #expect(!controller.isAccessOnly)
+    }
+
+    @Test func theAccessScreenIsPointlessWithAccess() {
+        let (controller, _) = make(granted: true)
+        controller.presentAccessOnly()
         #expect(!controller.isPresented)
     }
 
-    @Test func theButtonAsksTheSystem() {
-        let (controller, access) = make(trusted: false)
+    @Test func theButtonOfTheLoneAccessScreenAsksForAccess() {
+        let (controller, access) = make(granted: false)
+        controller.presentAccessOnly()
+        controller.primaryAction()
+        #expect(access.requests == 1)
+        #expect(controller.isPresented)
+    }
+
+    @Test func theMenuOpensTheTutorialOverTheLoneAccessScreen() {
+        let (controller, _) = make(granted: false)
+        controller.presentAccessOnly()
+        controller.present(replay: true)
+        #expect(!controller.isAccessOnly)
+        #expect(controller.slides.count == 8)
+        #expect(controller.index == 0)
+    }
+
+    @Test func theCardButtonAsksForAccess() {
+        let (controller, access) = make(granted: false)
+        controller.present(replay: false)
         controller.requestAccess()
         #expect(access.requests == 1)
+    }
+
+    @Test func keysDriveTheTutorial() {
+        let (controller, _) = make()
+        #expect(!controller.handleKey(.enter))
+        controller.present(replay: false)
+        #expect(controller.handleKey(.enter))
+        #expect(controller.index == 1)
+        #expect(controller.handleKey(.escape))
+        #expect(!controller.isPresented)
+    }
+
+    @Test func returnOnTheLastSlideStarts() {
+        let (controller, _) = make()
+        controller.present(replay: false)
+        for _ in 0..<(controller.slides.count - 1) { controller.next() }
+        #expect(controller.handleKey(.enter))
+        #expect(!controller.isPresented)
+    }
+
+    @Test func theTutorialLeavesOtherKeysAlone() {
+        let (controller, _) = make()
+        controller.present(replay: false)
+        #expect(!controller.handleKey(.up))
+        #expect(!controller.handleKey(.down))
+        #expect(controller.index == 0)
+    }
+
+    @Test func theAccessSlideHasNoKeys() {
+        let (controller, _) = make(granted: false)
+        controller.present(replay: false)
+        for _ in 0..<(controller.slides.count - 1) { controller.next() }
+        #expect(controller.slide.kind == .access)
+        #expect(!controller.handleKey(.enter))
+        #expect(!controller.handleKey(.escape))
+        #expect(controller.isPresented)
+
+        let (lone, _) = make(granted: false)
+        lone.presentAccessOnly()
+        #expect(!lone.handleKey(.enter))
+        #expect(!lone.handleKey(.escape))
+        #expect(lone.isPresented)
     }
 
     @Test func showingThePanelAgainRestartsTheSceneOnlyWhileOpen() {
@@ -1774,42 +1766,13 @@ struct OnboardingControllerTests {
 - [ ] **Step 2: Запустить — падает**
 
 Run: `swift test --filter OnboardingControllerTests`
-Expected: FAIL: ошибка сборки `cannot find type 'AccessibilityAccess' in scope`.
+Expected: FAIL: ошибка сборки `cannot find 'OnboardingController' in scope`.
 
 - [ ] **Step 3: Код**
 
-Правила — из спеки, «Кому и когда» и «Слайд «ДОСТУП»». Набор слайдов складывается при открытии и не меняется до закрытия. Увиденным обучение отмечается при закрытии, если это не повтор из меню. Клавиши: → и Return — дальше (на последнем Return — «Начать»), ← — назад, Esc — закрыть; остальные глотаются, чтобы не печатать в поиск под обучением.
+Правила — из спеки, «Кому и когда», «Управление» и «Слайд «ДОСТУП»». Набор слайдов складывается при открытии и не меняется до закрытия. Увиденным обучение отмечается при закрытии, если это не повтор из меню и не одиночный экран доступа. Разрешение контроллер только читает и запрашивает: `AccessGate` уже есть в приложении, а опрос раз в секунду держит `JournalPanelController`.
 
-Создать `Sources/BufferJournal/Onboarding/AccessibilityAccess.swift`:
-
-```swift
-import AppKit
-import ApplicationServices
-
-/// Whether Stash may press ⌘V for the person, and a way to ask for it.
-@MainActor
-protocol AccessibilityAccess: AnyObject {
-    var isTrusted: Bool { get }
-    /// Puts Stash on the Accessibility list and opens that pane of System Settings.
-    func requestAndOpenSettings()
-}
-
-@MainActor
-final class SystemAccessibilityAccess: AccessibilityAccess {
-    static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-
-    var isTrusted: Bool {
-        AXIsProcessTrusted()
-    }
-
-    func requestAndOpenSettings() {
-        // Asking with a prompt is what puts Stash on the list; macOS may show its own alert too.
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
-        NSWorkspace.shared.open(Self.settingsURL)
-    }
-}
-```
+Клавиши: Return — «Дальше», на последнем слайде «Начать»; Esc закрывает обучение, но не панель. ↑ и ↓ обучение не берёт: они остаются журналу. ← и → появятся в `JournalKey` в Task 10, и `switch` без `default` заставит их там дописать. На слайде «ДОСТУП» и на одиночном экране доступа клавиш нет вовсе.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingController.swift`:
 
@@ -1817,8 +1780,9 @@ final class SystemAccessibilityAccess: AccessibilityAccess {
 import Combine
 import Foundation
 
-/// The tutorial's state: whether it is on screen, which slides this showing has and which one
-/// is current. It also remembers that the person has seen it.
+/// The tutorial's state: whether it is on screen, which slides this showing has and which one is
+/// current. It also remembers that the person has seen it, and shows the access slide on its own
+/// when the tutorial was seen but Stash still may not paste.
 @MainActor
 final class OnboardingController: ObservableObject {
     /// Bump to show the tutorial to everyone again after a big update.
@@ -1826,22 +1790,21 @@ final class OnboardingController: ObservableObject {
     static let seenVersionKey = "OnboardingSeenVersion"
 
     @Published private(set) var isPresented = false
-    @Published private(set) var slides: [OnboardingSlide] = OnboardingSlides.visible(includeAccess: false)
+    @Published private(set) var slides: [OnboardingSlide] = OnboardingSlides.slides(hasAccess: true)
     @Published private(set) var index = 0
     /// Grows each time a slide is entered or the panel shows again; scenes restart on a change.
     @Published private(set) var run = 0
-    @Published private(set) var hasAccess = false
     /// A showing opened from the menu does not mark the tutorial as seen.
     private(set) var isReplay = false
+    /// The access slide alone: no progress bars, and the bottom button opens System Settings.
+    private(set) var isAccessOnly = false
 
     private let defaults: UserDefaults
-    private let access: AccessibilityAccess
-    private let pasteOnSelection: @MainActor () -> Bool
+    private let access: AccessGate
 
-    init(defaults: UserDefaults = .standard, access: AccessibilityAccess, pasteOnSelection: @escaping @MainActor () -> Bool) {
+    init(defaults: UserDefaults = .standard, access: AccessGate) {
         self.defaults = defaults
         self.access = access
-        self.pasteOnSelection = pasteOnSelection
     }
 
     var shouldShowOnLaunch: Bool {
@@ -1856,17 +1819,30 @@ final class OnboardingController: ObservableObject {
         index == slides.count - 1
     }
 
-    /// Opens the tutorial on its first slide. The slide set stays fixed until it closes.
+    /// Opens the tutorial on its first slide. The slide set is taken here and stays fixed until it
+    /// closes, so a permission granted midway does not move the ground under the person.
     func present(replay: Bool) {
-        if isPresented {
+        if isPresented, !isAccessOnly {
             // The menu item during the first showing restarts it; closing still marks it seen.
             isReplay = isReplay && replay
         } else {
             isReplay = replay
-            hasAccess = access.isTrusted
-            slides = OnboardingSlides.visible(includeAccess: !hasAccess && pasteOnSelection())
+            isAccessOnly = false
+            slides = OnboardingSlides.slides(hasAccess: access.isGranted)
             isPresented = true
         }
+        index = 0
+        run += 1
+    }
+
+    /// The access slide on its own: the tutorial was seen, but Stash has no Accessibility access.
+    /// With access there is nothing to ask for.
+    func presentAccessOnly() {
+        guard !access.isGranted else { return }
+        isReplay = false
+        isAccessOnly = true
+        slides = [OnboardingSlides.accessSlide]
+        isPresented = true
         index = 0
         run += 1
     }
@@ -1883,9 +1859,11 @@ final class OnboardingController: ObservableObject {
         run += 1
     }
 
-    /// "Next", or "Start" on the last slide.
+    /// The bottom button: "Next", "Start" on the last slide, "Open Settings" on the lone access screen.
     func primaryAction() {
-        if isLast {
+        if isAccessOnly {
+            requestAccess()
+        } else if isLast {
             close()
         } else {
             next()
@@ -1895,9 +1873,11 @@ final class OnboardingController: ObservableObject {
     func close() {
         guard isPresented else { return }
         isPresented = false
-        if !isReplay {
+        // A replay from the menu and the lone access screen record nothing.
+        if !isReplay, !isAccessOnly {
             defaults.set(Self.currentVersion, forKey: Self.seenVersionKey)
         }
+        isAccessOnly = false
     }
 
     /// The panel showed again: the current scene starts over.
@@ -1906,29 +1886,28 @@ final class OnboardingController: ObservableObject {
         run += 1
     }
 
+    /// Asks macOS for Accessibility access; the panel drops to the normal window level on its own,
+    /// so it does not cover System Settings.
     func requestAccess() {
-        access.requestAndOpenSettings()
+        access.request()
     }
 
-    func refreshAccess() {
-        let trusted = access.isTrusted
-        if trusted != hasAccess {
-            hasAccess = trusted
+    /// Keys while the tutorial is open: Return goes on ("Start" on the last slide), Escape closes
+    /// the tutorial but not the panel. Up and Down are none of the tutorial's business — they stay
+    /// with the journal. The access slide has no keys at all: Return and Escape belong to System
+    /// Settings, where the person is headed, and that slide is turned with the mouse and buttons.
+    func handleKey(_ key: JournalKey) -> Bool {
+        guard isPresented, !isAccessOnly, slide.kind != .access else { return false }
+        switch key {
+        case .enter:
+            primaryAction()
+            return true
+        case .escape:
+            close()
+            return true
+        case .up, .down:
+            return false
         }
-    }
-
-    /// Keys while the tutorial is open: → and Return go on, ← goes back, Esc closes. Every other
-    /// plain key is swallowed so nothing gets typed into the search field underneath.
-    func handleKey(_ keyCode: UInt16) -> Bool {
-        guard isPresented else { return false }
-        switch keyCode {
-        case 124: next()
-        case 123: back()
-        case 36, 76: primaryAction()
-        case 53: close()
-        default: break
-        }
-        return true
     }
 }
 ```
@@ -1936,32 +1915,34 @@ final class OnboardingController: ObservableObject {
 - [ ] **Step 4: Запустить — проходит**
 
 Run: `swift test --filter OnboardingControllerTests`
-Expected: PASS: 11 тестов.
+Expected: PASS: 18 тестов.
 
 - [ ] **Step 5: Коммит**
 
 ```bash
-git add Sources/BufferJournal/Onboarding/AccessibilityAccess.swift Sources/BufferJournal/Onboarding/OnboardingController.swift Tests/BufferJournalTests/OnboardingControllerTests.swift
-git commit -m "Tutorial controller: showing, slides, keys and access"
+git add Sources/BufferJournal/Onboarding/OnboardingController.swift Tests/BufferJournalTests/OnboardingControllerTests.swift
+git commit -m "Tutorial controller: showing, slides, keys and access" -m "Access comes from the app's own AccessGate; the access slide also shows on its own, without the tutorial and without keys."
 ```
 
+---
 
 ### Task 9: Рамка обучения: полосы, карточка по сцене, текст, кнопка
 
 **Files:**
 - Create: `Sources/BufferJournal/Onboarding/SceneClock.swift` — часы сцены на `TimelineView`
 - Create: `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` — выбор сцены и её холста; пока сцены `Color.clear`, холсты 480 × 240
-- Create: `Sources/BufferJournal/Onboarding/OnboardingChrome.swift` — цвета, кнопки, полоса прогресса
-- Create: `Sources/BufferJournal/Onboarding/OnboardingView.swift` — каркас
-- Test: `Tests/BufferJournalTests/SnapshotTests.swift` — PNG рамки в трёх размерах панели; `Tests/BufferJournalTests/OnboardingViewTests.swift`
+- Create: `Sources/BufferJournal/Onboarding/OnboardingChrome.swift` — цвета, кнопки, полоса прогресса, окружение кнопки доступа
+- Create: `Sources/BufferJournal/Onboarding/OnboardingView.swift` — каркас в двух видах: обучение и одиночный слайд «ДОСТУП»
+- Test: `Tests/BufferJournalTests/SnapshotTests.swift` — PNG рамки в трёх размерах панели, в обоих видах; `Tests/BufferJournalTests/OnboardingViewTests.swift`
 
 **Interfaces:**
-- Consumes: `OnboardingController` (Task 8), `OnboardingLayout` (Task 6), `SceneTime`, `SceneLoop` (Task 7), `WindowDragHandle`, `ThemePalette`, `TranslucentButtonStyle` (Task 2), `FakeAccess` (Task 8, тесты).
+- Consumes: `OnboardingController` (Task 8) — `isPresented`, `isAccessOnly`, `slides`, `index`, `run`, `slide`, `isLast`, `next()`, `back()`, `primaryAction()`, `close()`; `OnboardingLayout` (Task 6) — `sceneSize`, `sceneScale(_:in:)`, `cardSize(for:in:)`, `titleFontSize(widthAt100:rowWidth:panelHeight:)`, `HeavyTextMetrics.width(_:size:tracking:)`; `SceneTime`, `SceneLoop.time(elapsed:duration:loops:)` (Task 7); `OnboardingSlide`, `OnboardingSlides.all`, `OnboardingSceneKind` (Task 5); `AccessGate` (`AccessibilityAccess.swift`, уже в приложении); `WindowDragHandle`, `ThemePalette` (Task 2).
 - Produces: `SceneClock(duration:loops:still:content:)`; `OnboardingSceneView(slide:still:)`, `static func size(of: OnboardingSceneKind) -> CGSize?` (у первого слайда `nil`) и `static func canvas(for:at:in:) -> some View`.
 - Produces: `OnboardingColors(isDark:)` — `field`, `close`, `text`, `barFill`, `barTrack`, `cardShadow`, `wordmark`, `title`, `button(_ level: Int)`; `OnboardingPrimaryButtonStyle`, `OnboardingCloseButtonStyle`, `OnboardingProgressBar`.
-- Produces: `OnboardingView(controller:l10n:)`, `static func spoken(_ word: String) -> String` — слово слайда предложением для VoiceOver.
+- Produces: `OnboardingView(controller:access:l10n:onOpenSettings:onClosePanel:)`, `static func spoken(_ word: String) -> String` — слово слайда предложением для VoiceOver.
+- Produces: `EnvironmentValues.onboardingOpenSettings: () -> Void` — кнопка «Открыть настройки» внутри карточки слайда «ДОСТУП» (Task 19) берёт действие отсюда, чтобы оно было тем же, что у нижней кнопки.
 - Produces: `EnvironmentValues.scenesHoldStopFrame` — тесты-снимки держат сцены на стоп-кадре.
-- Produces (тесты): `SnapshotTests.render(_:name:)`, `SnapshotTests.schemes`, `controller(on:)`.
+- Produces (тесты): `SnapshotTests.render(_:name:)`, `SnapshotTests.schemes`, `SnapshotTests.sizes`, `controller(on:)`, `accessOnlyController()`, `gate(granted:)`.
 
 - [ ] **Step 1: Часы сцены**
 
@@ -2016,7 +1997,7 @@ extension EnvironmentValues {
 
 - [ ] **Step 2: Выбор сцены**
 
-Каждая сцена — отдельная задача ниже; до неё её место занимает `Color.clear`, а холст — 480 × 240. У сцен 2–8 свой холст по содержимому, он растёт или уменьшается во всё свободное место с сохранением пропорций. У первого слайда холста нет. `size` и `canvas` открыты для рамки и тестов-снимков.
+Каждая сцена — отдельная задача ниже; до неё её место занимает `Color.clear`, а холст — 480 × 240. У сцен 2–8 свой холст по содержимому, он растёт или уменьшается во всё свободное место с сохранением пропорций; свой размер каждая сцена ставит в своей задаче. У первого слайда холста нет. `size` и `canvas` открыты для рамки и тестов-снимков.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift`:
 
@@ -2040,7 +2021,8 @@ struct OnboardingSceneView: View {
     }
 
     /// Each scene's own canvas, fitted to what it shows; the card hugs it. The first slide has no
-    /// canvas: it lays its logo out by whatever room it gets.
+    /// canvas: it lays its logo out by whatever room it gets. Every scene keeps the placeholder
+    /// size until its own task gives it the one from the spec.
     static func size(of kind: OnboardingSceneKind) -> CGSize? {
         switch kind {
         case .hero: nil
@@ -2048,7 +2030,7 @@ struct OnboardingSceneView: View {
         case .paste: OnboardingLayout.sceneSize
         case .pin: OnboardingLayout.sceneSize
         case .images: OnboardingLayout.sceneSize
-        case .search: OnboardingLayout.sceneSize
+        case .keys: OnboardingLayout.sceneSize
         case .settings: OnboardingLayout.sceneSize
         case .access: OnboardingLayout.sceneSize
         }
@@ -2076,7 +2058,7 @@ struct OnboardingSceneView: View {
         case .paste: Color.clear
         case .pin: Color.clear
         case .images: Color.clear
-        case .search: Color.clear
+        case .keys: Color.clear
         case .settings: Color.clear
         case .access: Color.clear
         }
@@ -2084,9 +2066,9 @@ struct OnboardingSceneView: View {
 }
 ```
 
-- [ ] **Step 3: Цвета и кнопки рамки**
+- [ ] **Step 3: Цвета, кнопки и окружение рамки**
 
-Цвета — таблица «Цвета» из спеки: светло-серое поле или чёрное, оранжевые полосы и кнопка, «Stash» первого слайда — оранжевым иконки.
+Цвета — таблица «Цвета» из спеки: светло-серое поле или чёрное, оранжевые полосы и кнопка, «Stash» первого слайда — оранжевым иконки. Рядом окружение с действием «Открыть настройки»: нижняя кнопка одиночного вида и кнопка внутри карточки слайда «ДОСТУП» делают одно и то же.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingChrome.swift`:
 
@@ -2115,7 +2097,8 @@ struct OnboardingColors {
     }
 }
 
-/// "Next" / "Start": an orange capsule that darkens on hover and press, like the journal's buttons.
+/// "Next" / "Start" / "Open Settings": an orange capsule that darkens on hover and press, like
+/// the journal's buttons.
 struct OnboardingPrimaryButtonStyle: ButtonStyle {
     let colors: OnboardingColors
 
@@ -2206,11 +2189,28 @@ struct OnboardingProgressBar: View {
         }
     }
 }
+
+private struct OpenSettingsKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+
+extension EnvironmentValues {
+    /// Asks for Accessibility access, opens System Settings and lowers the panel. The access
+    /// slide's own button inside the card and the single view's bottom button share it.
+    var onboardingOpenSettings: () -> Void {
+        get { self[OpenSettingsKey.self] }
+        set { self[OpenSettingsKey.self] = newValue }
+    }
+}
 ```
 
-- [ ] **Step 4: Каркас**
+- [ ] **Step 4: Каркас в двух видах**
+
+Один вид рисует и обучение, и одиночный показ слайда «ДОСТУП»; вид выбирает `controller.isAccessOnly`.
 
 Сверху вниз: строка из полос (3 pt, зазор 4) и крестика, место для карточки, текст рядом с кнопкой 150 × 36. Отступы 12 / 20 / 16, между блоками 10. На первом слайде под шапкой большой оранжевый заголовок — его слово, «ПРИВЕТ, ЭТО»: `.heavy`, трекинг −2 %, кегль по ширине строки, но не больше 10 % высоты панели. У остальных слайдов заголовка нет, слово — только заголовок карточки для VoiceOver, прочитанный предложением. Карточка занимает всю ширину или всю высоту свободного места и обнимает сцену; стоит по центру и при смене слайда пружинисто перетекает в размер следующей. Тексты всех восьми слайдов лежат друг на друге, виден один — высота низа не прыгает. Клик по левым 30 % ниже шапки — назад, по остальному — вперёд; строка с полосами двигает окно.
+
+В одиночном показе слайда «ДОСТУП» листать нечего: полос нет, зон клика нет, крестик закрывает панель, а нижняя кнопка — «Открыть настройки».
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingView.swift`:
 
@@ -2220,10 +2220,17 @@ import SwiftUI
 
 /// The tutorial: stories over the whole journal panel. Progress bars and the close cross on top,
 /// the first slide's big title under them, the scene in a card that hugs it, and the text beside
-/// the main button at the bottom.
+/// the main button at the bottom. The same view shows the access slide on its own, without the
+/// bars and with "Open Settings" as its main button.
 struct OnboardingView: View {
     @ObservedObject var controller: OnboardingController
+    /// Watched so the access slide goes to its stop frame the moment access is granted.
+    @ObservedObject var access: AccessGate
     let l10n: L10n
+    /// Asks for access, opens System Settings and lowers the panel (`JournalPanelController`).
+    let onOpenSettings: () -> Void
+    /// Closes the panel: the single access screen has no journal to fall back to.
+    let onClosePanel: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -2260,7 +2267,9 @@ struct OnboardingView: View {
             ZStack(alignment: .topLeading) {
                 colors.field
 
-                zones(width: geometry.size.width, top: Metrics.top + Metrics.headHeight)
+                if !controller.isAccessOnly {
+                    zones(width: geometry.size.width, top: Metrics.top + Metrics.headHeight)
+                }
 
                 VStack(spacing: 0) {
                     head
@@ -2280,8 +2289,11 @@ struct OnboardingView: View {
                 .padding(.bottom, Metrics.bottom)
             }
         }
+        .environment(\.onboardingOpenSettings, onOpenSettings)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(l10n("Stash tour", "Знакомство со Stash"))
+        .accessibilityLabel(controller.isAccessOnly
+            ? l10n("Stash needs Accessibility access", "Stash нужен Универсальный доступ")
+            : l10n("Stash tour", "Знакомство со Stash"))
         .accessibilityAddTraits(.isModal)
         .onChange(of: controller.index) { index in
             announce(index)
@@ -2292,7 +2304,12 @@ struct OnboardingView: View {
 
     private var head: some View {
         HStack(spacing: 12) {
-            bars
+            // Nothing to page through on the single access screen, so it shows no bars.
+            if controller.isAccessOnly {
+                Spacer(minLength: 0)
+            } else {
+                bars
+            }
             closeButton
         }
         .frame(height: Metrics.headHeight)
@@ -2316,9 +2333,15 @@ struct OnboardingView: View {
         return offset == controller.index ? .current : .upcoming
     }
 
+    /// Closes the tutorial and leaves the journal under it; on the single access screen there is
+    /// no journal to show, so it closes the panel.
     private var closeButton: some View {
         Button {
-            controller.close()
+            if controller.isAccessOnly {
+                onClosePanel()
+            } else {
+                controller.close()
+            }
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 13, weight: .semibold))
@@ -2395,7 +2418,7 @@ struct OnboardingView: View {
     }
 
     private var isStill: Bool {
-        reduceMotion || (controller.slide.kind == .access && controller.hasAccess)
+        reduceMotion || (controller.slide.kind == .access && access.isGranted)
     }
 
     // MARK: Footer
@@ -2404,14 +2427,27 @@ struct OnboardingView: View {
         HStack(alignment: .center, spacing: 16) {
             texts
             Button {
-                controller.primaryAction()
+                if controller.isAccessOnly {
+                    onOpenSettings()
+                } else {
+                    controller.primaryAction()
+                }
             } label: {
-                Text(controller.isLast ? l10n("Start", "Начать") : l10n("Next", "Дальше"))
+                Text(primaryTitle)
                     .font(.system(size: 13, weight: .semibold))
-                    .frame(width: Metrics.buttonWidth, height: Metrics.buttonHeight)
+                    .padding(.horizontal, 16)
+                    // 150 pt wide for "Next" and "Start"; "Открыть настройки" is allowed to grow.
+                    .frame(minWidth: Metrics.buttonWidth, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
             }
             .buttonStyle(OnboardingPrimaryButtonStyle(colors: colors))
         }
+    }
+
+    private var primaryTitle: String {
+        if controller.isAccessOnly {
+            return l10n("Open Settings", "Открыть настройки")
+        }
+        return controller.isLast ? l10n("Start", "Начать") : l10n("Next", "Дальше")
     }
 
     /// Every slide's text lies in the same spot, the current one visible: the block is as tall
@@ -2459,6 +2495,8 @@ struct OnboardingView: View {
     }
 
     private func announce(_ index: Int) {
+        // One slide on its own is not a story: nothing to count.
+        guard !controller.isAccessOnly else { return }
         let count = controller.slides.count
         let message = l10n("Slide \(index + 1) of \(count)", "Слайд \(index + 1) из \(count)")
         NSAccessibility.post(
@@ -2475,7 +2513,7 @@ struct OnboardingView: View {
 
 - [ ] **Step 5: Тесты рамки**
 
-Тесты-снимки рисуют обучение в PNG через `ImageRenderer`, сцены — на стоп-кадре. Без `SNAPSHOT_DIR` они только проверяют, что всё рисуется.
+Тесты-снимки рисуют обучение в PNG через `ImageRenderer`, сцены — на стоп-кадре. Оба вида рамки: обучение на трёх слайдах и одиночный слайд «ДОСТУП». Без `SNAPSHOT_DIR` они только проверяют, что всё рисуется.
 
 Создать `Tests/BufferJournalTests/SnapshotTests.swift`:
 
@@ -2492,6 +2530,12 @@ import Testing
 struct SnapshotTests {
     private static let directory = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"].map { URL(fileURLWithPath: $0) }
     private static let schemes: [(ColorScheme, String)] = [(.light, "light"), (.dark, "dark")]
+    /// The panel at its smallest, its default and a large size.
+    private static let sizes = [
+        CGSize(width: 560, height: 360),
+        CGSize(width: 640, height: 440),
+        CGSize(width: 900, height: 600),
+    ]
 
     private func render<V: View>(_ view: V, name: String) throws {
         let renderer = ImageRenderer(content: view)
@@ -2504,30 +2548,65 @@ struct SnapshotTests {
         try png.write(to: directory.appendingPathComponent("\(name).png"))
     }
 
-    private func controller(on kind: OnboardingSceneKind) -> OnboardingController {
-        let defaults = UserDefaults(suiteName: "SnapshotTests-\(UUID().uuidString)")!
-        let controller = OnboardingController(defaults: defaults, access: FakeAccess(trusted: false), pasteOnSelection: { true })
-        controller.present(replay: true)
-        while controller.slide.kind != kind { controller.next() }
-        return controller
+    /// An Accessibility gate that answers what the test wants and never touches the system.
+    private func gate(granted: Bool) -> AccessGate {
+        AccessGate(access: AccessibilityAccess(isGranted: { granted }, request: {}))
     }
 
-    /// The whole tutorial on three slides, at the panel's smallest, default and a large size.
+    private func defaults() -> UserDefaults {
+        UserDefaults(suiteName: "SnapshotTests-\(UUID().uuidString)")!
+    }
+
+    private func controller(on kind: OnboardingSceneKind) -> (OnboardingController, AccessGate) {
+        let access = gate(granted: false)
+        let controller = OnboardingController(defaults: defaults(), access: access)
+        controller.present(replay: true)
+        while controller.slide.kind != kind { controller.next() }
+        return (controller, access)
+    }
+
+    private func accessOnlyController() -> (OnboardingController, AccessGate) {
+        let access = gate(granted: false)
+        let controller = OnboardingController(defaults: defaults(), access: access)
+        controller.presentAccessOnly()
+        return (controller, access)
+    }
+
+    private func frame(_ controller: OnboardingController, _ access: AccessGate, scheme: ColorScheme, size: CGSize) -> some View {
+        OnboardingView(
+            controller: controller,
+            access: access,
+            l10n: L10n(language: .russian),
+            onOpenSettings: {},
+            onClosePanel: {}
+        )
+        .frame(width: size.width, height: size.height)
+        .environment(\.colorScheme, scheme)
+        .environment(\.scenesHoldStopFrame, true)
+    }
+
+    /// The whole tutorial on three slides, at three panel sizes.
     @Test func tutorialFrame() throws {
         for (scheme, name) in Self.schemes {
-            for kind in [OnboardingSceneKind.hero, .search, .access] {
-                for size in [CGSize(width: 560, height: 360), CGSize(width: 640, height: 440), CGSize(width: 900, height: 600)] {
-                    let view = OnboardingView(controller: controller(on: kind), l10n: L10n(language: .russian))
-                        .frame(width: size.width, height: size.height)
-                        .environment(\.colorScheme, scheme)
-                        .environment(\.scenesHoldStopFrame, true)
-                    try render(view, name: "frame-\(kind.rawValue)-\(Int(size.width))-\(name)")
+            for kind in [OnboardingSceneKind.hero, .keys, .access] {
+                for size in Self.sizes {
+                    let (controller, access) = controller(on: kind)
+                    try render(frame(controller, access, scheme: scheme, size: size), name: "frame-\(kind.rawValue)-\(Int(size.width))-\(name)")
                 }
             }
         }
     }
-}
 
+    /// The access slide on its own: no bars, and "Открыть настройки" at the bottom.
+    @Test func accessOnlyFrame() throws {
+        for (scheme, name) in Self.schemes {
+            for size in Self.sizes {
+                let (controller, access) = accessOnlyController()
+                try render(frame(controller, access, scheme: scheme, size: size), name: "frame-access-only-\(Int(size.width))-\(name)")
+            }
+        }
+    }
+}
 ```
 
 Создать `Tests/BufferJournalTests/OnboardingViewTests.swift`:
@@ -2552,36 +2631,286 @@ Run: `swift build && swift test`
 Expected: `Build complete!`, все тесты PASS.
 
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
-Expected: PASS; в `/tmp/stash-snapshots` 18 файлов `frame-<слайд>-<ширина>-<тема>.png`.
+Expected: PASS; в `/tmp/stash-snapshots` 24 файла: 18 `frame-<слайд>-<ширина>-<тема>.png` и 6 `frame-access-only-<ширина>-<тема>.png`.
 
 - [ ] **Step 7: Посмотреть снимки**
 
-Проверка вручную: Открыть `frame-hero-640-light.png`: под полосами слева оранжевое «ПРИВЕТ, ЭТО» 44 pt, ниже пустое место под логотип. Открыть `frame-search-640-light.png` и `frame-search-640-dark.png`. Светлый: светло-серое поле, оранжевые полосы (шесть полных) и крестик в одной строке, пустая светлая карточка — холст-заглушка 480 × 240, растянутый во всю ширину места, — с обводкой и мягкой тенью, текст слева, оранжевая капсула «Дальше». Тёмный: чёрное поле, карточка с тонкой обводкой. Жёлтая полоса с перечёркнутым кругом поверх строки с полосами — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` и `frame-*-900-*` карточка так же упирается в свободное место. На `frame-hero-*` карточки нет.
+Проверка вручную: Открыть `frame-hero-640-light.png`: под полосами слева оранжевое «ПРИВЕТ, ЭТО» 44 pt, ниже пустое место под логотип, карточки нет. Открыть `frame-keys-640-light.png` и `frame-keys-640-dark.png`. Светлый: светло-серое поле, оранжевые полосы (восемь, шесть полных) и крестик в одной строке, пустая светлая карточка — холст-заглушка 480 × 240, растянутый во всю ширину места, — с обводкой и мягкой тенью, текст слева, оранжевая капсула «Дальше». Тёмный: чёрное поле, карточка с тонкой обводкой. Открыть `frame-access-640-light.png`: полосы на месте, капсула «Начать». Открыть `frame-access-only-640-light.png`: полос нет, в шапке один крестик справа, карточка стала выше на 13 pt, внизу капсула «Открыть настройки». Жёлтая полоса с перечёркнутым кругом поверх шапки — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` и `frame-*-900-*` карточка так же упирается в свободное место.
 
 - [ ] **Step 8: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding Tests/BufferJournalTests/SnapshotTests.swift Tests/BufferJournalTests/OnboardingViewTests.swift
-git commit -m "Tutorial frame: bars, card and footer" -m "The stories layout from the concept. Only the first slide keeps a big title;
-the card hugs its scene. Not wired into the app yet; scenes are placeholders."
+git commit -m "Tutorial frame: bars, card and footer" -m "The stories layout from the concept, in both looks: the tutorial with its progress
+bars, and the access slide alone with Open Settings at the bottom. Only the first
+slide keeps a big title; the card hugs its scene. Not wired into the app yet;
+scenes are placeholders."
 ```
 
+---
 
 ### Task 10: Подключение: журнал, панель, меню, README
 
 **Files:**
+- Modify: `Sources/BufferJournal/JournalKeys.swift` — режимы клавиш: `.off`, `.journal`, `.onboarding`
 - Modify: `Sources/BufferJournal/Localization.swift` — `StatusMenuTitles`
-- Modify: `Sources/BufferJournal/JournalView.swift` — слой обучения поверх всего, клавиши сначала обучению
-- Modify: `Sources/BufferJournal/JournalPanelController.swift` — `showOnboarding(replay:)`, перезапуск сцены при показе панели
+- Modify: `Sources/BufferJournal/JournalView.swift` — слой обучения поверх всего, клавиши сначала обучению; экран доступа больше не отдельный
+- Delete: `Sources/BufferJournal/AccessScreen.swift` — его место занял слайд «ДОСТУП»
+- Modify: `Sources/BufferJournal/JournalPanelController.swift` — `showOnboarding(replay:)`, перезапуск сцены при показе панели, обучение по центру экрана, режим клавиш по содержимому панели
 - Modify: `Sources/BufferJournal/AppDelegate.swift` — контроллер, показ при запуске, пункт «Обучение»
 - Modify: `README.md`
+- Test: `Tests/BufferJournalTests/JournalKeysTests.swift` (переписан под режимы), `Tests/BufferJournalTests/JournalKeyActionTests.swift`
 
 **Interfaces:**
-- Consumes: `OnboardingController`, `SystemAccessibilityAccess` (Task 8), `OnboardingView` (Task 9).
-- Produces: `StatusMenuTitles(l10n:)` — `openStash`, `tutorial`, `pasteOnSelection`, `closeAfterSelection`, `theme`, `language`, `clearHistory`, `quit`. Меню значка и сцена «НАСТРОЙКИ» (Task 18) берут названия отсюда.
-- Produces: `JournalPanelController(store:writer:settings:onboarding:)`, `showOnboarding(replay: Bool)`; `JournalView(store:settings:onboarding:…)`.
+- Consumes: `OnboardingController` (Task 8) — `init(defaults:access:)`, `isPresented`, `isAccessOnly`, `slide`, `present(replay:)`, `presentAccessOnly()`, `restartScene()`, `requestAccess()`, `handleKey(_ key: JournalKey) -> Bool`, `shouldShowOnLaunch`; `OnboardingView(controller:access:l10n:onOpenSettings:onClosePanel:)` (Task 9); `OnboardingSceneKind.access` (Task 5); `AccessGate` (уже в приложении).
+- Produces: `enum JournalKey` — добавлены `.left` и `.right`; `JournalKeys.Mode` (`off`, `journal`, `onboarding`), `JournalKeys.PanelContent` (`journal`, `onboarding`, `access`), `JournalKeys.mode(intercepts:panelVisible:content:stashActive:menuOpen:) -> Mode`, `var mode: Mode`.
+- Produces: `StatusMenuTitles(l10n:)` — `openStash`, `tutorial`, `closeAfterSelection`, `interceptKeys`, `openAtCaret`, `theme`, `language`, `clearHistory`, `quit`. Меню значка и сцена «НАСТРОЙКИ» (Task 18) берут названия отсюда.
+- Produces: `JournalPanelController(store:writer:settings:hotKeys:access:onboarding:)`, `showOnboarding(replay: Bool)`; `JournalView(store:settings:access:onboarding:keyEvents:…)`.
+- Removes: `AccessScreen`; `JournalKeys.shouldListen(intercepts:panelVisible:journalShown:stashActive:menuOpen:)`; `JournalKeys.isListening`.
 
-- [ ] **Step 1: Названия пунктов меню в одном месте**
+- [ ] **Step 1: Падающий тест режимов клавиш**
+
+Правило одно и чистое: что Stash забирает у приложения под панелью, решает содержимое панели. Журнал — ↑ ↓ Return Esc, обучение — ← → Return Esc, экран доступа — ничего.
+
+Переписать `Tests/BufferJournalTests/JournalKeysTests.swift` целиком:
+
+```swift
+import Testing
+@testable import BufferJournal
+
+struct JournalKeysTests {
+    @Test func theOpenJournalTakesItsOwnKeys() {
+        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .journal, stashActive: false, menuOpen: false) == .journal)
+    }
+
+    @Test func theTutorialTakesTheArrowsItNeeds() {
+        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .onboarding, stashActive: false, menuOpen: false) == .onboarding)
+    }
+
+    @Test func theAccessScreenTakesNone() {
+        // The user is on their way to System Settings, where Return and Esc are theirs.
+        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .access, stashActive: false, menuOpen: false) == .off)
+    }
+
+    @Test func letsTheKeysGoOtherwise() {
+        for content in [JournalKeys.PanelContent.journal, .onboarding] {
+            #expect(JournalKeys.mode(intercepts: true, panelVisible: false, content: content, stashActive: false, menuOpen: false) == .off)
+            #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: content, stashActive: true, menuOpen: false) == .off)
+            #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: content, stashActive: false, menuOpen: true) == .off)
+        }
+    }
+
+    @Test func staysOutOfTheWayWithInterceptKeysOff() {
+        #expect(JournalKeys.mode(intercepts: false, panelVisible: true, content: .journal, stashActive: false, menuOpen: false) == .off)
+        #expect(JournalKeys.mode(intercepts: false, panelVisible: true, content: .onboarding, stashActive: false, menuOpen: false) == .off)
+    }
+}
+```
+
+В `Tests/BufferJournalTests/JournalKeyActionTests.swift` заменить:
+
+```swift
+    @Test func aDialogIgnoresArrowsAndReturn() {
+```
+
+на:
+
+```swift
+    @Test func theJournalIgnoresTheTutorialsArrows() {
+        // Left and Right are registered only while the tutorial is open; the journal drops them.
+        #expect(JournalKeyAction.resolve(.left, dialogShown: false, hasSelection: true) == .ignore)
+        #expect(JournalKeyAction.resolve(.right, dialogShown: false, hasSelection: true) == .ignore)
+    }
+
+    @Test func aDialogIgnoresArrowsAndReturn() {
+```
+
+Run: `swift test --filter JournalKeys`
+Expected: не собирается — `JournalKeys.mode`, `JournalKeys.PanelContent`, `JournalKey.left` и `.right` ещё не существуют.
+
+- [ ] **Step 2: Режимы клавиш**
+
+В `Sources/BufferJournal/JournalKeys.swift` заменить:
+
+```swift
+/// Keys the journal takes while it is open: plain Up, Down, Return (or keypad Enter) and Escape.
+enum JournalKey: Equatable {
+    case up
+    case down
+    case enter
+    case escape
+}
+```
+
+на:
+
+```swift
+/// Keys Stash takes while the panel is open: the journal's plain Up, Down, Return (or keypad
+/// Enter) and Escape, and the tutorial's Left and Right.
+enum JournalKey: Equatable {
+    case up
+    case down
+    case left
+    case right
+    case enter
+    case escape
+}
+```
+
+В `Sources/BufferJournal/JournalKeys.swift` заменить:
+
+```swift
+        switch key {
+        case .up: return .moveUp
+        case .down: return .moveDown
+        case .enter: return hasSelection ? .paste : .ignore
+        case .escape: return .closePanel
+        }
+```
+
+на:
+
+```swift
+        switch key {
+        case .up: return .moveUp
+        case .down: return .moveDown
+        // The tutorial's arrows never reach the journal: they are taken only while it is open.
+        case .left, .right: return .ignore
+        case .enter: return hasSelection ? .paste : .ignore
+        case .escape: return .closePanel
+        }
+```
+
+В `Sources/BufferJournal/JournalKeys.swift` заменить:
+
+```swift
+/// The journal's hotkeys. While listening, plain Up, Down, Return, keypad Enter and Escape are
+/// registered as global hotkeys, so macOS hands them to Stash instead of the app under the panel.
+/// macOS swallows the auto-repeats of a held hotkey, so Up and Down repeat on a timer at the
+/// system key-repeat rate.
+@MainActor
+final class JournalKeys {
+    /// Listen only while Intercept Keys is on, the journal is on screen, Stash is not the active
+    /// app (its clip editor needs these keys) and no menu of Stash is open (menus are walked with
+    /// the arrows). Turned off, every key stays with the app the user is typing in.
+    nonisolated static func shouldListen(intercepts: Bool, panelVisible: Bool, journalShown: Bool, stashActive: Bool, menuOpen: Bool) -> Bool {
+        intercepts && panelVisible && journalShown && !stashActive && !menuOpen
+    }
+
+    let events = PassthroughSubject<JournalKey, Never>()
+
+    var isListening = false {
+        didSet {
+            guard isListening != oldValue else { return }
+            if isListening {
+                register()
+            } else {
+                unregister()
+            }
+        }
+    }
+
+    private static let bindings: [(keyCode: Int, key: JournalKey)] = [
+        (kVK_UpArrow, .up),
+        (kVK_DownArrow, .down),
+        (kVK_Return, .enter),
+        (kVK_ANSI_KeypadEnter, .enter),
+        (kVK_Escape, .escape),
+    ]
+```
+
+на:
+
+```swift
+/// Stash's hotkeys while the panel is open. The keys of the mode in force are registered as
+/// global hotkeys, so macOS hands them to Stash instead of the app under the panel. macOS
+/// swallows the auto-repeats of a held hotkey, so Up and Down repeat on a timer at the system
+/// key-repeat rate.
+@MainActor
+final class JournalKeys {
+    /// What the panel shows right now.
+    enum PanelContent: Equatable {
+        case journal
+        case onboarding
+        case access
+    }
+
+    /// Which keys are registered.
+    enum Mode: Equatable {
+        /// None: every key stays with the app the user is typing in.
+        case off
+        /// Up, Down, Return, keypad Enter, Escape.
+        case journal
+        /// Left, Right, Return, keypad Enter, Escape.
+        case onboarding
+    }
+
+    /// Take keys only while Intercept Keys is on, the panel is on screen, Stash is not the active
+    /// app (its clip editor needs these keys) and no menu of Stash is open (menus are walked with
+    /// the arrows). The access screen takes none: the user is on their way to System Settings,
+    /// where Return and Escape are theirs.
+    nonisolated static func mode(intercepts: Bool, panelVisible: Bool, content: PanelContent, stashActive: Bool, menuOpen: Bool) -> Mode {
+        guard intercepts, panelVisible, !stashActive, !menuOpen else { return .off }
+
+        switch content {
+        case .journal: return .journal
+        case .onboarding: return .onboarding
+        case .access: return .off
+        }
+    }
+
+    let events = PassthroughSubject<JournalKey, Never>()
+
+    var mode: Mode = .off {
+        didSet {
+            guard mode != oldValue else { return }
+            unregister()
+            register()
+        }
+    }
+
+    private static func bindings(for mode: Mode) -> [(keyCode: Int, key: JournalKey)] {
+        switch mode {
+        case .off:
+            return []
+        case .journal:
+            return [
+                (kVK_UpArrow, .up),
+                (kVK_DownArrow, .down),
+                (kVK_Return, .enter),
+                (kVK_ANSI_KeypadEnter, .enter),
+                (kVK_Escape, .escape),
+            ]
+        case .onboarding:
+            return [
+                (kVK_LeftArrow, .left),
+                (kVK_RightArrow, .right),
+                (kVK_Return, .enter),
+                (kVK_ANSI_KeypadEnter, .enter),
+                (kVK_Escape, .escape),
+            ]
+        }
+    }
+```
+
+В `Sources/BufferJournal/JournalKeys.swift` заменить:
+
+```swift
+    private func register() {
+        for binding in Self.bindings {
+```
+
+на:
+
+```swift
+    private func register() {
+        for binding in Self.bindings(for: mode) {
+```
+
+Run: `swift build 2>&1 | tail -20`
+Expected: `JournalPanelController.swift` ругается на `keys.isListening` и `JournalKeys.shouldListen` — их чинит Step 6; остальных ошибок в `JournalKeys.swift` нет.
+
+- [ ] **Step 3: Названия пунктов меню в одном месте**
 
 В `Sources/BufferJournal/Localization.swift` заменить:
 
@@ -2598,8 +2927,9 @@ struct StatusMenuTitles {
 
     var openStash: String { l10n("Open Stash", "Открыть Stash") }
     var tutorial: String { l10n("Tutorial", "Обучение") }
-    var pasteOnSelection: String { l10n("Paste on Selection", "Вставлять при выборе") }
     var closeAfterSelection: String { l10n("Close After Selection", "Закрывать после выбора") }
+    var interceptKeys: String { l10n("Intercept Keys", "Перехватывать клавиши") }
+    var openAtCaret: String { l10n("Open at the Cursor", "Открывать у курсора") }
     var theme: String { l10n("Theme", "Тема") }
     var language: String { l10n("Language", "Язык") }
     var clearHistory: String { l10n("Clear History", "Очистить историю") }
@@ -2609,26 +2939,58 @@ struct StatusMenuTitles {
 private struct SolidAccentsKey: EnvironmentKey {
 ```
 
-- [ ] **Step 2: Журнал: слой обучения и клавиши**
+- [ ] **Step 4: Журнал: слой обучения вместо экрана доступа**
 
-Обучение лежит в том же `ZStack`, что диалоги и тост, над ними (`zIndex(40)`), и потому обрезается скруглением панели. Пока оно открыто, все клавиши без ⌘ ⌃ ⌥ идут ему.
+Обучение лежит в том же `ZStack`, что диалоги и тост, над ними (`zIndex(40)`), и потому обрезается скруглением панели. Отдельного экрана доступа больше нет: без разрешения панель показывает тот же слой с одиночным слайдом «ДОСТУП», а журнал остаётся под ним.
 
 В `Sources/BufferJournal/JournalView.swift` заменить:
 
 ```swift
+    @ObservedObject var store: ClipboardHistoryStore
     @ObservedObject var settings: AppSettings
+    @ObservedObject var access: AccessGate
 ```
 
 на:
 
 ```swift
+    @ObservedObject var store: ClipboardHistoryStore
     @ObservedObject var settings: AppSettings
+    @ObservedObject var access: AccessGate
     @ObservedObject var onboarding: OnboardingController
 ```
 
 В `Sources/BufferJournal/JournalView.swift` заменить:
 
 ```swift
+            if access.isGranted {
+                journal
+                    .transition(.opacity)
+            } else {
+                AccessScreen(palette: palette, onOpenSettings: onOpenAccessSettings, onClose: onClose)
+                    .transition(.opacity)
+            }
+
+            // Dialogs belong to the journal; the access screen never shows one left over.
+            if access.isGranted, isClearConfirmationShown || entryPendingDeletion != nil {
+```
+
+на:
+
+```swift
+            journal
+
+            // Dialogs belong to the journal; the access slide over it never shows one left over.
+            if access.isGranted, isClearConfirmationShown || entryPendingDeletion != nil {
+```
+
+В `Sources/BufferJournal/JournalView.swift` заменить:
+
+```swift
+            if let toastMessage {
+                ToastOverlay(message: toastMessage)
+                    .padding(.bottom, 56)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     .zIndex(30)
             }
@@ -2637,53 +2999,94 @@ private struct SolidAccentsKey: EnvironmentKey {
 на:
 
 ```swift
+            if let toastMessage {
+                ToastOverlay(message: toastMessage)
+                    .padding(.bottom, 56)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     .zIndex(30)
             }
 
+            // The tutorial, and the access slide on its own, cover the whole panel.
             if onboarding.isPresented {
-                OnboardingView(controller: onboarding, l10n: l10n)
-                    .transition(.opacity)
-                    .zIndex(40)
+                OnboardingView(
+                    controller: onboarding,
+                    access: access,
+                    l10n: l10n,
+                    onOpenSettings: onOpenAccessSettings,
+                    onClosePanel: onClose
+                )
+                .transition(.opacity)
+                .zIndex(40)
             }
 ```
 
 В `Sources/BufferJournal/JournalView.swift` заменить:
 
 ```swift
-        .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
+        .animation(.easeOut(duration: 0.2), value: access.isGranted)
 ```
 
 на:
 
 ```swift
-        .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .animation(.easeOut(duration: 0.2), value: onboarding.isPresented)
 ```
 
 В `Sources/BufferJournal/JournalView.swift` заменить:
 
 ```swift
-    private func handleKey(_ event: NSEvent) -> Bool {
+    /// Keys arrive as hotkeys while the journal is open (see `JournalKeys`).
+    private func handleKey(_ key: JournalKey) {
+        let action = JournalKeyAction.resolve(
 ```
 
 на:
 
 ```swift
-    private func handleKey(_ event: NSEvent) -> Bool {
-        // The tutorial covers the journal and takes every plain key while it is open.
-        if onboarding.isPresented {
-            return onboarding.handleKey(event.keyCode)
-        }
+    /// Keys arrive as hotkeys while the panel is open (see `JournalKeys`).
+    private func handleKey(_ key: JournalKey) {
+        // The tutorial covers the journal and takes the keys it knows while it is open.
+        if onboarding.isPresented, onboarding.handleKey(key) { return }
 
+        let action = JournalKeyAction.resolve(
 ```
 
-- [ ] **Step 3: Панель**
+- [ ] **Step 5: Убрать экран доступа**
+
+Его заголовок, текст, кнопка и подсказка живут теперь в слайде «ДОСТУП» (Task 19).
+
+```bash
+git rm Sources/BufferJournal/AccessScreen.swift
+```
+
+- [ ] **Step 6: Панель**
+
+Панель с обучением встаёт по центру экрана мимо «Открывать у курсора», при каждом показе перезапускает сцену, а без разрешения сама поднимает одиночный слайд «ДОСТУП». Режим клавиш идёт за содержимым панели, и смена слайда его меняет.
+
+В `Sources/BufferJournal/JournalPanelController.swift` заменить:
+
+```swift
+import AppKit
+import QuartzCore
+import SwiftUI
+```
+
+на:
+
+```swift
+import AppKit
+import Combine
+import QuartzCore
+import SwiftUI
+```
 
 В `Sources/BufferJournal/JournalPanelController.swift` заменить:
 
 ```swift
     private let settings: AppSettings
+    private let access: AccessGate
+    private let keys: JournalKeys
     private var panel: NSPanel?
 ```
 
@@ -2691,29 +3094,42 @@ private struct SolidAccentsKey: EnvironmentKey {
 
 ```swift
     private let settings: AppSettings
+    private let access: AccessGate
     private let onboarding: OnboardingController
+    private let keys: JournalKeys
     private var panel: NSPanel?
+    private var onboardingObserver: AnyCancellable?
 ```
 
 В `Sources/BufferJournal/JournalPanelController.swift` заменить:
 
 ```swift
-    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings) {
+    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate) {
         self.store = store
         self.writer = writer
         self.settings = settings
-    }
+        self.access = access
+        keys = JournalKeys(hotKeys: hotKeys)
 ```
 
 на:
 
 ```swift
-    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, onboarding: OnboardingController) {
+    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate, onboarding: OnboardingController) {
         self.store = store
         self.writer = writer
         self.settings = settings
+        self.access = access
         self.onboarding = onboarding
-    }
+        keys = JournalKeys(hotKeys: hotKeys)
+
+        // Which slide is on screen decides the keys, and the access slide takes none.
+        // `objectWillChange` fires before the change, so the mode is read a turn of the run loop later.
+        onboardingObserver = onboarding.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in
+                self?.updateKeys()
+            }
+        }
 ```
 
 В `Sources/BufferJournal/JournalPanelController.swift` заменить:
@@ -2721,6 +3137,9 @@ private struct SolidAccentsKey: EnvironmentKey {
 ```swift
     func show() {
         let panel = makePanelIfNeeded()
+        positionIfNeeded(panel)
+        access.refresh()
+        panel.level = .floating
 ```
 
 на:
@@ -2729,86 +3148,243 @@ private struct SolidAccentsKey: EnvironmentKey {
     /// Opens the tutorial on its first slide, showing the panel if it is hidden.
     func showOnboarding(replay: Bool) {
         onboarding.present(replay: replay)
-        if panel?.isVisible != true {
+        // Already on screen: move it to the middle for the stories and take the tutorial's keys.
+        if isPanelVisible, let panel, panel.level == .floating {
+            positionIfNeeded(panel)
+            updateKeys()
+        } else {
             show()
         }
     }
 
     func show() {
-        // A tutorial left open when the panel was hidden starts its scene over.
-        onboarding.restartScene()
         let panel = makePanelIfNeeded()
+        access.refresh()
+        // Without access there is no journal to show: the panel puts up the access slide alone.
+        if !access.isGranted, !onboarding.isPresented {
+            onboarding.presentAccessOnly()
+        }
+        // A tutorial left open while the panel was hidden starts its scene over.
+        onboarding.restartScene()
+        positionIfNeeded(panel)
+        panel.level = .floating
 ```
 
 В `Sources/BufferJournal/JournalPanelController.swift` заменить:
 
 ```swift
-            store: store,
-            settings: settings,
-            onSelect:
+    private func updateKeys() {
+        keys.isListening = JournalKeys.shouldListen(
+            intercepts: settings.interceptKeys,
+            panelVisible: isPanelVisible,
+            journalShown: access.isGranted,
+            stashActive: NSApp.isActive,
+            menuOpen: !trackingMenus.isEmpty
+        )
+    }
 ```
 
 на:
 
 ```swift
-            store: store,
-            settings: settings,
-            onboarding: onboarding,
-            onSelect:
+    private func updateKeys() {
+        keys.mode = JournalKeys.mode(
+            intercepts: settings.interceptKeys,
+            panelVisible: isPanelVisible,
+            content: panelContent,
+            stashActive: NSApp.isActive,
+            menuOpen: !trackingMenus.isEmpty
+        )
+    }
+
+    /// What the panel shows right now. The access slide counts the same in both of its looks —
+    /// last in the tutorial and on its own — because both send the user to System Settings.
+    private var panelContent: JournalKeys.PanelContent {
+        guard onboarding.isPresented else {
+            return access.isGranted ? .journal : .access
+        }
+        return onboarding.slide.kind == .access ? .access : .onboarding
+    }
 ```
 
-- [ ] **Step 4: Приложение и меню**
+В `Sources/BufferJournal/JournalPanelController.swift` заменить:
+
+```swift
+    private func openAccessSettings() {
+        access.request()
+        panel?.level = .normal
+    }
+```
+
+на:
+
+```swift
+    private func openAccessSettings() {
+        onboarding.requestAccess()
+        panel?.level = .normal
+    }
+```
+
+В `Sources/BufferJournal/JournalPanelController.swift` заменить:
+
+```swift
+        let contentView = JournalView(
+            store: store,
+            settings: settings,
+            access: access,
+            keyEvents: keys.events,
+```
+
+на:
+
+```swift
+        let contentView = JournalView(
+            store: store,
+            settings: settings,
+            access: access,
+            onboarding: onboarding,
+            keyEvents: keys.events,
+```
+
+В `Sources/BufferJournal/JournalPanelController.swift` заменить:
+
+```swift
+    private func positionIfNeeded(_ panel: NSPanel) {
+        // Next to the text cursor, like Win+V. The panel is read before it is ordered in, while
+        // the app the user types in still holds the focus.
+        if settings.openAtCaret, let anchor = CaretLocator.anchor()?.rect {
+```
+
+на:
+
+```swift
+    private func positionIfNeeded(_ panel: NSPanel) {
+        // The stories open in the middle of the screen: nobody is typing while they play, so
+        // "Open at the Cursor" does not apply to them.
+        if onboarding.isPresented {
+            center(panel)
+            return
+        }
+
+        // Next to the text cursor, like Win+V. The panel is read before it is ordered in, while
+        // the app the user types in still holds the focus.
+        if settings.openAtCaret, let anchor = CaretLocator.anchor()?.rect {
+```
+
+В `Sources/BufferJournal/JournalPanelController.swift` заменить:
+
+```swift
+        guard let screen = NSScreen.main else {
+            panel.center()
+            return
+        }
+
+        let frame = screen.visibleFrame
+        let panelSize = panel.frame.size
+        let x = frame.midX - panelSize.width / 2
+        let y = frame.midY - panelSize.height / 2 + 40
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+```
+
+на:
+
+```swift
+        center(panel)
+    }
+
+    /// The middle of the screen, a touch above centre.
+    private func center(_ panel: NSPanel) {
+        guard let screen = NSScreen.main else {
+            panel.center()
+            return
+        }
+
+        let frame = screen.visibleFrame
+        let panelSize = panel.frame.size
+        let x = frame.midX - panelSize.width / 2
+        let y = frame.midY - panelSize.height / 2 + 40
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+```
+
+- [ ] **Step 7: Приложение и меню**
 
 Пункт «Обучение» — сразу под «Открыть Stash»: оба открывают панель, а «Очистить историю» очищает без подтверждения, и промах стоил бы истории.
 
 В `Sources/BufferJournal/AppDelegate.swift` заменить:
 
 ```swift
-    private var settings: AppSettings!
+    private var access: AccessGate!
+    private var panelController: JournalPanelController!
 ```
 
 на:
 
 ```swift
-    private var settings: AppSettings!
+    private var access: AccessGate!
     private var onboarding: OnboardingController!
+    private var panelController: JournalPanelController!
 ```
 
 В `Sources/BufferJournal/AppDelegate.swift` заменить:
 
 ```swift
-        settings = AppSettings()
-        panelController = JournalPanelController(store: store, writer: writer, settings: settings)
+        access = AccessGate()
+        hotKeyController = HotKeyController()
+        hotKeyController.install()
+        panelController = JournalPanelController(
+            store: store,
+            writer: writer,
+            settings: settings,
+            hotKeys: hotKeyController,
+            access: access
+        )
 ```
 
 на:
 
 ```swift
-        let settings = AppSettings()
-        self.settings = settings
-        onboarding = OnboardingController(
-            access: SystemAccessibilityAccess(),
-            pasteOnSelection: { settings.pasteOnSelection }
+        access = AccessGate()
+        onboarding = OnboardingController(defaults: .standard, access: access)
+        hotKeyController = HotKeyController()
+        hotKeyController.install()
+        panelController = JournalPanelController(
+            store: store,
+            writer: writer,
+            settings: settings,
+            hotKeys: hotKeyController,
+            access: access,
+            onboarding: onboarding
         )
-        panelController = JournalPanelController(store: store, writer: writer, settings: settings, onboarding: onboarding)
 ```
 
 В `Sources/BufferJournal/AppDelegate.swift` заменить:
 
 ```swift
+        configureStatusItem()
         monitor.start()
-        hotKeyController.register()
+
+        // Pasting needs Accessibility access; without it the panel opens right away on the access screen.
+        if !access.isGranted {
+            panelController.show()
+        }
     }
 ```
 
 на:
 
 ```swift
+        configureStatusItem()
         monitor.start()
-        hotKeyController.register()
 
+        // The tour runs once, on the first launch after the update, and its last slide asks for
+        // access. Later on, pasting still needs that access, and without it the panel opens right
+        // away on the access slide alone.
         if onboarding.shouldShowOnLaunch {
             panelController.showOnboarding(replay: false)
+        } else if !access.isGranted {
+            panelController.show()
         }
     }
 ```
@@ -2821,11 +3397,14 @@ private struct SolidAccentsKey: EnvironmentKey {
         menu.addItem(menuItem(l10n("Open Stash", "Открыть Stash"), action: #selector(openJournal)))
         menu.addItem(NSMenuItem.separator())
 
-        pasteOnSelectionItem = menuItem(l10n("Paste on Selection", "Вставлять при выборе"), action: #selector(togglePasteOnSelection))
-        menu.addItem(pasteOnSelectionItem)
-
         closeAfterSelectionItem = menuItem(l10n("Close After Selection", "Закрывать после выбора"), action: #selector(toggleCloseAfterSelection))
         menu.addItem(closeAfterSelectionItem)
+
+        interceptKeysItem = menuItem(l10n("Intercept Keys", "Перехватывать клавиши"), action: #selector(toggleInterceptKeys))
+        menu.addItem(interceptKeysItem)
+
+        openAtCaretItem = menuItem(l10n("Open at the Cursor", "Открывать у курсора"), action: #selector(toggleOpenAtCaret))
+        menu.addItem(openAtCaretItem)
 
         let themeItem = NSMenuItem(title: l10n("Theme", "Тема"), action: nil, keyEquivalent: "")
 ```
@@ -2841,11 +3420,14 @@ private struct SolidAccentsKey: EnvironmentKey {
         menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial)))
         menu.addItem(NSMenuItem.separator())
 
-        pasteOnSelectionItem = menuItem(titles.pasteOnSelection, action: #selector(togglePasteOnSelection))
-        menu.addItem(pasteOnSelectionItem)
-
         closeAfterSelectionItem = menuItem(titles.closeAfterSelection, action: #selector(toggleCloseAfterSelection))
         menu.addItem(closeAfterSelectionItem)
+
+        interceptKeysItem = menuItem(titles.interceptKeys, action: #selector(toggleInterceptKeys))
+        menu.addItem(interceptKeysItem)
+
+        openAtCaretItem = menuItem(titles.openAtCaret, action: #selector(toggleOpenAtCaret))
+        menu.addItem(openAtCaretItem)
 
         let themeItem = NSMenuItem(title: titles.theme, action: nil, keyEquivalent: "")
 ```
@@ -2896,38 +3478,53 @@ private struct SolidAccentsKey: EnvironmentKey {
     }
 ```
 
-- [ ] **Step 5: README**
+- [ ] **Step 8: README**
 
 В `README.md` заменить:
 
 ```markdown
-- Menu settings can also paste immediately after selection, close the journal after selection, and switch theme and interface language (System, English, Русский).
+- Menu settings open the journal at the cursor (`Open at the Cursor`, on by default), close it after a paste or copy, take or leave the journal's keys (`Intercept Keys`, on by default), and switch theme and interface language (System, English, Русский).
 ```
 
 на:
 
 ```markdown
-- Menu settings can also paste immediately after selection, close the journal after selection, and switch theme and interface language (System, English, Русский).
-- A short tour opens inside the journal on first launch; Tutorial in the menu bar menu plays it again. The default theme is Stash Auto.
+- Menu settings open the journal at the cursor (`Open at the Cursor`, on by default), close it after a paste or copy, take or leave the journal's keys (`Intercept Keys`, on by default), and switch theme and interface language (System, English, Русский).
+- A short tour opens inside the panel on the first launch and walks through the journal in eight slides; → and Return go on, ← goes back, Esc closes it. `Tutorial` in the menu bar menu plays it again. The default theme is Stash Auto.
 ```
 
-- [ ] **Step 6: Сборка и тесты**
+В `README.md` заменить:
+
+```markdown
+Stash needs Accessibility access to paste (System Settings → Privacy & Security → Accessibility); until it has it, the journal shows an access screen with a button that opens those settings. The app is signed ad hoc, so macOS treats every update as a new app: if the access screen stays although Stash is switched on, remove Stash from the list with − and click Open Settings again.
+```
+
+на:
+
+```markdown
+Stash needs Accessibility access to paste (System Settings → Privacy & Security → Accessibility); until it has it, the panel shows the tour's access slide on its own, with a button that opens those settings. The app is signed ad hoc, so macOS treats every update as a new app: if that slide stays although Stash is switched on, remove Stash from the list with − and click Open Settings again.
+```
+
+- [ ] **Step 9: Сборка и тесты**
 
 Run: `swift build && swift test`
-Expected: `Build complete!`, все тесты PASS.
+Expected: `Build complete!`, все тесты PASS, в том числе `JournalKeysTests` и `JournalKeyActionTests`.
 
-- [ ] **Step 7: Проверить в приложении**
+- [ ] **Step 10: Проверить в приложении**
 
-Проверка вручную: Закрыть установленный Stash. `Scripts/build_app.sh`, затем `defaults delete local.buffer-journal OnboardingSeenVersion` и `open .build/Stash.app`. Панель открывается сама, на ней обучение: «ПРИВЕТ», полосы, пустые карточки. → и Return листают вперёд, ← назад, клик слева назад, справа вперёд; буквы не печатаются в поиск под обучением. Esc закрывает обучение, под ним журнал; второй Esc закрывает панель. Перезапуск — обучение само не открывается. В меню значка «Обучение» под «Открыть Stash» — открывает с первого слайда. ⌥V посреди обучения прячет панель; следующий ⌥V — тот же слайд.
+Проверка вручную: Закрыть установленный Stash. `Scripts/build_app.sh`, затем `defaults delete local.buffer-journal OnboardingSeenVersion` и `open .build/Stash.app`. Панель открывается сама по центру экрана, на ней обучение: «ПРИВЕТ, ЭТО», полосы, пустые карточки. → и Return листают вперёд, ← назад, клик по левой трети назад, по остальному вперёд; буквы при этом идут в приложение под панелью. Esc закрывает обучение, под ним журнал; второй Esc закрывает панель. Перезапуск — обучение само не открывается. В меню значка «Обучение» под «Открыть Stash» — открывает с первого слайда и ставит панель по центру, даже с включённой настройкой «Открывать у курсора». ⌥V посреди обучения прячет панель; следующий ⌥V — тот же слайд, сцена с начала. На последнем слайде «ДОСТУП» (если доступа нет) ←, →, Return и Esc не работают, листается мышью. Без разрешения и с уже увиденным обучением ⌥V открывает одиночный слайд «ДОСТУП»: полос нет, внизу «Открыть настройки», крестик закрывает панель.
 
-- [ ] **Step 8: Коммит**
+- [ ] **Step 11: Коммит**
 
 ```bash
-git add Sources/BufferJournal/Localization.swift Sources/BufferJournal/JournalView.swift Sources/BufferJournal/JournalPanelController.swift Sources/BufferJournal/AppDelegate.swift README.md
-git commit -m "Show the tutorial on first launch and from the menu" -m "The tutorial lies over the journal and takes plain keys while open. A Tutorial
-item under Open Stash plays it again without marking anything."
+git add Sources/BufferJournal Tests/BufferJournalTests README.md
+git commit -m "Show the tutorial on first launch and from the menu" -m "The tutorial lies over the journal and takes ←, →, Return and Esc while it is open;
+the access slide takes none. The separate access screen is gone: without access the
+panel shows that slide alone. A Tutorial item under Open Stash plays the tour again
+without marking anything."
 ```
 
+---
 
 ### Task 11: Набор для сцен: указатель, клавиши, окна, демо-клипы, панель превью
 
@@ -2940,7 +3537,7 @@ item under Open Stash plays it again without marking anything."
 **Interfaces:**
 - Consumes: `EntryRow`, `EntryThumb`, `GlassIconButton`, `TranslucentButtonStyle`, `ThemePalette` (Tasks 2–3), `ClipLabels` (Task 1), `CursorState`, `ClickRipple`, `SceneTime` (Task 7), `Localized` (Task 5).
 - Produces: `ThemePalette.scene(_ colorScheme:)`, `listSurface`, `detailSurface`; `SceneCursor(state:)`, `SceneRipple(ripple:)`, `SceneKeycap(label:secondary:caption:size:pressed:)`, `SceneWindow(title:palette:content:)`, `TrafficLights()`, `SceneTextLine(width:palette:)`, `SceneCaret(height:visible:)` и `SceneCaret.isVisible(at:duration:)`, `PhotoArt(style: .mountains | .sunset)`.
-- Produces: `DemoClip { id, entry, thumbnail, fileIcon, pixelSize; pinned(_:), matches(_:_:) }`, `DemoClips.text(_:_:_:at:_:)`, `DemoClips.image(_:_:pixelSize:at:_:)`, `DemoClips.file(_:_:bytes:_:at:_:)`, `DemoImages.thumbnail(_:)`, `DemoImages.pdfIcon`, `DemoRow(clip:isSelected:isHovered:palette:)`, `AnyTransition.journalRow`, `DemoDetailPane(clip:photo:palette:)`.
+- Produces: `DemoClip { id, entry, thumbnail, fileIcon, pixelSize; pinned(_:) }`, `DemoClips.text(_:_:_:at:_:)`, `DemoClips.image(_:_:pixelSize:at:_:)`, `DemoClips.file(_:_:bytes:_:at:_:)`, `DemoImages.thumbnail(_:)`, `DemoImages.pdfIcon`, `DemoRow(clip:isSelected:isHovered:palette:)`, `AnyTransition.journalRow`, `DemoDetailPane(clip:photo:palette:)`.
 
 - [ ] **Step 1: Детали сцен**
 
@@ -3193,7 +3790,7 @@ struct PhotoArt: View {
 
 - [ ] **Step 2: Демо-клипы**
 
-Демо-клип — настоящая `ClipboardEntry` и то, что для неё дал бы журнал: миниатюра, значок файла, размер в пикселях. Строка сцены — настоящий `EntryRow` с подписями из `ClipLabels`. Личность клипа одна и та же из кадра в кадр, иначе строки теряли бы состояние.
+Демо-клип — настоящая `ClipboardEntry` и то, что для неё дал бы журнал: миниатюра, значок файла, размер в пикселях. Строка сцены — настоящий `EntryRow` с подписями из `ClipLabels`. Личность клипа одна и та же из кадра в кадр, иначе строки теряли бы состояние. Поиска в журнале нет, поэтому у клипа нет и правила совпадения: `ClipLabels` умеет только подписи.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/DemoClips.swift`:
 
@@ -3214,10 +3811,6 @@ struct DemoClip: Identifiable {
         var copy = self
         copy.entry.isPinned = isPinned
         return copy
-    }
-
-    func matches(_ query: String, _ l10n: L10n) -> Bool {
-        ClipLabels.matches(entry, query, pixelSize: pixelSize, l10n)
     }
 }
 
@@ -3287,7 +3880,6 @@ struct DemoRow: View {
             isSelected: isSelected,
             isCurrent: false,
             palette: palette,
-            quickPasteTitle: l10n("Paste", "Вставить"),
             onQuickPaste: {},
             onExpand: clip.entry.isText ? nil : {},
             onTogglePin: {},
@@ -3474,6 +4066,7 @@ git add Sources/BufferJournal/Onboarding/Scenes Tests/BufferJournalTests/DemoCli
 git commit -m "Scene kit: cursor, keys, windows, demo clips and the preview pane"
 ```
 
+---
 
 ### Task 12: Сцена «ПРИВЕТ»
 
@@ -3758,6 +4351,7 @@ git add Sources/BufferJournal/Onboarding/Scenes/HeroScene.swift Sources/BufferJo
 git commit -m "Tutorial scene: hello"
 ```
 
+---
 
 ### Task 13: Сцена «ВЫЗОВ»
 
@@ -3768,11 +4362,13 @@ git commit -m "Tutorial scene: hello"
 - Test: `Tests/BufferJournalTests/Scenes/HotKeySceneTests.swift`
 
 **Interfaces:**
-- Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `HotKeyScene(time:)`, `HotKeyScene.duration`, `HotKeyScene.size`, `HotKeyScene.State`, `HotKeyScene.state(at: SceneTime) -> State`.
+- Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5), `PanelPlacement.gap` (приложение).
+- Produces: `HotKeyScene(time:)`, `HotKeyScene.duration`, `HotKeyScene.size`, `HotKeyScene.State`, `HotKeyScene.state(at: SceneTime) -> State`, `HotKeyScene.caret`, `HotKeyScene.journalFrame`.
 - Produces: `JournalMiniature(palette:)` — журнал 640 × 440 без стекла.
 
 - [ ] **Step 1: Тест стоп-кадра**
+
+Кроме стоп-кадра тест проверяет место журнала: он стоит под строкой с точкой вставки, с тем же зазором `PanelPlacement.gap`, что и настоящая панель, и целиком помещается на холсте.
 
 Создать `Tests/BufferJournalTests/Scenes/HotKeySceneTests.swift`:
 
@@ -3784,12 +4380,21 @@ import Testing
 /// The stop frame from the spec's "Сцены" section and the moments that lead to it.
 @MainActor
 struct HotKeySceneTests {
-    @Test func hotKeyEndsWithTheJournalOverTheWindowAndKeysUp() {
+    @Test func hotKeyEndsWithTheJournalUnderTheCaretAndKeysUp() {
         let end = HotKeyScene.state(at: .end(of: HotKeyScene.duration))
         #expect(end.journal == 1)
         #expect(!end.optionDown && !end.vDown)
         let pressed = HotKeyScene.state(at: SceneTime(t: 0.55, rewind: 0))
         #expect(pressed.optionDown && pressed.vDown)
+    }
+
+    @Test func theJournalOpensUnderTheCaretWithTheAppsOwnGap() {
+        // The scene places the journal the way PanelPlacement does on screen: left edge at the
+        // caret, top edge a gap below the line it stands on.
+        #expect(HotKeyScene.journalFrame.minX == HotKeyScene.caret.minX)
+        #expect(HotKeyScene.journalFrame.minY == HotKeyScene.caret.maxY + PanelPlacement.gap)
+        #expect(HotKeyScene.journalFrame.maxX <= HotKeyScene.size.width)
+        #expect(HotKeyScene.journalFrame.maxY <= HotKeyScene.size.height)
     }
 }
 ```
@@ -3801,7 +4406,9 @@ Expected: FAIL: ошибка сборки `cannot find 'HotKeyScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Слева клавиши ⌥ option и V; в русском интерфейсе на V вторая буква «М», как на русской клавиатуре Mac: сочетание работает по положению клавиши. Справа окно «Документ» со строками и мигающей точкой вставки. ⌥ нажимается (0,3 с), следом V (0,5 с); поверх окна проявляется журнал с увеличением от 0,96 (0,6–0,9 с); клавиши отпускаются (1,0 с). Журнал — `JournalMiniature`: весь журнал 640 × 440 из его же частей (шапка с иконкой и счётчиком, поле поиска, фильтр, строки, панель превью), уменьшенный до 0,4.
+Слева клавиши ⌥ option и V; в русском интерфейсе на V вторая буква «М», как на русской клавиатуре Mac: сочетание работает по положению клавиши. Справа окно «Документ» со строками и мигающей точкой вставки во второй строке. ⌥ нажимается (0,3 с), следом V (0,5 с); журнал проявляется с увеличением от 0,96 прямо под строкой с точкой вставки, с зазором `PanelPlacement.gap` = 16 pt (0,6–0,9 с); клавиши отпускаются (1,0 с). Журнал закрывает нижнюю часть окна и выходит за его край — так и бывает, когда панель открывается у курсора в высоком окне.
+
+Журнал — `JournalMiniature`: весь журнал 640 × 440 из его же частей (шапка с иконкой и счётчиком, фильтр, строки, панель превью), уменьшенный до 0,3. Поля поиска в журнале больше нет, и на его месте помещается ещё одна строка.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/JournalMiniature.swift`:
 
@@ -3821,6 +4428,7 @@ struct JournalMiniature: View {
             DemoClips.text("mini-address", Localized(en: "Office address: 12 Main St, entrance 3", ru: "Адрес офиса: Тверская, 12, подъезд 3"), l10n, at: 14, 20),
             DemoClips.image("mini-photo", .mountains, pixelSize: CGSize(width: 1600, height: 1000), at: 14, 2),
             DemoClips.file("mini-contract", Localized(en: "Contract.pdf", ru: "Договор.pdf"), bytes: 1_240_000, l10n, at: 12, 10),
+            DemoClips.text("mini-promo", Localized(en: "Promo code AUTUMN25", ru: "Промокод AUTUMN25"), l10n, at: 9, 12),
         ]
         let shape = RoundedRectangle(cornerRadius: JournalView.Layout.cornerRadius, style: .continuous)
 
@@ -3834,7 +4442,7 @@ struct JournalMiniature: View {
                         .font(.system(size: 28, weight: .heavy))
                         .foregroundStyle(palette.textPrimary)
                     Spacer(minLength: 0)
-                    Text("3/20")
+                    Text("\(clips.count)/20")
                         .font(.system(size: 11, weight: .medium))
                         .monospacedDigit()
                         .foregroundStyle(palette.textTertiary)
@@ -3845,15 +4453,6 @@ struct JournalMiniature: View {
                 .padding(.trailing, 10)
                 .padding(.top, 12)
                 .padding(.bottom, 10)
-
-                SearchFieldChrome(palette: palette, isEditing: false, showsClear: false, clearHelp: "", onClear: {}) {
-                    Text(l10n("Search", "Поиск"))
-                        .font(.system(size: 13))
-                        .foregroundStyle(palette.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
 
                 TypeSegmentedControl(
                     titles: [l10n("All", "Все"), l10n("Text", "Текст"), l10n("Images", "Картинки"), l10n("Files", "Файлы")],
@@ -3894,16 +4493,17 @@ struct JournalMiniature: View {
 ```swift
 import SwiftUI
 
-/// ВЫЗОВ: ⌥ and V go down on a Mac keyboard, and the journal appears over another app's window.
+/// ВЫЗОВ: ⌥ and V go down on a Mac keyboard, and the journal opens right under the line the
+/// insertion point stands on, as it does on screen.
 struct HotKeyScene: View {
     static let duration = 2.6
-    /// Two keys, and another app's window with the journal over it.
+    /// Two keys, and another app's window with the journal under its caret.
     static let size = CGSize(width: 470, height: 234)
 
     struct State: Equatable {
         var optionDown: Bool
         var vDown: Bool
-        /// 0…1: the journal appearing over the window.
+        /// 0…1: the journal appearing under the caret.
         var journal: Double
     }
 
@@ -3915,8 +4515,41 @@ struct HotKeyScene: View {
         State(optionDown: option.value(at: time), vDown: v.value(at: time), journal: journal.value(at: time))
     }
 
-    /// The journal is shown at this share of its real size, so it fits over the window.
-    static let miniatureScale: CGFloat = 0.4
+    /// The journal is shown at this share of its real size: what is left under the caret once the
+    /// window and the app's own gap have taken their room.
+    static let miniatureScale: CGFloat = 0.3
+
+    // MARK: Geometry, in canvas coordinates
+
+    /// The other app's window with the document text.
+    static let window = CGRect(x: 142, y: 6, width: 312, height: 150)
+    /// SceneWindow draws a 24 pt title bar above its content.
+    private static let titleBar: CGFloat = 24
+    private static let textInset = CGSize(width: 14, height: 12)
+    /// Grey lines of the document; the caret stands at the end of the second one.
+    private static let lines: [CGFloat] = [190, 64, 168, 212, 140]
+    private static let lineHeight: CGFloat = 6
+    private static let lineSpacing: CGFloat = 9
+    private static let caretLine = 1
+    private static let caretHeight: CGFloat = 13
+
+    /// The insertion point: at the end of its line, centred on it.
+    static let caret = CGRect(
+        x: window.minX + textInset.width + lines[caretLine] + 4,
+        y: window.minY + titleBar + textInset.height
+            + CGFloat(caretLine) * (lineHeight + lineSpacing) + lineHeight / 2 - caretHeight / 2,
+        width: 1.5,
+        height: caretHeight
+    )
+
+    /// Where the journal lands: left edge at the caret, top edge a gap below its line — the same
+    /// placement `PanelPlacement` computes on screen.
+    static let journalFrame = CGRect(
+        x: caret.minX,
+        y: caret.maxY + PanelPlacement.gap,
+        width: JournalView.Layout.width * miniatureScale,
+        height: JournalView.Layout.height * miniatureScale
+    )
 
     let time: SceneTime
 
@@ -3926,41 +4559,38 @@ struct HotKeyScene: View {
     var body: some View {
         let state = Self.state(at: time)
         let palette = ThemePalette.scene(colorScheme)
-        let journalSize = CGSize(
-            width: JournalView.Layout.width * Self.miniatureScale,
-            height: JournalView.Layout.height * Self.miniatureScale
-        )
 
         ZStack(alignment: .topLeading) {
-            SceneKeycap(label: "⌥", caption: "option", pressed: state.optionDown)
-                .offset(x: 12, y: 85)
+            SceneKeycap(label: "⌥", caption: "option", size: 60, pressed: state.optionDown)
+                .offset(x: 10, y: 84)
             // On a Russian keyboard V also carries "М"; the shortcut works by key, in any layout.
-            SceneKeycap(label: "V", secondary: l10n.language == .russian ? "М" : nil, pressed: state.vDown)
-                .offset(x: 88, y: 85)
+            SceneKeycap(label: "V", secondary: l10n.language == .russian ? "М" : nil, size: 60, pressed: state.vDown)
+                .offset(x: 78, y: 84)
 
             SceneWindow(title: l10n("Document", "Документ"), palette: palette) {
-                VStack(alignment: .leading, spacing: 9) {
-                    SceneTextLine(width: 180, palette: palette)
-                    SceneTextLine(width: 230, palette: palette)
-                    SceneTextLine(width: 150, palette: palette)
-                    SceneTextLine(width: 205, palette: palette)
-                    HStack(spacing: 4) {
-                        SceneTextLine(width: 90, palette: palette)
-                        SceneCaret(height: 13, visible: SceneCaret.isVisible(at: time, duration: Self.duration))
+                VStack(alignment: .leading, spacing: Self.lineSpacing) {
+                    ForEach(Array(Self.lines.enumerated()), id: \.offset) { _, width in
+                        SceneTextLine(width: width, palette: palette)
                     }
                 }
-                .padding(16)
+                .padding(.leading, Self.textInset.width)
+                .padding(.top, Self.textInset.height)
             }
-            .frame(width: 290, height: 210)
-            .offset(x: 168, y: 12)
+            .frame(width: Self.window.width, height: Self.window.height)
+            .offset(x: Self.window.minX, y: Self.window.minY)
+
+            // Drawn over the window at the canvas's own coordinates, so the caret and the journal
+            // under it come from the same numbers.
+            SceneCaret(height: Self.caret.height, visible: SceneCaret.isVisible(at: time, duration: Self.duration))
+                .offset(x: Self.caret.minX, y: Self.caret.minY)
 
             JournalMiniature(palette: palette)
                 .scaleEffect(Self.miniatureScale)
-                .frame(width: journalSize.width, height: journalSize.height)
+                .frame(width: Self.journalFrame.width, height: Self.journalFrame.height)
                 .shadow(color: palette.shadow(0.3), radius: 14, y: 8)
-                .scaleEffect(0.96 + 0.04 * state.journal)
+                .scaleEffect(0.96 + 0.04 * state.journal, anchor: .top)
                 .opacity(state.journal)
-                .offset(x: 313 - journalSize.width / 2, y: 117 - journalSize.height / 2)
+                .offset(x: Self.journalFrame.minX, y: Self.journalFrame.minY)
         }
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
     }
@@ -4006,15 +4636,17 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-hotKey-end-ru-light.png` — две клавиши слева, над окном «Документ» маленький журнал: оранжевая выбранная строка, фильтр «Все», справа текст клипа и оранжевая «Вставить». На V в русской версии видна «М», в английской нет.
+Проверка вручную: `scene-hotKey-end-ru-light.png` — две клавиши слева, окно «Документ», точка вставки во второй строке и прямо под ней, с зазором, маленький журнал: оранжевая выбранная строка, фильтр «Все», четыре строки без поля поиска, справа текст клипа и оранжевая «Вставить». Журнал не выходит за холст и не налезает на клавиши. На V в русской версии видна «М», в английской нет. `scene-hotKey-mid-ru-light.png` — клавиши нажаты, журнал ещё проявляется.
 
 - [ ] **Step 7: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding/Scenes/JournalMiniature.swift Sources/BufferJournal/Onboarding/Scenes/HotKeyScene.swift Sources/BufferJournal/Onboarding/OnboardingSceneView.swift Tests/BufferJournalTests/Scenes/HotKeySceneTests.swift
-git commit -m "Tutorial scene: open with ⌥V"
+git commit -m "Tutorial scene: open with ⌥V" -m "The journal opens under the line with the insertion point, a PanelPlacement gap
+below it, as it does on screen."
 ```
 
+---
 
 ### Task 14: Сцена «ВСТАВКА»
 
@@ -4039,17 +4671,19 @@ import Testing
 /// The stop frame from the spec's "Сцены" section and the moments that lead to it.
 @MainActor
 struct PasteSceneTests {
-    @Test func pasteEndsPastedWithTheArrowOnTheButton() {
+    @Test func pasteEndsWithTheClipInTheLetterAndTheJournalGone() {
         let end = PasteScene.state(at: .end(of: PasteScene.duration))
         #expect(end.selectedRow == 1)
         #expect(end.hoveredRow == 1)
-        #expect(end.toast)
         #expect(end.pasted == 1)
+        // Close After Selection is on by default: the journal dissolves after the click.
+        #expect(end.journal == 0)
         #expect(end.cursor.tip == PasteScene.returnButton)
         #expect(end.cursor.opacity == 1)
         let beforeClick = PasteScene.state(at: SceneTime(t: 1.4, rewind: 0))
         #expect(beforeClick.selectedRow == nil)
-        #expect(!beforeClick.toast)
+        #expect(beforeClick.journal == 1)
+        #expect(beforeClick.pasted == 0)
     }
 }
 ```
@@ -4061,15 +4695,16 @@ Expected: FAIL: ошибка сборки `cannot find 'PasteScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Слева «Сегодня» из трёх строк — картинка, текст «Счёт за сентябрь № 1042», PDF; справа окно «Письмо» с точкой вставки. Указатель заходит на строку с текстом: подсветка наведения, кнопки строки, текст гаснет под ними (0,3–0,8 с). Указатель на оранжевой стрелке, клик (1,5 с): строка выбрана, стрелка белая с оранжевым значком, тост «Вставлено», в письме появляется текст клипа (1,6–2,0 с).
+Слева «Сегодня» из трёх строк — картинка, текст «Счёт за сентябрь № 1042», PDF; справа окно «Письмо» с точкой вставки. Указатель заходит на строку с текстом: подсветка наведения, кнопки строки, текст гаснет под ними (0,3–0,8 с). Указатель на оранжевой стрелке, клик (1,5 с): строка выбрана, стрелка белая с оранжевым значком, в письме у точки вставки появляется текст клипа, а журнал растворяется — «Закрывать после выбора» включено по умолчанию (1,6–2,2 с). Тоста «Вставлено» в сцене нет: журнал уходит, и говорить о вставке нечему.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/PasteScene.swift`:
 
 ```swift
 import SwiftUI
 
-/// ВСТАВКА: the arrow hovers a text clip, clicks its orange arrow; the row is selected, the toast
-/// says "Pasted", and the clip's text lands at the insertion point of a letter next to the list.
+/// ВСТАВКА: the arrow hovers a text clip and clicks its orange arrow; the row is selected, the
+/// clip's text lands at the insertion point of a letter next to the list, and the journal goes
+/// away — Close After Selection is on by default.
 struct PasteScene: View {
     static let duration = 3.6
     /// The list, and the letter to its right.
@@ -4080,7 +4715,8 @@ struct PasteScene: View {
         var ripple: ClickRipple?
         var hoveredRow: Int?
         var selectedRow: Int?
-        var toast: Bool
+        /// 1 while the journal is there, 0 once it has dissolved.
+        var journal: Double
         /// 0…1: the pasted text appearing in the letter.
         var pasted: Double
     }
@@ -4098,8 +4734,9 @@ struct PasteScene: View {
     )
     private static let hovered = Track<Int?>(nil).set(1, at: 0.62)
     private static let selected = Track<Int?>(nil).set(1, at: click + 0.04)
-    private static let toast = Track(false).set(true, at: 1.6)
-    private static let pasted = Track(0.0).to(1, at: 1.75, until: 2.0, .easeOut)
+    // The panel's own fade is 0.055 s — too quick to follow; the spec gives the scene 0.2 s.
+    private static let journal = Track(1.0).to(0, at: 1.7, until: 1.9, .easeOut)
+    private static let pasted = Track(0.0).to(1, at: 1.75, until: 2.05, .easeOut)
 
     static func state(at time: SceneTime) -> State {
         State(
@@ -4107,7 +4744,7 @@ struct PasteScene: View {
             ripple: cursor.ripple(at: time),
             hoveredRow: hovered.value(at: time),
             selectedRow: selected.value(at: time),
-            toast: toast.value(at: time),
+            journal: journal.value(at: time),
             pasted: pasted.value(at: time)
         )
     }
@@ -4138,12 +4775,7 @@ struct PasteScene: View {
             .padding(.horizontal, 10)
             .frame(width: 270)
             .padding(.top, 4)
-
-            if state.toast {
-                ToastOverlay(message: l10n("Pasted", "Вставлено"))
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    .position(x: 135, y: 212)
-            }
+            .opacity(state.journal)
 
             SceneWindow(title: l10n("Letter", "Письмо"), palette: palette) {
                 letter(state, palette: palette)
@@ -4155,7 +4787,6 @@ struct PasteScene: View {
             SceneCursor(state: state.cursor)
         }
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
-        .animation(.easeOut(duration: 0.16), value: state.toast)
     }
 
     private func letter(_ state: State, palette: ThemePalette) -> some View {
@@ -4220,15 +4851,17 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-paste-mid-ru-light.png` — строка с наведением и тремя кнопками, указатель на оранжевой стрелке. `scene-paste-end-ru-light.png` — строка оранжевая, стрелка белая, внизу списка «Вставлено», в письме «Счёт за сентябрь № 1042» и точка вставки после него.
+Проверка вручную: `scene-paste-mid-ru-light.png` — строка с наведением и тремя кнопками, указатель на оранжевой стрелке, список на месте. `scene-paste-end-ru-light.png` — списка нет, в письме «Счёт за сентябрь № 1042» и точка вставки после него, указатель стоит там, где была кнопка. Тоста нигде нет.
 
 - [ ] **Step 7: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding/Scenes/PasteScene.swift Sources/BufferJournal/Onboarding/OnboardingSceneView.swift Tests/BufferJournalTests/Scenes/PasteSceneTests.swift
-git commit -m "Tutorial scene: paste"
+git commit -m "Tutorial scene: paste" -m "The clip lands in the letter and the journal dissolves: Close After Selection is
+on by default, so the scene ends with the journal gone."
 ```
 
+---
 
 ### Task 15: Сцена «ЗАКРЕП»
 
@@ -4436,6 +5069,7 @@ git add Sources/BufferJournal/Onboarding/Scenes/PinScene.swift Sources/BufferJou
 git commit -m "Tutorial scene: pin"
 ```
 
+---
 
 ### Task 16: Сцена «КАРТИНКИ»
 
@@ -4649,21 +5283,22 @@ git add Sources/BufferJournal/Onboarding/Scenes/ImagesScene.swift Sources/Buffer
 git commit -m "Tutorial scene: images"
 ```
 
+---
 
-### Task 17: Сцена «ПОИСК»
+### Task 17: Сцена «КЛАВИШИ»
 
 **Files:**
-- Create: `Sources/BufferJournal/Onboarding/Scenes/SearchScene.swift`
-- Modify: `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` — `case .search`
-- Test: `Tests/BufferJournalTests/Scenes/SearchSceneTests.swift`
+- Create: `Sources/BufferJournal/Onboarding/Scenes/KeysScene.swift`
+- Modify: `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` — `case .keys`
+- Test: `Tests/BufferJournalTests/Scenes/KeysSceneTests.swift`
 
 **Interfaces:**
-- Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `SearchScene(time:)`, `SearchScene.duration`, `SearchScene.size`, `SearchScene.State`, `SearchScene.state(at: SceneTime) -> State`.
+- Consumes: набор для сцен (Task 11), `Track`, `SceneTime` (Task 7), `Localized` (Task 5).
+- Produces: `KeysScene(time:)`, `KeysScene.duration`, `KeysScene.size`, `KeysScene.State`, `KeysScene.state(at: SceneTime) -> State`, `KeysScene.word`, `KeysScene.letters`.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
-Создать `Tests/BufferJournalTests/Scenes/SearchSceneTests.swift`:
+Создать `Tests/BufferJournalTests/Scenes/KeysSceneTests.swift`:
 
 ```swift
 import CoreGraphics
@@ -4672,82 +5307,108 @@ import Testing
 
 /// The stop frame from the spec's "Сцены" section and the moments that lead to it.
 @MainActor
-struct SearchSceneTests {
-    @Test func searchEndsOnTheSecondInvoiceWithTheToast() {
-        let end = SearchScene.state(at: .end(of: SearchScene.duration))
-        #expect(end.typed == 3)
-        #expect(end.movedDown)
-        #expect(end.toast)
+struct KeysSceneTests {
+    @Test func keysEndWithTheThirdClipBehindTheTypedWordAndTheJournalGone() {
+        let end = KeysScene.state(at: .end(of: KeysScene.duration))
+        #expect(end.typed == KeysScene.letters)
+        #expect(end.selectedRow == 2)
+        #expect(end.pasted == 1)
+        #expect(end.journal == 0)
         #expect(!end.downPressed && !end.returnPressed)
+
+        // The letters go to the document while the journal is open.
+        let typing = KeysScene.state(at: SceneTime(t: 0.5, rewind: 0))
+        #expect(typing.typed == 1)
+        #expect(typing.journal == 1)
+
+        // One ↓ moves the selection by one row, and nothing is pasted yet.
+        let afterFirstDown = KeysScene.state(at: SceneTime(t: 1.8, rewind: 0))
+        #expect(afterFirstDown.selectedRow == 1)
+        #expect(afterFirstDown.pasted == 0)
+        #expect(KeysScene.state(at: SceneTime(t: 1.65, rewind: 0)).downPressed)
+        #expect(KeysScene.state(at: SceneTime(t: 2.65, rewind: 0)).returnPressed)
     }
 
-    @Test func searchFiltersByTheJournalsRule() {
-        for language in [ResolvedLanguage.russian, .english] {
-            let l10n = L10n(language: language)
-            let clips = [
-                DemoClips.file("lease", Localized(en: "Lease agreement.pdf", ru: "Договор аренды.pdf"), bytes: 1, l10n, at: 14, 31),
-                DemoClips.text("sep", Localized(en: "Invoice #1042 for September", ru: "Инвойс № 1042 за сентябрь"), l10n, at: 13, 47),
-                DemoClips.image("photo", .mountains, pixelSize: CGSize(width: 1200, height: 800), at: 12, 20),
-                DemoClips.text("aug", Localized(en: "Invoice for August, paid", ru: "Инвойс за август, оплачен"), l10n, at: 9, 12),
-            ]
-            let query = SearchScene.query(l10n)
-            let afterFirst = clips.filter { $0.matches(String(query.prefix(1)), l10n) }.map(\.id)
-            let afterAll = clips.filter { $0.matches(query, l10n) }.map(\.id)
-            #expect(afterFirst == ["sep", "photo", "aug"], "\(language)")
-            #expect(afterAll == ["sep", "aug"], "\(language)")
-        }
+    @Test func theSceneTypesThreeLettersInBothLanguages() {
+        #expect(KeysScene.word.ru == "нап")
+        #expect(KeysScene.word.en == "typ")
+        #expect(KeysScene.word.ru.count == KeysScene.letters)
+        #expect(KeysScene.word.en.count == KeysScene.letters)
     }
 }
 ```
 
 - [ ] **Step 2: Запустить — падает**
 
-Run: `swift test --filter SearchSceneTests`
-Expected: FAIL: ошибка сборки `cannot find 'SearchScene' in scope`.
+Run: `swift test --filter KeysSceneTests`
+Expected: FAIL: ошибка сборки `cannot find 'KeysScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Указателя нет: мышь не нужна. Поле поиска в фокусе — оранжевая обводка, как при открытии журнала. Под ним «Договор аренды.pdf», «Инвойс № 1042 за сентябрь», картинка, «Инвойс за август, оплачен»; выбрана первая строка. Буквы «и», «н», «в» появляются через 0,2 с (0,4–0,8 с), список фильтруется правилом журнала (`ClipLabels.matches`): после «и» уходит договор, после «н» — картинка, выбор — на первом подходящем. Клавиша ↓ (1,6 с) — выбран второй инвойс; ⏎ (2,3 с) — тост «Вставлено». В журнале список при поиске меняется мгновенно, в сцене — за 0,2 с, чтобы глаз успел проследить.
+Указателя нет: мышь здесь не нужна. Слева окно «Документ» с мигающей точкой вставки, справа от него журнал из трёх строк — картинка, PDF, текст; выбрана первая. Сначала в документе печатается слово: буквы «н», «а», «п» появляются через 0,2 с (0,4–1,0 с) у точки вставки — журнал открыт, а текст идёт в документ. Затем под окном нажимается ↓ (1,6 с), и выбор переходит на вторую строку, потом ещё раз ↓ (2,0 с) — на третью. ⏎ (2,6 с): текст третьего клипа появляется в документе за набранным словом, журнал растворяется за 0,2 с. В английском печатается «typ». Клавиши рисуются как в сцене «ВЫЗОВ» — тем же `SceneKeycap`.
 
-Создать `Sources/BufferJournal/Onboarding/Scenes/SearchScene.swift`:
+Создать `Sources/BufferJournal/Onboarding/Scenes/KeysScene.swift`:
 
 ```swift
 import SwiftUI
 
-/// ПОИСК: no pointer. The search field already has focus; «инв» is typed a letter at a time and
-/// the list filters by the journal's own rule. ↓ moves to the second invoice, ⏎ pastes it.
-struct SearchScene: View {
+/// КЛАВИШИ: no pointer. The journal is open next to a document, and the letters still go to the
+/// document. ↓ and ↓ move the selection, ⏎ pastes the third clip behind the typed word and the
+/// journal goes away.
+struct KeysScene: View {
     static let duration = 4.2
-    /// The list with its search field, and the two keys to its right.
-    static let size = CGSize(width: 344, height: 246)
+    /// The document with its keys, and the journal's rows to its right.
+    static let size = CGSize(width: 470, height: 236)
 
     struct State: Equatable {
-        /// Letters of the query typed so far.
+        /// Letters of the word typed so far.
         var typed: Int
         var downPressed: Bool
         var returnPressed: Bool
-        /// ↓ has moved the selection to the second match.
-        var movedDown: Bool
-        var toast: Bool
+        /// Which row the journal's keys have landed on.
+        var selectedRow: Int
+        /// 1 while the journal is there, 0 once it has dissolved.
+        var journal: Double
+        /// 0…1: the pasted clip appearing in the document.
+        var pasted: Double
     }
 
-    static let query = Localized(en: "inv", ru: "инв")
+    /// The word being typed while the journal is open.
+    static let word = Localized(en: "typ", ru: "нап")
+    static let letters = 3
 
+    // Typing starts at 0.4 s and a letter lands every 0.2 s; the word stands by 1.0 s.
     private static let typed = Track(0).set(1, at: 0.4).set(2, at: 0.6).set(3, at: 0.8)
-    private static let down = Track(false).set(true, at: 1.6).set(false, at: 1.72)
-    private static let movedDown = Track(false).set(true, at: 1.64)
-    private static let enter = Track(false).set(true, at: 2.3).set(false, at: 2.42)
-    private static let toast = Track(false).set(true, at: 2.35)
+    private static let down = Track(false)
+        .set(true, at: 1.6).set(false, at: 1.72)
+        .set(true, at: 2.0).set(false, at: 2.12)
+    private static let selected = Track(0).set(1, at: 1.64).set(2, at: 2.04)
+    private static let enter = Track(false).set(true, at: 2.6).set(false, at: 2.72)
+    // The panel's own fade is 0.055 s — too quick to follow; the spec gives the scene 0.2 s.
+    private static let journal = Track(1.0).to(0, at: 2.7, until: 2.9, .easeOut)
+    private static let pasted = Track(0.0).to(1, at: 2.68, until: 2.98, .easeOut)
 
     static func state(at time: SceneTime) -> State {
         State(
             typed: typed.value(at: time),
             downPressed: down.value(at: time),
             returnPressed: enter.value(at: time),
-            movedDown: movedDown.value(at: time),
-            toast: toast.value(at: time)
+            selectedRow: selected.value(at: time),
+            journal: journal.value(at: time),
+            pasted: pasted.value(at: time)
         )
     }
+
+    // MARK: Geometry, in canvas coordinates
+
+    /// The document the person keeps typing in.
+    private static let window = CGRect(x: 8, y: 6, width: 178, height: 152)
+    /// The keys pressed under it: ↓ and ⏎, centred on the window.
+    private static let keySize: CGFloat = 52
+    private static let keysTop: CGFloat = 172
+    /// The journal's rows, at their real width, to the right of the window.
+    private static let listLeft: CGFloat = 192
+    private static let listWidth: CGFloat = 270
 
     let time: SceneTime
 
@@ -4757,66 +5418,68 @@ struct SearchScene: View {
     var body: some View {
         let state = Self.state(at: time)
         let palette = ThemePalette.scene(colorScheme)
-        let query = String(Self.query(l10n).prefix(state.typed))
-        let visible = query.isEmpty ? clips : clips.filter { $0.matches(query, l10n) }
-        // The journal's rule: no explicit choice means the first visible clip is selected.
-        let selected = state.movedDown && visible.count > 1 ? visible[1].id : visible.first?.id
+        let clips = self.clips
 
         ZStack(alignment: .topLeading) {
-            VStack(spacing: 0) {
-                SearchFieldChrome(palette: palette, isEditing: true, showsClear: !query.isEmpty, clearHelp: "", onClear: {}) {
-                    HStack(spacing: 1) {
-                        if query.isEmpty {
-                            SceneCaret(height: 15, visible: SceneCaret.isVisible(at: time, duration: Self.duration))
-                            Text(l10n("Search", "Поиск"))
-                                .foregroundStyle(palette.textTertiary)
-                        } else {
-                            Text(query)
-                                .foregroundStyle(palette.textPrimary)
-                            SceneCaret(height: 15, visible: SceneCaret.isVisible(at: time, duration: Self.duration))
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .font(.system(size: 13))
-                }
-                .padding(.top, 10)
-                .padding(.bottom, 6)
+            SceneWindow(title: l10n("Document", "Документ"), palette: palette) {
+                document(state, palette: palette)
+            }
+            .frame(width: Self.window.width, height: Self.window.height)
+            .offset(x: Self.window.minX, y: Self.window.minY)
 
+            SceneKeycap(label: "↓", size: Self.keySize, pressed: state.downPressed)
+                .offset(x: 34, y: Self.keysTop)
+            SceneKeycap(label: "⏎", size: Self.keySize, pressed: state.returnPressed)
+                .offset(x: 102, y: Self.keysTop)
+
+            VStack(spacing: 0) {
                 SectionHeader(title: l10n("Today", "Сегодня"), palette: palette)
-                ForEach(visible) { clip in
-                    DemoRow(clip: clip, isSelected: clip.id == selected, palette: palette)
-                        .transition(.journalRow)
+                ForEach(Array(clips.enumerated()), id: \.element.id) { index, clip in
+                    DemoRow(clip: clip, isSelected: state.selectedRow == index, palette: palette)
                 }
-                Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            // Top-aligned: four rows are taller than the scene, and the field must stay in view.
-            .frame(width: 270, height: Self.size.height, alignment: .top)
-            .clipped()
-            .animation(.easeOut(duration: 0.2), value: visible.map(\.id))
-
-            SceneKeycap(label: "↓", size: 44, pressed: state.downPressed)
-                .offset(x: 290, y: 96)
-            SceneKeycap(label: "⏎", size: 44, pressed: state.returnPressed)
-                .offset(x: 290, y: 152)
-
-            if state.toast {
-                ToastOverlay(message: l10n("Pasted", "Вставлено"))
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    .position(x: 135, y: 222)
-            }
+            .frame(width: Self.listWidth)
+            .opacity(state.journal)
+            .offset(x: Self.listLeft, y: 6)
         }
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
-        .clipped()
-        .animation(.easeOut(duration: 0.16), value: state.toast)
     }
+
+    /// Two grey lines and the line being typed: the word, then the pasted clip, then the caret.
+    private func document(_ state: State, palette: ThemePalette) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            SceneTextLine(width: 110, palette: palette)
+            SceneTextLine(width: 130, palette: palette)
+            HStack(spacing: 1) {
+                if state.typed > 0 {
+                    Text(String(Self.word(l10n).prefix(state.typed)))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(palette.textPrimary)
+                }
+                if state.pasted > 0 {
+                    Text(Self.promo(l10n))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(palette.textPrimary)
+                        .lineLimit(1)
+                        .opacity(state.pasted)
+                        .offset(y: (1 - state.pasted) * 4)
+                }
+                SceneCaret(height: 13, visible: SceneCaret.isVisible(at: time, duration: Self.duration))
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.top, 12)
+    }
+
+    /// The clip ⏎ pastes: the third row of the list.
+    private static let promo = Localized(en: "Promo code AUTUMN25", ru: "Промокод AUTUMN25")
 
     private var clips: [DemoClip] {
         [
-            DemoClips.file("search-lease", Localized(en: "Lease agreement.pdf", ru: "Договор аренды.pdf"), bytes: 860_000, l10n, at: 14, 31),
-            DemoClips.text("search-invoice-sep", Localized(en: "Invoice #1042 for September", ru: "Инвойс № 1042 за сентябрь"), l10n, at: 13, 47),
-            DemoClips.image("search-photo", .mountains, pixelSize: CGSize(width: 1200, height: 800), at: 12, 20),
-            DemoClips.text("search-invoice-aug", Localized(en: "Invoice for August, paid", ru: "Инвойс за август, оплачен"), l10n, at: 9, 12),
+            DemoClips.image("keys-photo", .mountains, pixelSize: CGSize(width: 1600, height: 1000), at: 14, 2),
+            DemoClips.file("keys-contract", Localized(en: "Contract.pdf", ru: "Договор.pdf"), bytes: 1_240_000, l10n, at: 12, 10),
+            DemoClips.text("keys-promo", Self.promo, l10n, at: 9, 12),
         ]
     }
 }
@@ -4827,31 +5490,31 @@ struct SearchScene: View {
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
 ```swift
-        case .search: OnboardingLayout.sceneSize
+        case .keys: OnboardingLayout.sceneSize
 ```
 
 на:
 
 ```swift
-        case .search: SearchScene.size
+        case .keys: KeysScene.size
 ```
 
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
 ```swift
-        case .search: Color.clear
+        case .keys: Color.clear
 ```
 
 на:
 
 ```swift
-        case .search: SearchScene(time: time)
+        case .keys: KeysScene(time: time)
 ```
 
 - [ ] **Step 5: Запустить — проходит**
 
-Run: `swift test --filter SearchSceneTests`
-Expected: PASS.
+Run: `swift test --filter KeysSceneTests`
+Expected: PASS: 2 теста.
 
 Run: `swift build && swift test`
 Expected: `Build complete!`, все тесты PASS.
@@ -4861,15 +5524,17 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-search-end-ru-light.png` — в поле «инв» и кнопка очистки, два инвойса, второй оранжевый, клавиши ↓ и ⏎ справа, «Вставлено» внизу. В английской версии «inv» и два «Invoice…».
+Проверка вручную: `scene-keys-mid-ru-light.png` — окно «Документ» со словом «нап» у точки вставки, под ним клавиши ↓ и ⏎, справа три строки журнала, выбрана первая. `scene-keys-end-ru-light.png` — строк журнала нет, в документе «нап» и за ним «Промокод AUTUMN25», клавиши отпущены. В английской версии в документе «typ» и «Promo code AUTUMN25».
 
 - [ ] **Step 7: Коммит**
 
 ```bash
-git add Sources/BufferJournal/Onboarding/Scenes/SearchScene.swift Sources/BufferJournal/Onboarding/OnboardingSceneView.swift Tests/BufferJournalTests/Scenes/SearchSceneTests.swift
-git commit -m "Tutorial scene: search"
+git add Sources/BufferJournal/Onboarding/Scenes/KeysScene.swift Sources/BufferJournal/Onboarding/OnboardingSceneView.swift Tests/BufferJournalTests/Scenes/KeysSceneTests.swift
+git commit -m "Tutorial scene: the journal's keys" -m "Letters keep going to the document while the journal is open; ↓ picks a clip and
+⏎ pastes it behind the typed word, and the journal closes."
 ```
 
+---
 
 ### Task 18: Сцена «НАСТРОЙКИ»
 
@@ -4879,10 +5544,10 @@ git commit -m "Tutorial scene: search"
 - Test: `Tests/BufferJournalTests/Scenes/SettingsSceneTests.swift`
 
 **Interfaces:**
-- Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
+- Consumes: набор для сцен (Task 11) — `SceneCursor`, `SceneRipple`, `ThemePalette.scene(_:)`; `Track`, `CursorTrack`, `SceneTime` (Task 7); `StatusMenuTitles` (Task 10) — `openStash`, `tutorial`, `closeAfterSelection`, `interceptKeys`, `openAtCaret`, `theme`, `language`, `clearHistory`, `quit`; `L10n.themeName(_:)`; ресурс `StatusIcon`.
 - Produces: `SettingsScene(time:)`, `SettingsScene.duration`, `SettingsScene.size`, `SettingsScene.State`, `SettingsScene.state(at: SceneTime) -> State`.
-- Consumes: `StatusMenuTitles` (Task 10), `L10n.themeName(_:)`.
-- Produces: `SettingsScene.menuOrigin`, `menuWidth`, `submenuWidth`, `submenuOrigin`, `rowHeight`, `separatorHeight`, `menuPadding`, `frame(of:)`, `iconClick`, `itemClicks`, `blinkOff` — геометрия и моменты для тестов.
+- Produces: `SettingsScene.Item`, `rows`, `menuOrigin`, `menuWidth`, `submenuWidth`, `submenuOrigin`, `rowHeight`, `separatorHeight`, `menuPadding`, `frame(of:)`, `isChecked(_:_:)`, `iconClick`, `itemClicks`, `blinkOff` — геометрия и моменты для тестов.
+- Removes: ничего.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -4901,19 +5566,25 @@ struct SettingsSceneTests {
         #expect(end.menuOpen)
         #expect(end.iconHighlighted)
         #expect(end.highlighted == .tutorial)
-        #expect(end.closeChecked)
-        let onTheme = SettingsScene.state(at: SceneTime(t: 2.5, rewind: 0))
-        #expect(onTheme.highlighted == .theme)
+        // Both switches the story talks about are ticked at the end.
+        #expect(SettingsScene.isChecked(.closeAfterSelection, end))
+        #expect(SettingsScene.isChecked(.interceptKeys, end))
     }
 
-    @Test func clickingCloseAfterSelectionBlinksAndTicksItWithTheMenuOpen() {
+    @Test func theArrowPassesCloseAfterSelectionAndClicksInterceptKeys() {
+        // "Close After Selection" is on from the start: the arrow only walks over it.
+        let passing = SettingsScene.state(at: SceneTime(t: 1.35, rewind: 0))
+        #expect(passing.highlighted == .closeAfterSelection)
+        #expect(SettingsScene.isChecked(.closeAfterSelection, passing))
+        #expect(!SettingsScene.isChecked(.interceptKeys, passing))
+
         let click = SettingsScene.itemClicks[0]
         let ripple = SettingsScene.state(at: SceneTime(t: click + 0.01, rewind: 0)).ripple
-        #expect(ripple.map { SettingsScene.frame(of: .closeAfterSelection).contains($0.center) } == true)
+        #expect(ripple.map { SettingsScene.frame(of: .interceptKeys).contains($0.center) } == true)
         let blink = SettingsScene.state(at: SceneTime(t: click + 0.09, rewind: 0))
-        #expect(blink.menuOpen && blink.highlighted == nil && !blink.closeChecked)
+        #expect(blink.menuOpen && blink.highlighted == nil && !blink.interceptChecked)
         let after = SettingsScene.state(at: SceneTime(t: click + 0.2, rewind: 0))
-        #expect(after.menuOpen && after.highlighted == .closeAfterSelection && after.closeChecked)
+        #expect(after.menuOpen && after.highlighted == .interceptKeys && after.interceptChecked)
         // From the first click on, the menu never closes before the loop goes back.
         for t in stride(from: SettingsScene.iconClick + 0.05, through: SettingsScene.duration, by: 0.05) {
             #expect(SettingsScene.state(at: SceneTime(t: t, rewind: 0)).menuOpen)
@@ -4925,13 +5596,30 @@ struct SettingsSceneTests {
         #expect(ripple.map { SettingsScene.frame(of: .tutorial).contains($0.center) } == true)
     }
 
-    @Test func theSubmenuOpensToTheRightInsideTheScene() {
+    @Test func theArrowRestsOnThemeBetweenTheTwoClicks() {
+        #expect(SettingsScene.state(at: SceneTime(t: 2.4, rewind: 0)).highlighted == .theme)
+        // By the time it is on its way to Tutorial the submenu is gone.
+        #expect(SettingsScene.state(at: SceneTime(t: 3.0, rewind: 0)).highlighted != .theme)
+    }
+
+    @Test func theMenuAndItsSubmenuFitTheCanvas() {
+        #expect(SettingsScene.frame(of: .quit).maxY + SettingsScene.menuPadding <= SettingsScene.size.height)
         let submenu = SettingsScene.submenuOrigin
         #expect(submenu.x >= SettingsScene.menuOrigin.x + SettingsScene.menuWidth - 8)
         #expect(submenu.x + SettingsScene.submenuWidth <= SettingsScene.size.width)
-        // Seven rows and a separator, with the menu's padding.
+        // Six theme rows and a separator, with the menu's padding.
         let height = 6 * SettingsScene.rowHeight + SettingsScene.separatorHeight + 2 * SettingsScene.menuPadding
         #expect(submenu.y + height <= SettingsScene.size.height)
+    }
+
+    @Test func theMenuMatchesTheMenuBarMenu() {
+        // The rows are the menu of the app, in its order: two openers, three switches, two
+        // submenus, then Clear History and Quit.
+        #expect(SettingsScene.rows == [
+            .openStash, .tutorial, nil,
+            .closeAfterSelection, .interceptKeys, .openAtCaret, .theme, .language, nil,
+            .clearHistory, .quit,
+        ])
     }
 
     @Test func nothingLightsUpWhileTheLoopGoesBack() {
@@ -4951,7 +5639,9 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 
 - [ ] **Step 3: Сцена**
 
-Сверху правый край строки меню — только трей: слева значок Stash (настоящий ресурс `StatusIcon` в своих 14 × 18 pt; в тестах — запасной символ, как в `AppDelegate`), справа системные значки и часы. Указатель жмёт значок (0,9 с): значок подсвечен, под ним выпадает меню в составе из Task 10. Указатель проходит по «Вставлять при выборе» (с галочкой) и жмёт «Закрывать после выбора» (1,6 с): пункт на 0,06 с гаснет и снова загорается, и у него появляется галочка. Меню остаётся открытым. Указатель встаёт на «Тему» — справа открывается подменю тем с галочкой у Stash Auto, — поднимается к «Обучению» и жмёт его (3,35 с), пункт так же мигает. Подсветка — системный акцент, и она всегда у пункта под указателем. Меню открыто по флагу, а не по плавной дорожке: на возврате круга оно закрывается сразу, и указатель по дороге к началу ничего не подсвечивает.
+Сверху правый край строки меню — только трей: слева значок Stash (настоящий ресурс `StatusIcon` в своих 14 × 18 pt; в тестах — запасной символ, как в `AppDelegate`), справа системные значки и часы. Указатель жмёт значок (0,9 с): значок подсвечен, под ним выпадает меню в новом составе — «Открыть Stash», «Обучение», черта, «Закрывать после выбора», «Перехватывать клавиши», «Открывать у курсора», «Тема ▸», «Язык ▸», черта, «Очистить историю», «Выйти ⌘Q». Указатель проходит по «Закрывать после выбора» — у него уже галочка — и жмёт «Перехватывать клавиши» (1,6 с): пункт на 0,06 с гаснет и снова загорается, и у него появляется галочка. Меню остаётся открытым. Указатель встаёт на «Тему» (2,1–2,8 с) — справа открывается подменю тем с галочкой у Stash Auto, — поднимается к «Обучению» и жмёт его (3,35 с), пункт так же мигает. Подсветка — системный акцент, и она всегда у пункта под указателем. Меню открыто по флагу, а не по плавной дорожке: на возврате круга оно закрывается сразу, и указатель по дороге к началу ничего не подсвечивает.
+
+Ряды и подменю умещаются в холст 380 × 280 при ряде 20 pt: меню кончается на 230 pt, подменю тем — на 270 pt.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/SettingsScene.swift`:
 
@@ -4959,7 +5649,7 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 import AppKit
 import SwiftUI
 
-/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon, then "Close After Selection",
+/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon, then "Intercept Keys",
 /// which blinks and gets its check; the menu stays open. The arrow rests on Theme to open the
 /// submenu on the right and ends clicking Tutorial.
 struct SettingsScene: View {
@@ -4968,7 +5658,7 @@ struct SettingsScene: View {
     static let size = CGSize(width: 380, height: 280)
 
     enum Item: CaseIterable, Equatable, Sendable {
-        case openStash, tutorial, pasteOnSelection, closeAfterSelection, theme, language, clearHistory, quit
+        case openStash, tutorial, closeAfterSelection, interceptKeys, openAtCaret, theme, language, clearHistory, quit
     }
 
     struct State: Equatable {
@@ -4977,8 +5667,8 @@ struct SettingsScene: View {
         var iconHighlighted: Bool
         var menuOpen: Bool
         var highlighted: Item?
-        /// "Close After Selection" has been switched on.
-        var closeChecked: Bool
+        /// "Intercept Keys" has been switched on by the click.
+        var interceptChecked: Bool
     }
 
     // Geometry, in scene points. The Stash icon opens the tray; a real menu hangs from its status
@@ -4987,12 +5677,16 @@ struct SettingsScene: View {
     static let menuOrigin = CGPoint(x: 8, y: 26)
     static let menuWidth: CGFloat = 210
     static let submenuWidth: CGFloat = 150
-    static let rowHeight: CGFloat = 22
-    static let separatorHeight: CGFloat = 9
-    static let menuPadding: CGFloat = 5
+    static let rowHeight: CGFloat = 20
+    static let separatorHeight: CGFloat = 8
+    static let menuPadding: CGFloat = 4
 
-    /// Menu rows top to bottom; nil is a separator.
-    static let rows: [Item?] = [.openStash, .tutorial, nil, .pasteOnSelection, .closeAfterSelection, .theme, .language, nil, .clearHistory, .quit]
+    /// Menu rows top to bottom, as in the app's menu; nil is a separator.
+    static let rows: [Item?] = [
+        .openStash, .tutorial, nil,
+        .closeAfterSelection, .interceptKeys, .openAtCaret, .theme, .language, nil,
+        .clearHistory, .quit,
+    ]
 
     /// Where each item sits in the menu, for the highlight to follow the arrow.
     static func frame(of item: Item) -> CGRect {
@@ -5011,11 +5705,22 @@ struct SettingsScene: View {
         CGPoint(x: menuOrigin.x + menuWidth - 4, y: frame(of: .theme).minY - menuPadding)
     }
 
+    /// Checks in the demo menu: closing after a selection is on from the start, intercepting keys
+    /// is switched on by the click. Opening at the cursor stays off so only the story's two
+    /// switches carry a check.
+    static func isChecked(_ item: Item, _ state: State) -> Bool {
+        switch item {
+        case .closeAfterSelection: true
+        case .interceptKeys: state.interceptChecked
+        default: false
+        }
+    }
+
     private static func center(of item: Item) -> CGPoint {
         CGPoint(x: menuOrigin.x + 90, y: frame(of: item).midY)
     }
 
-    // Clicks: the icon, "Close After Selection", Tutorial. The menu stays open throughout.
+    // Clicks: the icon, "Intercept Keys", Tutorial. The menu stays open throughout.
     static let iconClick = 0.9
     static let itemClicks = [1.6, 3.35]
     /// A clicked item goes dark for a moment and lights up again, as in macOS.
@@ -5024,8 +5729,8 @@ struct SettingsScene: View {
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 300, y: 262))
             .to(statusIcon, at: 0.3, until: 0.8)
-            .to(center(of: .pasteOnSelection), at: 1.15, until: 1.35)
-            .to(center(of: .closeAfterSelection), at: 1.38, until: 1.5)
+            .to(center(of: .closeAfterSelection), at: 1.05, until: 1.3)
+            .to(center(of: .interceptKeys), at: 1.42, until: 1.55)
             .to(center(of: .theme), at: 1.9, until: 2.1)
             .to(center(of: .tutorial), at: 2.8, until: 3.2),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
@@ -5034,7 +5739,7 @@ struct SettingsScene: View {
     private static let iconHighlighted = Track(false).set(true, at: iconClick)
     private static let menuOpen = Track(false).set(true, at: iconClick + 0.05)
     /// The check appears as the clicked item lights up again.
-    private static let closeChecked = Track(false).set(true, at: itemClicks[0] + blinkOff.upperBound)
+    private static let interceptChecked = Track(false).set(true, at: itemClicks[0] + blinkOff.upperBound)
 
     static func state(at time: SceneTime) -> State {
         let cursor = cursor.state(at: time)
@@ -5050,7 +5755,7 @@ struct SettingsScene: View {
             iconHighlighted: iconHighlighted.value(at: time),
             menuOpen: menuOpen,
             highlighted: highlighted,
-            closeChecked: closeChecked.value(at: time)
+            interceptChecked: interceptChecked.value(at: time)
         )
     }
 
@@ -5127,6 +5832,7 @@ struct SettingsScene: View {
                 Image(systemName: "doc.on.clipboard")
             }
         }
+        .frame(width: 14, height: 18)
     }
 
     private var menuBackground: Color {
@@ -5140,9 +5846,14 @@ struct SettingsScene: View {
         return VStack(spacing: 0) {
             ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
                 if let row {
-                    menuRow(title: title(of: row, titles), checked: row == .pasteOnSelection || (row == .closeAfterSelection && state.closeChecked),
-                            submenu: row == .theme || row == .language,
-                            shortcut: row == .quit ? "⌘Q" : nil, highlighted: state.highlighted == row, palette: palette)
+                    menuRow(
+                        title: title(of: row, titles),
+                        checked: Self.isChecked(row, state),
+                        submenu: row == .theme || row == .language,
+                        shortcut: row == .quit ? "⌘Q" : nil,
+                        highlighted: state.highlighted == row,
+                        palette: palette
+                    )
                 } else {
                     separator(palette: palette)
                 }
@@ -5154,6 +5865,7 @@ struct SettingsScene: View {
     }
 
     private func themeSubmenu(palette: ThemePalette) -> some View {
+        // The app's own order, with the separator before Stash Auto, as in AppDelegate.
         let modes: [ThemeMode?] = [.system, .light, .dark, nil, .stashAuto, .stashLight, .stashDark]
         return VStack(spacing: 0) {
             ForEach(Array(modes.enumerated()), id: \.offset) { _, mode in
@@ -5194,9 +5906,9 @@ struct SettingsScene: View {
                     .opacity(0.5)
             }
         }
-        .font(.system(size: 13))
+        .font(.system(size: 12))
         .foregroundStyle(highlighted ? Color.white : palette.textPrimary)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 8)
         .frame(height: Self.rowHeight)
         .background(
             RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -5217,8 +5929,9 @@ struct SettingsScene: View {
         switch item {
         case .openStash: titles.openStash
         case .tutorial: titles.tutorial
-        case .pasteOnSelection: titles.pasteOnSelection
         case .closeAfterSelection: titles.closeAfterSelection
+        case .interceptKeys: titles.interceptKeys
+        case .openAtCaret: titles.openAtCaret
         case .theme: titles.theme
         case .language: titles.language
         case .clearHistory: titles.clearHistory
@@ -5267,28 +5980,36 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-settings-mid-ru-light.png` (1,88 с) — меню открыто, галочки у обоих переключателей, указатель на пути к «Теме». `scene-settings-end-ru-light.png` — подсвечено «Обучение», подменю закрыто.
+Проверка вручную: `scene-settings-mid-ru-light.png` (1,88 с) — меню открыто в новом составе, галочки у «Закрывать после выбора» и «Перехватывать клавиши», указатель идёт к «Теме». `scene-settings-end-ru-light.png` — подсвечено «Обучение», подменю тем закрыто, меню целиком в холсте. В английской версии те же пункты: «Close After Selection», «Intercept Keys», «Open at the Cursor», «Tutorial».
 
 - [ ] **Step 7: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding/Scenes/SettingsScene.swift Sources/BufferJournal/Onboarding/OnboardingSceneView.swift Tests/BufferJournalTests/Scenes/SettingsSceneTests.swift
-git commit -m "Tutorial scene: settings"
+git commit -m "Tutorial scene: settings" -m "The menu bar menu as the app builds it: two openers, three switches, Theme and
+Language, Clear History and Quit. The arrow ticks Intercept Keys and ends on Tutorial."
 ```
 
+---
 
-### Task 19: Сцена «ДОСТУП»
+### Task 19: Сцена и слайд «ДОСТУП»
+
+Слайд работает в двух видах: последним в обучении и сам по себе, когда обучение уже видели, а доступа нет. Общее у видов — сцена с окном «Системных настроек» и три части под карточкой, взятые с экрана доступа: заголовок со значком приложения и оранжевым «Stash», строка про ⌘V и подсказка с серой полоской. В обучении в карточке под сценой стоит кнопка «Открыть настройки», а нижняя — «Начать»; один, без обучения, слайд идёт без полос прогресса и без кнопки в карточке, её место занимает нижняя кнопка «Открыть настройки» (рамку одиночного вида делает Task 9). Доступ и его проверку раз в секунду берём у готового `AccessGate`: своего кода доступа обучение не заводит.
 
 **Files:**
 - Create: `Sources/BufferJournal/Onboarding/Scenes/AccessScene.swift`
+- Create: `Sources/BufferJournal/Onboarding/AccessSlide.swift` — тексты экрана доступа, заголовок, подсказка и кнопка в карточке
 - Modify: `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` — `case .access`
-- Test: `Tests/BufferJournalTests/Scenes/AccessSceneTests.swift`
+- Modify: `Sources/BufferJournal/Onboarding/OnboardingView.swift` — низ слайда и кнопка в карточке
+- Test: `Tests/BufferJournalTests/Scenes/AccessSceneTests.swift`, `Tests/BufferJournalTests/AccessSlideTests.swift`
 
 **Interfaces:**
-- Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `AccessScene(time:)`, `AccessScene.duration`, `AccessScene.size`, `AccessScene.State`, `AccessScene.state(at: SceneTime) -> State`.
+- Consumes: набор для сцен (Task 11) — `SceneCursor`, `SceneRipple`, `TrafficLights`, `ThemePalette.scene(_:)`; `Track`, `CursorTrack`, `SceneTime` (Task 7); `TranslucentButtonStyle`, `ThemePalette` (Task 2); `OnboardingController` (Task 8) — `isAccessOnly`, `requestAccess()`, `primaryAction()`, `handleKey(_:)`; `AccessGate.isGranted` и `AccessibilityAccess` (уже в приложении); `EnvironmentValues.onboardingOpenSettings` (Task 9).
+- Produces: `AccessScene(time:)`, `AccessScene.duration`, `AccessScene.size`, `AccessScene.State`, `AccessScene.state(at: SceneTime) -> State`; `AccessScene.window`, `sidebarWidth`, `toggle`, `click` — геометрия и момент для тестов; `SceneSwitch(isOn:)`.
+- Produces: `enum AccessSlide` — `titleTail(_:)`, `line(_:)`, `hint(_:)`, `buttonTitle(_:)`, `grantedTitle(_:)`, `showsCardButton(isAccessOnly:)`; `AccessPrompt(palette:l10n:)`, `AccessRequestButton(controller:palette:l10n:)`.
+- Removes: ничего. `AccessScreen.swift` удаляет задача подключения (Task 10); его тексты и части живут здесь.
 
-- [ ] **Step 1: Тест стоп-кадра**
+- [ ] **Step 1: Тест стоп-кадра сцены**
 
 Создать `Tests/BufferJournalTests/Scenes/AccessSceneTests.swift`:
 
@@ -5304,6 +6025,19 @@ struct AccessSceneTests {
         #expect(AccessScene.state(at: .end(of: AccessScene.duration)).isOn)
         #expect(!AccessScene.state(at: SceneTime(t: 1, rewind: 0)).isOn)
     }
+
+    @Test func theArrowClicksTheSwitchInTheSettingsWindow() {
+        let ripple = AccessScene.state(at: SceneTime(t: AccessScene.click + 0.01, rewind: 0)).ripple
+        #expect(ripple?.center == AccessScene.toggle)
+        // The switch belongs to the Stash row in the right-hand pane, not to the sidebar.
+        #expect(AccessScene.window.contains(AccessScene.toggle))
+        #expect(AccessScene.toggle.x > AccessScene.window.minX + AccessScene.sidebarWidth)
+    }
+
+    @Test func theCanvasKeepsRoomUnderTheWindowForTheCardButton() {
+        // The tutorial puts the real "Open Settings" button in that strip; alone it stays empty.
+        #expect(AccessScene.size.height - AccessScene.window.maxY >= 42)
+    }
 }
 ```
 
@@ -5314,7 +6048,7 @@ Expected: FAIL: ошибка сборки `cannot find 'AccessScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Окно «Системных настроек» занимает верх сцены: слева разделы, выделен «Конфиденциальность и безопасность»; справа «Универсальный доступ» — строка Stash с выключенным переключателем, под списком «+» и «−». Указатель подходит к переключателю и включает его (1,2 с): рычажок переезжает, дорожка окрашивается системным акцентом. Низ сцены свободен под настоящую кнопку карточки.
+Окно «Системных настроек» занимает верх сцены: слева разделы, выделен «Конфиденциальность и безопасность»; справа «Универсальный доступ» — строка Stash с выключенным переключателем, под списком «+» и «−». Указатель подходит к переключателю и включает его (1,2 с): рычажок переезжает, дорожка окрашивается системным акцентом. Низ холста свободен: в обучении там стоит настоящая кнопка карточки, в одиночном виде — воздух.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/AccessScene.swift`:
 
@@ -5323,10 +6057,11 @@ import AppKit
 import SwiftUI
 
 /// ДОСТУП: System Settings open on Privacy & Security → Accessibility; the arrow switches Stash on.
-/// The bottom of the scene stays free for the card's real "Open Settings" button.
+/// The bottom of the canvas stays free for the card's real "Open Settings" button; in the single
+/// view of the slide there is no button and the strip is just air.
 struct AccessScene: View {
     static let duration = 3.0
-    /// The System Settings window, and room under it for the card's real button.
+    /// The System Settings window, and room under it for the card's button.
     static let size = CGSize(width: 460, height: 236)
 
     struct State: Equatable {
@@ -5335,12 +6070,16 @@ struct AccessScene: View {
         var isOn: Bool
     }
 
-    /// The Stash switch: window x 10…450, content pane from x 160, list row centred at y 106.
-    static let toggle = CGPoint(x: 410, y: 106)
-    private static let click = 1.2
+    /// The window and the pane inside it: the sidebar on the left, the app list on the right.
+    static let window = CGRect(x: 10, y: 10, width: 440, height: 174)
+    static let sidebarWidth: CGFloat = 150
+    /// The Stash switch: the list row sits under the title and the explanation, the switch at its
+    /// trailing edge.
+    static let toggle = CGPoint(x: 418, y: 96)
+    static let click = 1.2
 
     private static let cursor = CursorTrack(
-        tip: Track(CGPoint(x: 390, y: 240)).to(toggle, at: 0.3, until: 1.0),
+        tip: Track(CGPoint(x: 390, y: 232)).to(toggle, at: 0.3, until: 1.0),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
         clicks: [click]
     )
@@ -5363,16 +6102,16 @@ struct AccessScene: View {
         ZStack(alignment: .topLeading) {
             HStack(spacing: 0) {
                 sidebar(palette: palette)
-                    .frame(width: 150)
+                    .frame(width: Self.sidebarWidth)
                     .background(palette.listSurface)
                 content(state, palette: palette)
                     .background(palette.modalBackground)
             }
-            .frame(width: 440, height: 174)
+            .frame(width: Self.window.width, height: Self.window.height)
             .clipShape(shape)
             .overlay(shape.strokeBorder(palette.border, lineWidth: 1))
             .shadow(color: palette.shadow(0.18), radius: 16, y: 8)
-            .offset(x: 10, y: 10)
+            .offset(x: Self.window.minX, y: Self.window.minY)
 
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
@@ -5384,7 +6123,7 @@ struct AccessScene: View {
         VStack(alignment: .leading, spacing: 4) {
             TrafficLights()
                 .padding(.bottom, 8)
-            settingsItem("wifi", l10n("Wi‑Fi", "Wi‑Fi"), color: .blue, selected: false, palette: palette)
+            settingsItem("wifi", l10n("Wi\u{2011}Fi", "Wi\u{2011}Fi"), color: .blue, selected: false, palette: palette)
             settingsItem("network", l10n("Network", "Сеть"), color: .blue, selected: false, palette: palette)
             settingsItem("gearshape.fill", l10n("General", "Основные"), color: .gray, selected: false, palette: palette)
             settingsItem("hand.raised.fill", l10n("Privacy & Security", "Конфиденциальность и безопасность"), color: .blue, selected: true, palette: palette)
@@ -5429,8 +6168,9 @@ struct AccessScene: View {
                 .foregroundStyle(palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                Image(nsImage: NSApplication.shared.applicationIconImage)
+                Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
+                    .interpolation(.high)
                     .frame(width: 22, height: 22)
                 Text("Stash")
                     .font(.system(size: 13))
@@ -5441,6 +6181,7 @@ struct AccessScene: View {
             .padding(.horizontal, 10)
             .frame(height: 38)
             .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            // The buttons the footnote under the card talks about.
             HStack(spacing: 10) {
                 Image(systemName: "plus")
                 Image(systemName: "minus")
@@ -5501,9 +6242,280 @@ struct SceneSwitch: View {
         case .access: AccessScene(time: time)
 ```
 
-- [ ] **Step 5: Кнопка «Открыть настройки» в карточке**
+Run: `swift test --filter AccessSceneTests`
+Expected: PASS.
 
-Две замены в `Sources/BufferJournal/Onboarding/OnboardingView.swift`. Кнопка — единственное, что в карточке нажимается; стиль — акцентная кнопка журнала. Пока слайд на экране, раз в секунду проверяется доступ; как только он есть, кнопка растворяется в «✓ Доступ включён», а сцена встаёт на стоп-кадр (`isStill` уже учитывает `hasAccess`).
+- [ ] **Step 5: Тест слайда**
+
+Тексты слайда — дословно с экрана доступа (`AccessScreen.swift`), обоих языков; кнопка в карточке есть только в обучении; клавиш на слайде нет; один, без обучения, слайд просит доступ нижней кнопкой.
+
+Создать `Tests/BufferJournalTests/AccessSlideTests.swift`:
+
+```swift
+import Foundation
+import Testing
+@testable import BufferJournal
+
+/// The access screen stands in for the system here: `AccessibilityAccess` is a struct of closures.
+@MainActor
+final class AccessSpy {
+    var granted: Bool
+    private(set) var requests = 0
+
+    init(granted: Bool) {
+        self.granted = granted
+    }
+
+    var access: AccessibilityAccess {
+        AccessibilityAccess(
+            isGranted: { [self] in granted },
+            request: { [self] in
+                requests += 1
+                granted = true
+            }
+        )
+    }
+}
+
+/// The ДОСТУП slide: the texts it took from the access screen, its button and its silent keys.
+@MainActor
+struct AccessSlideTests {
+    private func defaults() -> UserDefaults {
+        let name = "AccessSlideTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    private func controller(granted: Bool) -> (OnboardingController, AccessSpy, AccessGate) {
+        let spy = AccessSpy(granted: granted)
+        let gate = AccessGate(access: spy.access)
+        return (OnboardingController(defaults: defaults(), access: gate), spy, gate)
+    }
+
+    private func onAccessSlide(granted: Bool = false) -> (OnboardingController, AccessSpy, AccessGate) {
+        let (controller, spy, gate) = controller(granted: granted)
+        controller.present(replay: false)
+        while !controller.isLast {
+            controller.next()
+        }
+        return (controller, spy, gate)
+    }
+
+    @Test func theTextsAreTheAccessScreensOwn() {
+        let ru = L10n(language: .russian)
+        let en = L10n(language: .english)
+        #expect(AccessSlide.titleTail(ru) == " нужен Универсальный доступ")
+        #expect(AccessSlide.titleTail(en) == " needs Accessibility access")
+        #expect(AccessSlide.line(ru) == "Stash вставляет клип, нажимая ⌘V за вас. Без Универсального доступа macOS этого не разрешит.")
+        #expect(AccessSlide.line(en) == "Stash pastes by pressing ⌘V for you. macOS won't allow it without Accessibility access.")
+        #expect(AccessSlide.hint(ru).hasPrefix("Stash уже в списке и включён"))
+        #expect(AccessSlide.hint(en).hasPrefix("Stash is already in the list"))
+        #expect(AccessSlide.buttonTitle(ru) == "Открыть настройки")
+        #expect(AccessSlide.buttonTitle(en) == "Open Settings")
+        #expect(AccessSlide.grantedTitle(ru) == "Доступ включён")
+        #expect(AccessSlide.grantedTitle(en) == "Access granted")
+    }
+
+    @Test func theCardHasAButtonOnlyInTheTutorial() {
+        #expect(AccessSlide.showsCardButton(isAccessOnly: false))
+        #expect(!AccessSlide.showsCardButton(isAccessOnly: true))
+    }
+
+    @Test func theSlideIsTheLastOneWithoutAccess() {
+        let (controller, _, gate) = onAccessSlide()
+        #expect(controller.slide.kind == .access)
+        #expect(controller.isLast)
+        #expect(!gate.isGranted)
+    }
+
+    @Test func theButtonAsksTheGateAndGrantedAccessShowsUp() {
+        let (controller, spy, gate) = onAccessSlide()
+        controller.requestAccess()
+        #expect(spy.requests == 1)
+        // The gate polls once a second while the panel is up; a refresh is what its timer does.
+        gate.refresh()
+        #expect(gate.isGranted)
+    }
+
+    @Test func theSlideHasNoKeys() {
+        let (controller, _, _) = onAccessSlide()
+        for key in [JournalKey.left, .right, .up, .down, .enter, .escape] {
+            #expect(!controller.handleKey(key))
+        }
+        #expect(controller.slide.kind == .access)
+        #expect(controller.isPresented)
+    }
+
+    @Test func aloneItIsTheOnlySlideAndItsMainButtonAsksForAccess() {
+        let (controller, spy, _) = controller(granted: false)
+        controller.presentAccessOnly()
+        #expect(controller.isAccessOnly)
+        #expect(controller.slides.count == 1)
+        #expect(controller.slide.kind == .access)
+        controller.primaryAction()
+        #expect(spy.requests == 1)
+    }
+}
+```
+
+- [ ] **Step 6: Запустить — падает**
+
+Run: `swift test --filter AccessSlideTests`
+Expected: FAIL: ошибка сборки `cannot find 'AccessSlide' in scope`.
+
+- [ ] **Step 7: Части экрана доступа**
+
+Тексты и виды переезжают с экрана доступа как есть: заголовок 18 pt полужирный со значком приложения 21 pt (зазор 2, выравнивание по заглавным) и оранжевым «Stash» цвета `accentText`; строка 13 pt `textSecondary`; подсказка 11 pt `textTertiary` по левому краю с полоской 3 pt цвета `iconOpacity(0.22)` и зазором 10 pt до текста. Кнопка — значок `accessibility` 15 pt перед подписью 12 pt, зазор 6, высота 32, `TranslucentButtonStyle(tone: .accent, cornerRadius: 8)`. Нажатие зовёт `controller.requestAccess()`: тот просит `AccessGate.request()` и опускает панель на обычный уровень окон, чтобы не заслонять Системные настройки. Своего таймера здесь нет: пока панель на экране, `AccessGate` проверяет разрешение раз в секунду сам, и `AccessGate.isGranted` меняется следом.
+
+Создать `Sources/BufferJournal/Onboarding/AccessSlide.swift`:
+
+```swift
+import AppKit
+import SwiftUI
+
+/// Texts of the ДОСТУП slide, word for word from the access screen it replaces.
+enum AccessSlide {
+    /// The title reads "Stash needs Accessibility access"; "Stash" is drawn in the icon's orange.
+    static func titleTail(_ l10n: L10n) -> String {
+        l10n(" needs Accessibility access", " нужен Универсальный доступ")
+    }
+
+    static func line(_ l10n: L10n) -> String {
+        l10n(
+            "Stash pastes by pressing ⌘V for you. macOS won't allow it without Accessibility access.",
+            "Stash вставляет клип, нажимая ⌘V за вас. Без Универсального доступа macOS этого не разрешит."
+        )
+    }
+
+    static func hint(_ l10n: L10n) -> String {
+        l10n(
+            "Stash is already in the list and switched on, but you still see this screen? Try removing it from the list of apps with “−” and clicking Open Settings again.",
+            "Stash уже в списке и включён, а вы всё ещё видите этот экран? Попробуйте удалить его из списка приложений кнопкой «−» и снова нажать «Открыть настройки»."
+        )
+    }
+
+    static func buttonTitle(_ l10n: L10n) -> String {
+        l10n("Open Settings", "Открыть настройки")
+    }
+
+    static func grantedTitle(_ l10n: L10n) -> String {
+        l10n("Access granted", "Доступ включён")
+    }
+
+    /// In the tutorial the card carries the button; alone, the main button at the bottom asks.
+    static func showsCardButton(isAccessOnly: Bool) -> Bool {
+        !isAccessOnly
+    }
+}
+
+/// Under the card in both views of the slide: the title with the app icon, the ⌘V line and the
+/// footnote about a stale entry in the Accessibility list.
+struct AccessPrompt: View {
+    let palette: ThemePalette
+    let l10n: L10n
+
+    /// The app icon before "Stash" keeps the proportions of the journal header's logo (icon 32 : font 28).
+    private enum Title {
+        static let fontSize: CGFloat = 18
+        static let iconFrame: CGFloat = 21
+        static let capHeight = NSFont.systemFont(ofSize: fontSize, weight: .semibold).capHeight
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 2) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: Title.iconFrame, height: Title.iconFrame)
+                    .accessibilityHidden(true)
+
+                (Text("Stash").foregroundColor(palette.accentText)
+                    + Text(AccessSlide.titleTail(l10n)))
+                    .font(.system(size: Title.fontSize, weight: .semibold))
+                    .foregroundStyle(palette.textPrimary)
+                    // Center on the capitals, not on the line box, so the icon lines up with "S".
+                    .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - Title.capHeight / 2 }
+                    .accessibilityAddTraits(.isHeader)
+            }
+
+            Text(AccessSlide.line(l10n))
+                .font(.system(size: 13))
+                .foregroundStyle(palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+
+            // A side note: left-aligned under a grey bar, like a footnote. On the access screen the
+            // button stood between the two; here it sits in the card, so the note comes closer.
+            HStack(alignment: .top, spacing: 10) {
+                Capsule()
+                    .fill(palette.iconOpacity(0.22))
+                    .frame(width: 3)
+
+                Text(AccessSlide.hint(l10n))
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            // The bar takes the height of the text.
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 10)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The one thing inside a card that can be pressed: it asks for access and opens System Settings.
+/// Once access is granted it dissolves into a note and the scene holds its stop frame.
+struct AccessRequestButton: View {
+    let hasAccess: Bool
+    let palette: ThemePalette
+    let l10n: L10n
+
+    /// The frame hands down the same action its own button runs (Task 9).
+    @Environment(\.onboardingOpenSettings) private var openSettings
+
+    var body: some View {
+        ZStack {
+            if hasAccess {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ThemePalette.orange)
+                    Text(AccessSlide.grantedTitle(l10n))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(palette.textPrimary)
+                }
+                .frame(height: 32)
+                .transition(.opacity)
+            } else {
+                Button {
+                    openSettings()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "accessibility")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text(AccessSlide.buttonTitle(l10n))
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 32)
+                }
+                .buttonStyle(TranslucentButtonStyle(tone: .accent, cornerRadius: 8))
+                .transition(.opacity)
+            }
+        }
+        // Inside a card everything keeps the Stash look, whatever theme is picked.
+        .environment(\.solidAccents, true)
+        .animation(.easeOut(duration: 0.2), value: hasAccess)
+    }
+}
+```
+
+- [ ] **Step 8: Слайд в рамке**
+
+Две замены в `Sources/BufferJournal/Onboarding/OnboardingView.swift` (код Task 9). Первая ставит кнопку в карточку — в обучении и только там. Вторая отдаёт низ слайда заголовку, строке и подсказке вместо обычного текста: строка слайда и есть текст экрана доступа, а заголовок с подсказкой стоят вокруг неё. Низ на этом слайде выше обычного, и карточка отдаёт ему место сама.
 
 В `Sources/BufferJournal/Onboarding/OnboardingView.swift` заменить:
 
@@ -5523,8 +6535,10 @@ struct SceneSwitch: View {
                 .id(controller.run)
                 .transition(.opacity)
 
-            if controller.slide.kind == .access {
-                accessButton
+            // In the tutorial the access slide carries a real button under its scene; shown alone,
+            // the slide has none and the main button at the bottom asks instead.
+            if controller.slide.kind == .access, AccessSlide.showsCardButton(isAccessOnly: controller.isAccessOnly) {
+                AccessRequestButton(hasAccess: access.isGranted, palette: palette, l10n: l10n)
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 10)
             }
@@ -5534,70 +6548,47 @@ struct SceneSwitch: View {
 В `Sources/BufferJournal/Onboarding/OnboardingView.swift` заменить:
 
 ```swift
-    private var isStill: Bool {
+        HStack(alignment: .center, spacing: 16) {
+            texts
 ```
 
 на:
 
 ```swift
-    /// The one thing in a card that can be pressed. Once access is granted it turns into a note.
-    private var accessButton: some View {
-        ZStack {
-            if controller.hasAccess {
-                Label(l10n("Access granted", "Доступ включён"), systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(palette.textPrimary)
-                    .frame(height: 32)
-                    .transition(.opacity)
+        HStack(alignment: .center, spacing: 16) {
+            if controller.slide.kind == .access {
+                // The slide's own text, with the title over it and the footnote under it.
+                AccessPrompt(palette: palette, l10n: l10n)
             } else {
-                Button {
-                    controller.requestAccess()
-                } label: {
-                    Text(l10n("Open Settings", "Открыть настройки"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 16)
-                        .frame(height: 32)
-                }
-                .buttonStyle(TranslucentButtonStyle(tone: .accent, cornerRadius: 8))
-                .transition(.opacity)
+                texts
             }
-        }
-        .environment(\.solidAccents, true)
-        .animation(.easeOut(duration: 0.2), value: controller.hasAccess)
-        // While the slide is on screen, check once a second whether access has been granted.
-        .task(id: controller.run) {
-            while !Task.isCancelled {
-                controller.refreshAccess()
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-        }
-    }
-
-    private var isStill: Bool {
 ```
 
-- [ ] **Step 6: Запустить — проходит**
+- [ ] **Step 9: Запустить — проходит**
 
-Run: `swift test --filter AccessSceneTests`
+Run: `swift test --filter AccessSlideTests`
 Expected: PASS.
 
 Run: `swift build && swift test`
 Expected: `Build complete!`, все тесты PASS.
 
-- [ ] **Step 7: Посмотреть снимки**
+- [ ] **Step 10: Посмотреть снимки**
 
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-access-end-ru-light.png` — переключатель у Stash включён, указатель на нём. `frame-access-640-light.png` — под сценой оранжевая кнопка «Открыть настройки», внизу «Начать».
+Проверка вручную: `scene-access-end-ru-light.png` — переключатель у Stash включён, указатель на нём, под окном пусто. `frame-access-640-light.png` — в карточке под окном оранжевая кнопка «Открыть настройки», ниже карточки заголовок со значком и оранжевым «Stash», строка про ⌘V и подсказка с серой полоской, справа «Начать», сверху полосы прогресса. `frame-access-only-640-light.png` (одиночный вид, Task 9) — полос нет, кнопки в карточке нет, нижняя кнопка — «Открыть настройки». На `frame-access-560-*` заголовок и подсказка помещаются, карточка ужимается.
 
-- [ ] **Step 8: Коммит**
+- [ ] **Step 11: Коммит**
 
 ```bash
-git add Sources/BufferJournal/Onboarding/Scenes/AccessScene.swift Sources/BufferJournal/Onboarding/OnboardingSceneView.swift Tests/BufferJournalTests/Scenes/AccessSceneTests.swift Sources/BufferJournal/Onboarding/OnboardingView.swift
-git commit -m "Tutorial scene: accessibility access"
+git add Sources/BufferJournal/Onboarding/Scenes/AccessScene.swift Sources/BufferJournal/Onboarding/AccessSlide.swift Sources/BufferJournal/Onboarding/OnboardingSceneView.swift Sources/BufferJournal/Onboarding/OnboardingView.swift Tests/BufferJournalTests/Scenes/AccessSceneTests.swift Tests/BufferJournalTests/AccessSlideTests.swift
+git commit -m "Tutorial slide: Accessibility access" -m "The scene switches Stash on in System Settings; the access screen's title, line, hint
+and button move under and into the card. The button asks the existing AccessGate, and
+granted access turns it into a note."
 ```
 
+---
 
 ### Task 20: Финальная проверка
 
@@ -5606,6 +6597,8 @@ git commit -m "Tutorial scene: accessibility access"
 
 **Interfaces:**
 - Consumes: все сцены (Tasks 12–19), `OnboardingSlides.all` (Task 5).
+- Produces: ничего нового — проверка собранного.
+- Removes: ничего.
 
 - [ ] **Step 1: Длительности сцен и слайдов совпадают**
 
@@ -5616,17 +6609,33 @@ import CoreGraphics
 import Testing
 @testable import BufferJournal
 
-/// Every scene is as long as its slide says.
+/// Every scene is as long as its slide says, and every kind has a scene.
 @MainActor
 struct SceneDurationTests {
+    private static let durations: [OnboardingSceneKind: Double] = [
+        .hero: HeroScene.duration,
+        .hotKey: HotKeyScene.duration,
+        .paste: PasteScene.duration,
+        .pin: PinScene.duration,
+        .images: ImagesScene.duration,
+        .keys: KeysScene.duration,
+        .settings: SettingsScene.duration,
+        .access: AccessScene.duration,
+    ]
+
     @Test func sceneDurationsMatchTheSlides() {
-        let durations: [OnboardingSceneKind: Double] = [
-            .hero: HeroScene.duration, .hotKey: HotKeyScene.duration, .paste: PasteScene.duration, .pin: PinScene.duration,
-            .images: ImagesScene.duration, .search: SearchScene.duration, .settings: SettingsScene.duration, .access: AccessScene.duration,
-        ]
         for slide in OnboardingSlides.all {
-            #expect(durations[slide.kind] == slide.duration, "\(slide.kind)")
+            #expect(Self.durations[slide.kind] == slide.duration, "\(slide.kind)")
         }
+    }
+
+    @Test func everyKindHasAScene() {
+        #expect(Set(Self.durations.keys) == Set(OnboardingSceneKind.allCases))
+        // Every scene but the first one draws on a canvas of its own.
+        for kind in OnboardingSceneKind.allCases where kind != .hero {
+            #expect(OnboardingSceneView.size(of: kind) != nil, "\(kind)")
+        }
+        #expect(OnboardingSceneView.size(of: .hero) == nil)
     }
 }
 ```
@@ -5637,28 +6646,45 @@ Run: `swift build && swift test`
 Expected: `Build complete!`, все тесты PASS.
 
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
-Expected: PASS; 18 снимков рамки и 64 снимка сцен.
+Expected: PASS; в `/tmp/stash-snapshots` снимки рамки в трёх размерах панели и на двух темах, снимки одиночного вида слайда «ДОСТУП» и снимки всех восьми сцен.
 
-- [ ] **Step 3: Приложение: первый запуск и повтор**
+- [ ] **Step 3: Приложение: первый запуск**
 
-Проверка вручную: Закрыть установленный Stash. `Scripts/build_app.sh`; `defaults delete local.buffer-journal OnboardingSeenVersion`; `open .build/Stash.app`. Пройти все слайды: на каждом сцена играет, доигрывает, за 0,5 с возвращается к началу, после паузы повторяется; первый слайд играет один раз — плитки падают в иконку Stash, она вспыхивает и приплющивается, после третьего удара выезжает «Stash». Полоса текущего слайда заливается за 0,3 с и стоит. «Начать» на последнем закрывает обучение, после перезапуска оно само не открывается. «Обучение» в меню — снова с первого слайда.
+Проверка вручную: Закрыть установленный Stash. `Scripts/build_app.sh`; `defaults delete local.buffer-journal OnboardingSeenVersion`; `open .build/Stash.app`. Панель открывается сама **по центру экрана** — настройка «Открывать у курсора» на обучение не влияет — сразу с первым слайдом. Пройти все слайды: на каждом сцена играет, доигрывает, за 0,5 с возвращается к началу, после паузы повторяется; первый слайд играет один раз — плитки падают в иконку Stash, она вспыхивает и приплющивается, после третьего удара выезжает «Stash». Полоса текущего слайда заливается за 0,3 с и стоит. Слайд «НАСТРОЙКИ» показывает меню в нынешнем составе: «Открыть Stash», «Обучение», «Закрывать после выбора», «Перехватывать клавиши», «Открывать у курсора», «Тема», «Язык», «Очистить историю», «Выйти». «Начать» на последнем слайде закрывает обучение, под ним журнал; после перезапуска обучение само не открывается.
 
-- [ ] **Step 4: Приложение: размеры, темы, языки**
+- [ ] **Step 4: Приложение: пункт меню, клавиши, ⌥V**
 
-Проверка вручную: Потянуть панель до минимума (560 × 360): крупные сцены уменьшаются, текст не больше трёх строк. Растянуть: карточка растёт вместе с панелью и упирается в ширину или высоту места, текст в сценах не мылится. Листать слайды: карточка перетекает в размер следующей сцены. Переключить систему в тёмный режим: поле чёрное. В меню значка Язык → English: тексты английские. Тема Stash Light или Light: в карточке всё равно стиль Stash — непрозрачные акценты.
+Проверка вручную:
 
-- [ ] **Step 5: Приложение: доступ**
+- Значок в строке меню → «Обучение»: обучение открывается с первого слайда, панель поднимается, если была спрятана. Повтор ничего не записывает: закрыть крестиком и снова открыть «Обучение» — оно открывается.
+- Клавиши при открытом обучении: → и Return — вперёд, ← — назад, Esc закрывает обучение, но не панель (под ним остаётся журнал). Буквы уходят в приложение под панелью: поставить курсор в заметку, нажать несколько букв — они появляются в заметке, обучение не реагирует.
+- На последнем слайде → ничего не делает, Return — «Начать».
+- ⌥V посреди обучения: панель прячется вместе с обучением; ещё раз ⌥V — обучение на том же слайде, сцена начинается заново.
+- Клики по зонам: левые 30 % ниже полос — назад, остальное — вперёд; на первом слайде «назад» ничего не делает.
+- Меню значка → снять «Перехватывать клавиши»: клавиши перестают листать обучение — ни ←, ни →, ни Return, ни Esc, — и оно остаётся на мыши и кнопках. Вернуть галочку.
 
-Проверка вручную: Если у сборки нет разрешения Универсального доступа, последний слайд — «ДОСТУП». «Открыть настройки» открывает Универсальный доступ; после включения Stash на слайде появляется «✓ Доступ включён». Выдаёт и снимает разрешение пользователь: системные настройки безопасности агент не трогает. С разрешением слайда нет, последний — «НАСТРОЙКИ».
+- [ ] **Step 5: Приложение: слайд «ДОСТУП» в обучении и отдельно**
 
-- [ ] **Step 6: Меньше движения**
+Проверка вручную: разрешение Универсального доступа выдаёт и снимает пользователь, `tccutil reset Accessibility local.buffer-journal` — тоже: системные настройки безопасности агент не трогает.
 
-Проверка вручную: Системные настройки → Универсальный доступ → Дисплей → «Уменьшить движение» включает пользователь. Сцены стоят на стоп-кадрах, слова меняются без сдвига, полосы заливаются сразу. Без этой проверки вживую остаются тесты стоп-кадров.
+- Без разрешения последний слайд обучения — «ДОСТУП»: в карточке окно «Системных настроек», под окном оранжевая кнопка «Открыть настройки», ниже карточки заголовок со значком приложения и оранжевым «Stash», строка про ⌘V и подсказка с серой полоской, справа внизу «Начать».
+- Клавиш на этом слайде нет вовсе: ←, →, Return и Esc ничего не делают, панель и обучение остаются на месте; листается слайд мышью и кнопками.
+- «Открыть настройки» открывает Универсальный доступ, панель опускается и не заслоняет Системные настройки.
+- **Выдача доступа при открытом слайде:** включить Stash в списке — кнопка в карточке за 0,2 с растворяется в «✓ Доступ включён», сцена встаёт на стоп-кадр с включённым переключателем, панель возвращается наверх.
+- С разрешением слайда нет: последний — «НАСТРОЙКИ», и «Начать» стоит на нём.
+- Слайд отдельно: обучение уже отмечено увиденным (`defaults read local.buffer-journal OnboardingSeenVersion` → 1), разрешение снято, запустить Stash — панель показывает слайд «ДОСТУП» один: полос прогресса нет, кнопки в карточке нет, главная нижняя кнопка — «Открыть настройки», крестик закрывает панель. Выдать доступ — экран за 0,2 с сменяется журналом.
 
-- [ ] **Step 7: Коммит**
+- [ ] **Step 6: Приложение: размеры, темы, языки**
+
+Проверка вручную: Потянуть панель до минимума **560 × 360**: крупные сцены уменьшаются, текст слайда не больше трёх строк, на слайде «ДОСТУП» заголовок, строка и подсказка помещаются, карточка ужимается. Растянуть до **900 × 600**: карточка растёт вместе с панелью и упирается в ширину или высоту места, текст в сценах не мылится. Листать слайды: карточка пружинисто перетекает в размер следующей сцены. Переключить систему в **тёмный** режим: поле чёрное, карточка с тонкой обводкой; вернуть **светлый**: светло-серое поле и мягкая тень у карточки. Тема Stash Light или Light: в карточке всё равно стиль Stash — непрозрачные акценты. Меню значка → Язык → **English**: тексты слайдов, меню в сцене «НАСТРОЙКИ», «Next»/«Start» и тексты слайда «ДОСТУП» английские, сцена «КЛАВИШИ» печатает «typ»; вернуть **Русский** — всё перерисовывается на месте, обучение остаётся на своём слайде.
+
+- [ ] **Step 7: Меньше движения**
+
+Проверка вручную: Системные настройки → Универсальный доступ → Дисплей → «Уменьшить движение» включает пользователь. Сцены стоят на стоп-кадрах, тексты меняются без сдвига, карточка меняет размер без пружины, полосы заливаются сразу, первый слайд — сразу собранный логотип. Без этой проверки вживую остаются тесты стоп-кадров.
+
+- [ ] **Step 8: Коммит**
 
 ```bash
 git add Tests/BufferJournalTests/Scenes/SceneDurationTests.swift
 git commit -m "Check every scene's length against its slide"
 ```
-
