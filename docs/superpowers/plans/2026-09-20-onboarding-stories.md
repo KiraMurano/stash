@@ -3248,6 +3248,7 @@ import SwiftUI
             store: store,
             settings: settings,
             access: access,
+            presentation: presentation,
             keyEvents: keys.events,
 ```
 
@@ -3258,6 +3259,7 @@ import SwiftUI
             store: store,
             settings: settings,
             access: access,
+            presentation: presentation,
             onboarding: onboarding,
             keyEvents: keys.events,
 ```
@@ -4750,7 +4752,7 @@ struct PasteScene: View {
     )
     private static let hovered = Track<Int?>(nil).set(1, at: 0.62)
     private static let selected = Track<Int?>(nil).set(1, at: click + 0.04)
-    // The panel's own fade is 0.055 s — too quick to follow; the spec gives the scene 0.2 s.
+    // The panel's own fade is 0.13 s — too quick to follow; the spec gives the scene 0.2 s.
     private static let journal = Track(1.0).to(0, at: 1.7, until: 1.9, .easeOut)
     private static let pasted = Track(0.0).to(1, at: 1.75, until: 2.05, .easeOut)
 
@@ -5400,7 +5402,7 @@ struct KeysScene: View {
         .set(true, at: 2.0).set(false, at: 2.12)
     private static let selected = Track(0).set(1, at: 1.64).set(2, at: 2.04)
     private static let enter = Track(false).set(true, at: 2.6).set(false, at: 2.72)
-    // The panel's own fade is 0.055 s — too quick to follow; the spec gives the scene 0.2 s.
+    // The panel's own fade is 0.13 s — too quick to follow; the spec gives the scene 0.2 s.
     private static let journal = Track(1.0).to(0, at: 2.7, until: 2.9, .easeOut)
     private static let pasted = Track(0.0).to(1, at: 2.68, until: 2.98, .easeOut)
 

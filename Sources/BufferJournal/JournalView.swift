@@ -41,6 +41,8 @@ struct JournalView: View {
     @ObservedObject var store: ClipboardHistoryStore
     @ObservedObject var settings: AppSettings
     @ObservedObject var access: AccessGate
+    /// Opening and closing: the panel grows into place and shrinks back.
+    @ObservedObject var presentation: PanelPresentation
     /// The journal's keys, taken as hotkeys while it is open: the panel itself never takes the keyboard.
     let keyEvents: PassthroughSubject<JournalKey, Never>
     /// Returns false when nothing was pasted.
@@ -162,6 +164,7 @@ struct JournalView: View {
         }
         .padding(.trailing, Layout.gripMargin)
         .padding(.bottom, Layout.gripMargin)
+        .scaleEffect(presentation.isOpen ? 1 : PanelPresentation.closedScale)
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .animation(.easeOut(duration: 0.2), value: access.isGranted)

@@ -23,6 +23,7 @@ final class JournalPanelController {
     private let writer: ClipboardWriter
     private let settings: AppSettings
     private let access: AccessGate
+    private let presentation = PanelPresentation()
     private let keys: JournalKeys
     private var panel: NSPanel?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
@@ -100,6 +101,7 @@ final class JournalPanelController {
         access.refresh()
         panel.level = .floating
         panel.alphaValue = 0
+        presentation.isOpen = false
         // Never key: typing stays with the app under the panel; the journal's keys come as hotkeys.
         panel.orderFrontRegardless()
         isPanelVisible = true
@@ -108,9 +110,16 @@ final class JournalPanelController {
         updateOutsideClicks()
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.12
+            context.duration = PanelPresentation.appearDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().alphaValue = 1
+        }
+
+        // A turn of the run loop later, so the journal is drawn small once and then grows.
+        DispatchQueue.main.async { [presentation] in
+            withAnimation(.easeOut(duration: PanelPresentation.appearDuration)) {
+                presentation.isOpen = true
+            }
         }
     }
 
@@ -127,9 +136,12 @@ final class JournalPanelController {
         }
 
         savePosition(panel)
+        withAnimation(.easeIn(duration: PanelPresentation.disappearDuration)) {
+            presentation.isOpen = false
+        }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.055
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.duration = PanelPresentation.disappearDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self, weak panel] in
             Task { @MainActor in
@@ -212,6 +224,7 @@ final class JournalPanelController {
             store: store,
             settings: settings,
             access: access,
+            presentation: presentation,
             keyEvents: keys.events,
             onPaste: { [weak self] entry in
                 self?.paste(entry) ?? false
@@ -449,6 +462,18 @@ final class JournalPanelController {
         let y = min(max(origin.y, visibleFrame.minY + 12), visibleFrame.maxY - panel.frame.height - 12)
         return NSPoint(x: x, y: y)
     }
+}
+
+/// Drives the panel's opening and closing: the window fades, and the journal inside grows into
+/// place and shrinks back, so neither end of the animation snaps.
+@MainActor
+final class PanelPresentation: ObservableObject {
+    @Published var isOpen = false
+
+    static let appearDuration = 0.16
+    static let disappearDuration = 0.13
+    /// The size the panel grows from and shrinks back to.
+    static let closedScale: CGFloat = 0.96
 }
 
 /// Never key: the keyboard stays with the app the user is typing in, even after a click.
