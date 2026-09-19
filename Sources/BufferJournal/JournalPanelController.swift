@@ -22,13 +22,28 @@ final class JournalPanelController {
     private let store: ClipboardHistoryStore
     private let writer: ClipboardWriter
     private let settings: AppSettings
+    private let keys: JournalKeys
     private var panel: NSPanel?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
+    private var isPanelVisible = false
+    private var isMenuOpen = false
+    private var activationObservers: [NSObjectProtocol] = []
 
-    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings) {
+    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController) {
         self.store = store
         self.writer = writer
         self.settings = settings
+        keys = JournalKeys(hotKeys: hotKeys)
+
+        // The clip editor activates Stash and needs the arrows, Return and Esc for itself.
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
+            let observer = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.updateKeys()
+                }
+            }
+            activationObservers.append(observer)
+        }
     }
 
     func toggle() {
@@ -43,9 +58,10 @@ final class JournalPanelController {
         let panel = makePanelIfNeeded()
         positionIfNeeded(panel)
         panel.alphaValue = 0
+        // Never key: typing stays with the app under the panel; the journal's keys come as hotkeys.
         panel.orderFrontRegardless()
-        // Key without activating the app: search and arrows work, the target app stays frontmost.
-        panel.makeKey()
+        isPanelVisible = true
+        updateKeys()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
@@ -60,6 +76,8 @@ final class JournalPanelController {
             return
         }
 
+        isPanelVisible = false
+        updateKeys()
         savePosition(panel)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.055
@@ -74,6 +92,21 @@ final class JournalPanelController {
         }
     }
 
+    /// The menu bar menu walks its items with the arrows, so the journal lets go of them meanwhile.
+    func setMenuOpen(_ isOpen: Bool) {
+        isMenuOpen = isOpen
+        updateKeys()
+    }
+
+    private func updateKeys() {
+        keys.isListening = JournalKeys.shouldListen(
+            panelVisible: isPanelVisible,
+            journalShown: true,
+            stashActive: NSApp.isActive,
+            menuOpen: isMenuOpen
+        )
+    }
+
     private func makePanelIfNeeded() -> NSPanel {
         if let panel {
             return panel
@@ -82,6 +115,7 @@ final class JournalPanelController {
         let contentView = JournalView(
             store: store,
             settings: settings,
+            keyEvents: keys.events,
             onSelect: { [weak self] entry in
                 self?.handleSelection(entry)
             },
@@ -122,6 +156,8 @@ final class JournalPanelController {
         panel.hasShadow = true
         panel.animationBehavior = .none
         panel.minSize = Constants.minSize
+        // Stash stays inactive while the panel is open; without this its tooltips never show.
+        panel.allowsToolTipsWhenApplicationIsInactive = true
 
         self.panel = panel
         return panel
@@ -138,22 +174,9 @@ final class JournalPanelController {
 
         if settings.closeAfterSelection {
             close(completion: performSelection)
-        } else if settings.pasteOnSelection, let panel, panel.isKeyWindow {
-            relinquishKeyFocus(of: panel)
-            // Give the window server a moment to hand key focus back before Cmd+V is sent.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                performSelection()
-            }
         } else {
             performSelection()
         }
-    }
-
-    /// Hands keyboard focus back to the app underneath while keeping the panel on screen,
-    /// so a synthesized Cmd+V reaches that app instead of the search field.
-    private func relinquishKeyFocus(of panel: NSPanel) {
-        panel.orderOut(nil)
-        panel.orderFrontRegardless()
     }
 
     private func openTextEditor(for entry: ClipboardEntry) {
@@ -299,8 +322,9 @@ final class JournalPanelController {
     }
 }
 
+/// Never key: the keyboard stays with the app the user is typing in, even after a click.
 private final class JournalPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
 

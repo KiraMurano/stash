@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Split journal: a denser frosted list with orange accents on the left, the selected clip
@@ -39,6 +40,8 @@ struct JournalView: View {
 
     @ObservedObject var store: ClipboardHistoryStore
     @ObservedObject var settings: AppSettings
+    /// The journal's keys, taken as hotkeys while it is open: the panel itself never takes the keyboard.
+    let keyEvents: PassthroughSubject<JournalKey, Never>
     let onSelect: (ClipboardEntry) -> Void
     let onEditText: (ClipboardEntry) -> Void
     let onPreviewImage: (ClipboardEntry) -> Void
@@ -57,10 +60,7 @@ struct JournalView: View {
     @State private var draggedPinnedID: ClipboardEntry.ID?
     @State private var dragStartIndex = 0
     @State private var dragTranslation: CGFloat = 0
-    @State private var query = ""
     @State private var keyboardScrollTarget: KeyboardScrollTarget?
-    @FocusState private var isSearchFocused: Bool
-    @State private var isSearchEditing = false
     @State private var sidebarDragStartWidth: CGFloat?
     @AppStorage("SidebarWidth") private var storedSidebarWidth: Double = Double(Layout.sidebarWidth)
 
@@ -73,16 +73,12 @@ struct JournalView: View {
     }
 
     private var filteredEntries: [ClipboardEntry] {
-        let byType: [ClipboardEntry] = switch selectedFilter {
+        switch selectedFilter {
         case .all: store.entries
         case .text: store.entries.filter(\.isText)
         case .media: store.entries.filter(\.isImage)
         case .files: store.entries.filter(\.isFile)
         }
-
-        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty else { return byType }
-        return byType.filter { matches($0, needle) }
     }
 
     /// Entries in the order the list shows them (pinned first, then by day), for arrow navigation.
@@ -190,13 +186,7 @@ struct JournalView: View {
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, l10n)
         .environment(\.solidAccents, settings.themeMode.usesSolidAccents)
-        .background(
-            KeyboardMonitor(
-                onKey: handleKey,
-                onBecomeKey: { isSearchFocused = true },
-                onEditingChanged: { isSearchEditing = $0 }
-            )
-        )
+        .onReceive(keyEvents) { handleKey($0) }
     }
 
     // MARK: Sidebar
@@ -239,11 +229,6 @@ struct JournalView: View {
             .padding(.bottom, 10)
             .background(WindowDragHandle())
 
-            searchField
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
-                .background(WindowDragHandle())
-
             TypeSegmentedControl(
                 titles: EntryFilter.allCases.map { $0.title(l10n) },
                 selectedIndex: EntryFilter.allCases.firstIndex(of: selectedFilter) ?? 0,
@@ -277,40 +262,6 @@ struct JournalView: View {
                 entryList
             }
         }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(palette.textTertiary)
-
-            TextField(l10n("Search", "Поиск"), text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .foregroundStyle(palette.textPrimary)
-                .focused($isSearchFocused)
-
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(palette.textTertiary)
-                }
-                .buttonStyle(.plain)
-                .help(l10n("Clear search", "Очистить поиск"))
-            }
-        }
-        .padding(.horizontal, 9)
-        .frame(height: 30)
-        .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(isSearchEditing ? ThemePalette.orange : .clear, lineWidth: 1.5)
-        )
-        .animation(.easeOut(duration: 0.12), value: isSearchEditing)
     }
 
     private static let listBottomID = "list-bottom"
@@ -757,9 +708,6 @@ struct JournalView: View {
     }
 
     private var emptyStateMessage: String {
-        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
-            return l10n("Nothing found", "Ничего не найдено")
-        }
         if store.entries.isEmpty {
             return l10n("No saved clips", "Нет сохранённых клипов")
         }
@@ -772,50 +720,34 @@ struct JournalView: View {
         }
     }
 
-    private func matches(_ entry: ClipboardEntry, _ needle: String) -> Bool {
-        let haystack: String = switch entry.payload {
-        case let .text(text): text
-        case .image: kindTitle(entry) + " " + (pixelSize(of: entry) ?? "")
-        case .file: entry.title(l10n)
-        }
-        return haystack.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
-    }
+    /// Keys arrive as hotkeys while the journal is open (see `JournalKeys`).
+    private func handleKey(_ key: JournalKey) {
+        let action = JournalKeyAction.resolve(
+            key,
+            dialogShown: isClearConfirmationShown || entryPendingDeletion != nil,
+            hasSelection: selectedEntry != nil
+        )
 
-    /// Arrow keys move the selection, Return pastes it, Escape clears the search or closes.
-    private func handleKey(_ event: NSEvent) -> Bool {
-        guard !isClearConfirmationShown, entryPendingDeletion == nil else {
-            if event.keyCode == 53 {
-                isClearConfirmationShown = false
-                entryPendingDeletion = nil
-                return true
-            }
-            return false
-        }
-
-        switch event.keyCode {
-        case 125, 126:
+        switch action {
+        case .moveUp, .moveDown:
             let entries = orderedEntries
-            guard !entries.isEmpty else { return true }
+            guard !entries.isEmpty else { return }
             let current = entries.firstIndex { $0.id == selectedEntry?.id } ?? 0
-            let next = event.keyCode == 125 ? min(current + 1, entries.count - 1) : max(current - 1, 0)
+            let next = action == .moveDown ? min(current + 1, entries.count - 1) : max(current - 1, 0)
             selectedID = entries[next].id
             // At the ends scroll to the header / bottom inset so the row keeps its margin.
             keyboardScrollTarget = next == 0 ? .top : (next == entries.count - 1 ? .bottom : .entry(entries[next].id))
-            return true
-        case 36, 76:
+        case .paste:
             if let entry = selectedEntry {
                 select(entry)
             }
-            return true
-        case 53:
-            if query.isEmpty {
-                onClose()
-            } else {
-                query = ""
-            }
-            return true
-        default:
-            return false
+        case .closeDialog:
+            isClearConfirmationShown = false
+            entryPendingDeletion = nil
+        case .closePanel:
+            onClose()
+        case .ignore:
+            break
         }
     }
 
@@ -1162,102 +1094,6 @@ private struct WindowResizeArea: NSViewRepresentable {
                     display: true
                 )
             }
-        }
-    }
-}
-
-/// Local key-down monitor for the panel's window, plus a callback when that window becomes key.
-private struct KeyboardMonitor: NSViewRepresentable {
-    let onKey: (NSEvent) -> Bool
-    let onBecomeKey: () -> Void
-    let onEditingChanged: (Bool) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onKey: onKey, onBecomeKey: onBecomeKey, onEditingChanged: onEditingChanged)
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        context.coordinator.view = view
-        context.coordinator.start()
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.onKey = onKey
-        context.coordinator.onBecomeKey = onBecomeKey
-        context.coordinator.onEditingChanged = onEditingChanged
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.stop()
-    }
-
-    @MainActor
-    final class Coordinator {
-        var onKey: (NSEvent) -> Bool
-        var onBecomeKey: () -> Void
-        var onEditingChanged: (Bool) -> Void
-        weak var view: NSView?
-        private var monitor: Any?
-        private var observers: [NSObjectProtocol] = []
-
-        init(onKey: @escaping (NSEvent) -> Bool, onBecomeKey: @escaping () -> Void, onEditingChanged: @escaping (Bool) -> Void) {
-            self.onKey = onKey
-            self.onBecomeKey = onBecomeKey
-            self.onEditingChanged = onEditingChanged
-        }
-
-        private func isOwnWindow(_ object: Any?) -> Bool {
-            guard let own = view?.window else { return false }
-            if let window = object as? NSWindow {
-                return window === own
-            }
-            return (object as? NSView)?.window === own
-        }
-
-        private func observe(_ name: Notification.Name, _ handler: @escaping @MainActor (Coordinator) -> Void) {
-            let token = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
-                nonisolated(unsafe) let object = notification.object
-                MainActor.assumeIsolated {
-                    guard let self, self.isOwnWindow(object) else { return }
-                    handler(self)
-                }
-            }
-            observers.append(token)
-        }
-
-        func start() {
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                nonisolated(unsafe) let event = event
-                let handled = MainActor.assumeIsolated { () -> Bool in
-                    guard
-                        let self,
-                        let window = self.view?.window,
-                        event.window === window,
-                        event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-                    else {
-                        return false
-                    }
-                    return self.onKey(event)
-                }
-                return handled ? nil : event
-            }
-            observe(NSWindow.didBecomeKeyNotification) { $0.onBecomeKey() }
-            observe(NSWindow.didResignKeyNotification) { $0.onEditingChanged(false) }
-            // The search field reports real editing through the field editor, which FocusState
-            // does not track reliably in a non-activating panel.
-            observe(NSControl.textDidBeginEditingNotification) { $0.onEditingChanged(true) }
-            observe(NSControl.textDidEndEditingNotification) { $0.onEditingChanged(false) }
-        }
-
-        func stop() {
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-            }
-            observers.forEach(NotificationCenter.default.removeObserver)
-            monitor = nil
-            observers = []
         }
     }
 }

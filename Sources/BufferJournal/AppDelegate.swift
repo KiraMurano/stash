@@ -3,7 +3,7 @@ import Carbon
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var store: ClipboardHistoryStore!
     private var monitor: ClipboardMonitor!
     private var writer: ClipboardWriter!
@@ -25,7 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings = AppSettings()
         hotKeyController = HotKeyController()
         hotKeyController.install()
-        panelController = JournalPanelController(store: store, writer: writer, settings: settings)
+        panelController = JournalPanelController(
+            store: store,
+            writer: writer,
+            settings: settings,
+            hotKeys: hotKeyController
+        )
         hotKeyController.register(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(optionKey)) { [weak self] in
             self?.panelController.toggle()
         }
@@ -47,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func rebuildMenu() {
         let l10n = settings.l10n
         let menu = NSMenu()
+        menu.delegate = self
         menu.addItem(menuItem(l10n("Open Stash", "Открыть Stash"), action: #selector(openJournal)))
         menu.addItem(NSMenuItem.separator())
 
@@ -143,6 +149,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    // The journal lets go of the arrows while the menu is open: they walk its items.
+    func menuWillOpen(_ menu: NSMenu) {
+        panelController.setMenuOpen(true)
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        panelController.setMenuOpen(false)
     }
 
     private func updateSettingsMenuState() {
