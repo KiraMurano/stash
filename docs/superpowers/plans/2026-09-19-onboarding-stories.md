@@ -4,7 +4,7 @@
 
 **Goal:** Сториз-обучение внутри панели журнала: восемь слайдов с живыми сценами из настоящих деталей Stash, показ при первом запуске и пункт «Обучение» в меню значка.
 
-**Architecture:** Обучение — слой `OnboardingView` поверх `JournalView`; им управляет `OnboardingController`: показ, набор слайдов, клавиши, отметка «увидено» в `UserDefaults`. Сцены — SwiftUI-виды на холсте 480 × 240, их состояние — чистая функция времени (`Track`, `CursorTrack`, `SceneLoop`), кадры даёт `TimelineView`. Всё, что в сцене изображает Stash, — настоящие виды журнала (`EntryRow`, `TypeSegmentedControl`, `ToastOverlay`, кнопки, палитра), которые план выносит из `JournalView.swift` в `Components/`.
+**Architecture:** Обучение — слой `OnboardingView` поверх `JournalView`; им управляет `OnboardingController`: показ, набор слайдов, клавиши, отметка «увидено» в `UserDefaults`. Сцены — SwiftUI-виды на своих холстах по содержимому, карточка обнимает холст; состояние сцены — чистая функция времени (`Track`, `CursorTrack`, `SceneLoop`), кадры даёт `TimelineView`. Всё, что в сцене изображает Stash, — настоящие виды журнала (`EntryRow`, `TypeSegmentedControl`, `ToastOverlay`, кнопки, палитра), которые план выносит из `JournalView.swift` в `Components/`.
 
 **Tech Stack:** Swift 6 (swift-tools-version 6.0, строгая конкурентность), SwiftUI + AppKit, SwiftPM, Swift Testing (Xcode 26), macOS 13+.
 
@@ -30,12 +30,12 @@
 | `Sources/BufferJournal/Components/EntryThumb.swift`, `SearchFieldChrome.swift`, `SectionHeader.swift` | миниатюра строки, рамка поля поиска, заголовок раздела — для журнала и сцен |
 | `Sources/BufferJournal/AppSettings.swift` | `init(defaults:)`, тема по умолчанию Stash Auto |
 | `Sources/BufferJournal/Onboarding/OnboardingSlides.swift` | восемь слайдов и правило, когда нужен «ДОСТУП» |
-| `Sources/BufferJournal/Onboarding/OnboardingLayout.swift` | кегль слова, масштаб сцены, логотип первого слайда |
+| `Sources/BufferJournal/Onboarding/OnboardingLayout.swift` | масштаб сцены, карточка по сцене, логотип первого слайда |
 | `Sources/BufferJournal/Onboarding/SceneEngine.swift` | кривые, дорожки, круг, указатель — время сцены в состояние |
 | `Sources/BufferJournal/Onboarding/AccessibilityAccess.swift` | есть ли разрешение и как его попросить |
 | `Sources/BufferJournal/Onboarding/OnboardingController.swift` | показ, слайды, клавиши, «увидено» |
 | `Sources/BufferJournal/Onboarding/SceneClock.swift` | часы сцены на `TimelineView` |
-| `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` | какая сцена на слайде и как она встаёт в карточку |
+| `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` | какая сцена на слайде, её холст и как он встаёт в карточку |
 | `Sources/BufferJournal/Onboarding/OnboardingChrome.swift`, `OnboardingView.swift` | рамка обучения: цвета, кнопки, полосы, каркас |
 | `Sources/BufferJournal/Onboarding/Scenes/SceneKit.swift`, `DemoClips.swift`, `DemoDetailPane.swift`, `JournalMiniature.swift` | детали сцен и демо-клипы |
 | `Sources/BufferJournal/Onboarding/Scenes/*Scene.swift` | восемь сцен |
@@ -1012,7 +1012,7 @@ enum OnboardingSlides {
     /// docs/superpowers/specs/2026-09-19-onboarding-stories-design.md, "Слайды".
     static let all: [OnboardingSlide] = [
         OnboardingSlide(
-            kind: .hero, duration: 2.2, loops: false,
+            kind: .hero, duration: 2.6, loops: false,
             word: Localized(en: "HELLO", ru: "ПРИВЕТ"),
             text: Localized(
                 en: "Stash remembers everything you copy: text, images and files. Copy something new, and the old one stays in the journal.",
@@ -1098,16 +1098,15 @@ git commit -m "Tutorial slides: words, texts and durations"
 ```
 
 
-### Task 6: Раскладка: кегль слова, масштаб сцены, логотип
+### Task 6: Раскладка: масштаб сцены, карточка по сцене, логотип
 
 **Files:**
 - Create: `Sources/BufferJournal/Onboarding/OnboardingLayout.swift`
 - Test: `Tests/BufferJournalTests/OnboardingLayoutTests.swift`
 
 **Interfaces:**
-- Consumes: `OnboardingSlides.all` (Task 5).
-- Produces: `OnboardingLayout.sceneSize` (480 × 240), `titleFontSize(widestAt100:rowWidth:panelHeight:) -> CGFloat`, `sceneScale(in: CGSize) -> CGFloat`, `struct Lockup { icon, gap, fontSize }`, `heroLockup(in:wordWidthAt28:) -> Lockup`.
-- Produces: `@MainActor enum TitleMetrics` — `width(of:size:tracking:) -> CGFloat`, `widestWord(_ l10n: L10n) -> CGFloat`, `capHeight(size:) -> CGFloat`.
+- Produces: `OnboardingLayout.sceneSize` (480 × 240 — самый большой холст, заглушка до сцен), `sceneScale(_ scene: CGSize, in area: CGSize) -> CGFloat`, `cardSize(for scene: CGSize, in area: CGSize) -> CGSize`, `struct Lockup { icon, gap, fontSize }`, `heroLockup(in:wordWidthAt28:) -> Lockup`.
+- Produces: `@MainActor enum WordmarkMetrics` — `width(size:) -> CGFloat` и `capHeight(size:) -> CGFloat` для «Stash» шрифтом шапки.
 
 - [ ] **Step 1: Тест**
 
@@ -1119,21 +1118,20 @@ import Testing
 @testable import BufferJournal
 
 struct OnboardingLayoutTests {
-    @Test func titleSizeStopsAtFifteenPercentOfThePanel() {
-        #expect(OnboardingLayout.titleFontSize(widestAt100: 500, rowWidth: 600, panelHeight: 440) == 66)
-        #expect(OnboardingLayout.titleFontSize(widestAt100: 500, rowWidth: 520, panelHeight: 360) == 54)
-    }
-
-    @Test func titleSizeShrinksToFitTheRow() {
-        // 100 × (600 − 40) / (900 × 1.02) = 61.0
-        #expect(OnboardingLayout.titleFontSize(widestAt100: 900, rowWidth: 600, panelHeight: 440) == 61)
-    }
-
     @Test func scenesAreNeverScaledUp() {
-        #expect(OnboardingLayout.sceneScale(in: CGSize(width: 600, height: 262)) == 1)
-        #expect(OnboardingLayout.sceneScale(in: CGSize(width: 860, height: 371)) == 1)
-        #expect(abs(OnboardingLayout.sceneScale(in: CGSize(width: 520, height: 193)) - 193.0 / 240.0) < 0.0001)
-        #expect(OnboardingLayout.sceneScale(in: .zero) == 0)
+        let scene = CGSize(width: 480, height: 240)
+        #expect(OnboardingLayout.sceneScale(scene, in: CGSize(width: 600, height: 262)) == 1)
+        #expect(OnboardingLayout.sceneScale(scene, in: CGSize(width: 860, height: 371)) == 1)
+        #expect(abs(OnboardingLayout.sceneScale(scene, in: CGSize(width: 520, height: 193)) - 193.0 / 240.0) < 0.0001)
+        #expect(OnboardingLayout.sceneScale(scene, in: .zero) == 0)
+    }
+
+    @Test func theCardHugsItsScene() {
+        let roomy = OnboardingLayout.cardSize(for: CGSize(width: 344, height: 246), in: CGSize(width: 600, height: 300))
+        #expect(roomy == CGSize(width: 344, height: 246))
+        let squeezed = OnboardingLayout.cardSize(for: CGSize(width: 480, height: 240), in: CGSize(width: 520, height: 193))
+        #expect(abs(squeezed.height - 193) < 0.001)
+        #expect(abs(squeezed.width - 386) < 0.001)
     }
 
     @Test func heroLockupFitsItsArea() {
@@ -1146,10 +1144,9 @@ struct OnboardingLayoutTests {
     }
 
     @MainActor
-    @Test func theWidestRussianWordIsSettings() {
-        let ru = L10n(language: .russian)
-        let settings = TitleMetrics.width(of: "НАСТРОЙКИ", size: 100, tracking: -2)
-        #expect(TitleMetrics.widestWord(ru) == settings)
+    @Test func theWordmarkIsMeasuredInTheHeaderFont() {
+        #expect(WordmarkMetrics.width(size: 56) > 2 * WordmarkMetrics.width(size: 27))
+        #expect(WordmarkMetrics.capHeight(size: 28) > 15)
     }
 }
 ```
@@ -1167,27 +1164,20 @@ Expected: FAIL: ошибка сборки `cannot find 'OnboardingLayout' in sco
 import AppKit
 
 enum OnboardingLayout {
-    /// Every scene but the first is drawn on this canvas and scaled into its card, never up.
+    /// The largest scene canvas. Each scene has its own size, fitted to what it shows; this one
+    /// stands in for a scene that is not built yet.
     static let sceneSize = CGSize(width: 480, height: 240)
-    /// Room the close button takes from the title row: a 28 pt button and a 12 pt gap.
-    static let closeButtonRoom: CGFloat = 40
-    /// Spare width for the widest word, and the share of the panel height a word may take.
-    static let titleSlack: CGFloat = 1.02
-    static let titleHeightShare: CGFloat = 0.15
 
-    /// One size for every slide: the widest word fills the title row, capped at 15 % of the
-    /// panel height. `widestAt100` is that word's width at 100 pt.
-    static func titleFontSize(widestAt100: CGFloat, rowWidth: CGFloat, panelHeight: CGFloat) -> CGFloat {
-        let cap = (panelHeight * titleHeightShare).rounded()
-        guard widestAt100 > 0 else { return max(cap, 1) }
-        let byWidth = floor(100 * (rowWidth - closeButtonRoom) / (widestAt100 * titleSlack))
-        return max(1, min(byWidth, cap))
+    /// 1:1 with the journal when there is room, smaller when there is not; never larger.
+    static func sceneScale(_ scene: CGSize, in area: CGSize) -> CGFloat {
+        guard scene.width > 0, scene.height > 0, area.width > 0, area.height > 0 else { return 0 }
+        return min(1, area.width / scene.width, area.height / scene.height)
     }
 
-    /// 1:1 with the journal when the card has room, smaller when it does not.
-    static func sceneScale(in card: CGSize) -> CGFloat {
-        guard card.width > 0, card.height > 0 else { return 0 }
-        return min(1, card.width / sceneSize.width, card.height / sceneSize.height)
+    /// The card hugs its scene: the scene's own size at the scale it gets in the area.
+    static func cardSize(for scene: CGSize, in area: CGSize) -> CGSize {
+        let scale = sceneScale(scene, in: area)
+        return CGSize(width: scene.width * scale, height: scene.height * scale)
     }
 
     /// The journal header's lockup: a 32 pt icon, a 2 pt gap and "Stash" at 28 pt heavy.
@@ -1210,19 +1200,12 @@ enum OnboardingLayout {
     }
 }
 
-/// Widths of words in the heavy system font: slide titles and the hero wordmark.
+/// The "Stash" wordmark in the heavy system font, as in the journal header.
 @MainActor
-enum TitleMetrics {
-    static func width(of word: String, size: CGFloat, tracking: CGFloat = 0) -> CGFloat {
+enum WordmarkMetrics {
+    static func width(size: CGFloat) -> CGFloat {
         let font = NSFont.systemFont(ofSize: size, weight: .heavy)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font, .kern: tracking]
-        return ceil(NSAttributedString(string: word, attributes: attributes).size().width)
-    }
-
-    /// The widest slide word of the language at 100 pt with the titles' −2 % tracking. Hidden
-    /// slides count too, so the size does not depend on which slides this showing has.
-    static func widestWord(_ l10n: L10n) -> CGFloat {
-        OnboardingSlides.all.map { width(of: $0.word(l10n), size: 100, tracking: -2) }.max() ?? 0
+        return ceil(NSAttributedString(string: "Stash", attributes: [.font: font]).size().width)
     }
 
     static func capHeight(size: CGFloat) -> CGFloat {
@@ -1234,13 +1217,13 @@ enum TitleMetrics {
 - [ ] **Step 4: Запустить — проходит**
 
 Run: `swift test --filter OnboardingLayoutTests`
-Expected: PASS: 5 тестов.
+Expected: PASS: 4 теста.
 
 - [ ] **Step 5: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding/OnboardingLayout.swift Tests/BufferJournalTests/OnboardingLayoutTests.swift
-git commit -m "Tutorial layout: title size, scene scale and the hero lockup"
+git commit -m "Tutorial layout: scene scale, card size and the hero lockup"
 ```
 
 
@@ -1933,19 +1916,19 @@ git commit -m "Tutorial controller: showing, slides, keys and access"
 ```
 
 
-### Task 9: Рамка обучения: полосы, слово, карточка, текст, кнопка
+### Task 9: Рамка обучения: полосы, карточка по сцене, текст, кнопка
 
 **Files:**
 - Create: `Sources/BufferJournal/Onboarding/SceneClock.swift` — часы сцены на `TimelineView`
-- Create: `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` — выбор сцены; пока все сцены `Color.clear`
+- Create: `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` — выбор сцены и её холста; пока сцены `Color.clear`, холсты 480 × 240
 - Create: `Sources/BufferJournal/Onboarding/OnboardingChrome.swift` — цвета, кнопки, полоса прогресса
-- Create: `Sources/BufferJournal/Onboarding/OnboardingView.swift` — каркас варианта 1.3
+- Create: `Sources/BufferJournal/Onboarding/OnboardingView.swift` — каркас
 - Test: `Tests/BufferJournalTests/SnapshotTests.swift` — PNG рамки в трёх размерах панели
 
 **Interfaces:**
-- Consumes: `OnboardingController` (Task 8), `OnboardingLayout`, `TitleMetrics` (Task 6), `SceneTime`, `SceneLoop` (Task 7), `WindowDragHandle`, `ThemePalette` (Task 2), `FakeAccess` (Task 8, тесты).
-- Produces: `SceneClock(duration:loops:still:content:)`; `OnboardingSceneView(slide:still:)` и `static func canvas(for: OnboardingSceneKind, at: SceneTime, in: CGSize) -> some View`.
-- Produces: `OnboardingColors(isDark:)` — `field`, `word`, `close`, `text`, `barFill`, `barTrack`, `cardShadow`, `button(_ level: Int)`; `OnboardingPrimaryButtonStyle`, `OnboardingCloseButtonStyle`, `OnboardingProgressBar`.
+- Consumes: `OnboardingController` (Task 8), `OnboardingLayout` (Task 6), `SceneTime`, `SceneLoop` (Task 7), `WindowDragHandle`, `ThemePalette`, `TranslucentButtonStyle` (Task 2), `FakeAccess` (Task 8, тесты).
+- Produces: `SceneClock(duration:loops:still:content:)`; `OnboardingSceneView(slide:still:)`, `static func size(of: OnboardingSceneKind) -> CGSize?` (у первого слайда `nil`) и `static func canvas(for:at:in:) -> some View`.
+- Produces: `OnboardingColors(isDark:)` — `field`, `close`, `text`, `barFill`, `barTrack`, `cardShadow`, `wordmark`, `button(_ level: Int)`; `OnboardingPrimaryButtonStyle`, `OnboardingCloseButtonStyle`, `OnboardingProgressBar`.
 - Produces: `OnboardingView(controller:l10n:)`.
 - Produces (тесты): `SnapshotTests.render(_:name:)`, `SnapshotTests.schemes`, `controller(on:)`.
 
@@ -1989,7 +1972,7 @@ struct SceneClock<Content: View>: View {
 
 - [ ] **Step 2: Выбор сцены**
 
-Каждая сцена — отдельная задача ниже; до неё её место занимает `Color.clear`. Сцены 2–8 рисуются на холсте 480 × 240 и уменьшаются в карточку, но не увеличиваются: на панели 640 × 440 сцена ровно 1:1 с журналом. `canvas` открыт для тестов-снимков.
+Каждая сцена — отдельная задача ниже; до неё её место занимает `Color.clear`, а холст — 480 × 240. У сцен 2–8 свой холст по содержимому, он уменьшается в карточку, но не увеличивается: на панели 640 × 440 сцены 1:1 с журналом. У первого слайда холста нет. `size` и `canvas` открыты для рамки и тестов-снимков.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift`:
 
@@ -2012,17 +1995,31 @@ struct OnboardingSceneView: View {
         .accessibilityHidden(true)
     }
 
-    /// The scene fitted into `area`. The first slide lays its logo out by the area; the others
-    /// are drawn on the 480 × 240 canvas and scaled in, never up.
+    /// Each scene's own canvas, fitted to what it shows; the card hugs it. The first slide has no
+    /// canvas: it lays its logo out by whatever room it gets.
+    static func size(of kind: OnboardingSceneKind) -> CGSize? {
+        switch kind {
+        case .hero: nil
+        case .hotKey: OnboardingLayout.sceneSize
+        case .paste: OnboardingLayout.sceneSize
+        case .pin: OnboardingLayout.sceneSize
+        case .images: OnboardingLayout.sceneSize
+        case .search: OnboardingLayout.sceneSize
+        case .settings: OnboardingLayout.sceneSize
+        case .access: OnboardingLayout.sceneSize
+        }
+    }
+
+    /// The scene fitted into `area`: scaled in when there is no room, never scaled up.
     @ViewBuilder
     static func canvas(for kind: OnboardingSceneKind, at time: SceneTime, in area: CGSize) -> some View {
-        if kind == .hero {
+        if let size = size(of: kind) {
             scene(kind, at: time, area: area)
+                .frame(width: size.width, height: size.height, alignment: .topLeading)
+                .scaleEffect(OnboardingLayout.sceneScale(size, in: area))
                 .frame(width: area.width, height: area.height)
         } else {
             scene(kind, at: time, area: area)
-                .frame(width: OnboardingLayout.sceneSize.width, height: OnboardingLayout.sceneSize.height, alignment: .topLeading)
-                .scaleEffect(OnboardingLayout.sceneScale(in: area))
                 .frame(width: area.width, height: area.height)
         }
     }
@@ -2045,35 +2042,35 @@ struct OnboardingSceneView: View {
 
 - [ ] **Step 3: Цвета и кнопки рамки**
 
-Цвета — таблица «Цвета» из спеки: оранжевое поле и чёрный в светлой теме, чёрное поле и оранжевый в тёмной.
+Цвета — таблица «Цвета» из спеки: светло-серое поле или чёрное, оранжевые полосы и кнопка, «Stash» первого слайда — оранжевым для текста.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingChrome.swift`:
 
 ```swift
 import SwiftUI
 
-/// Colours of the tutorial's frame (spec, "Цвета"): orange field in light, black in dark.
+/// Colours of the tutorial's frame: a light grey field in light, black in dark, orange accents.
 struct OnboardingColors {
     let isDark: Bool
 
-    var field: Color { isDark ? .black : ThemePalette.orange }
-    var word: Color { isDark ? ThemePalette.orange : .black }
-    var close: Color { isDark ? Color.white.opacity(0.9) : .black }
-    var text: Color { isDark ? Color.white.opacity(0.68) : Color.black.opacity(0.75) }
-    var barFill: Color { isDark ? ThemePalette.orange : .black }
-    var barTrack: Color { isDark ? Color.white.opacity(0.16) : Color.black.opacity(0.14) }
-    var cardShadow: Color { isDark ? .clear : Color.black.opacity(0.25) }
+    /// The window's own light grey, or black.
+    var field: Color { isDark ? .black : ThemePalette(colorScheme: .light).windowBackground }
+    var close: Color { isDark ? Color.white.opacity(0.9) : Color.black.opacity(0.8) }
+    var text: Color { isDark ? Color.white.opacity(0.68) : Color.black.opacity(0.68) }
+    var barFill: Color { ThemePalette.orange }
+    var barTrack: Color { isDark ? Color.white.opacity(0.16) : Color.black.opacity(0.1) }
+    var cardShadow: Color { isDark ? .clear : Color.black.opacity(0.1) }
+    /// "Stash" on the first slide. On the light field it takes the app's orange for text, which
+    /// keeps 3:1 against the grey; the brand orange would not.
+    var wordmark: Color { isDark ? ThemePalette.orange : ThemePalette(colorScheme: .light).accentText }
 
-    /// The main button; `level` is 0 at rest, 1 hovered, 2 pressed.
+    /// The main button, orange in both looks; `level` is 0 at rest, 1 hovered, 2 pressed.
     func button(_ level: Int) -> Color {
-        if isDark {
-            return ThemePalette.darken(ThemePalette.orange, by: 0.08 * Double(level))
-        }
-        return Color.black.opacity([1, 0.85, 0.78][min(max(level, 0), 2)])
+        ThemePalette.darken(ThemePalette.orange, by: 0.08 * Double(min(max(level, 0), 2)))
     }
 }
 
-/// "Next" / "Start": a capsule that lightens (light) or darkens (dark) on hover and press.
+/// "Next" / "Start": an orange capsule that darkens on hover and press, like the journal's buttons.
 struct OnboardingPrimaryButtonStyle: ButtonStyle {
     let colors: OnboardingColors
 
@@ -2168,7 +2165,7 @@ struct OnboardingProgressBar: View {
 
 - [ ] **Step 4: Каркас**
 
-Сверху вниз: полосы (3 pt, зазор 4), слово и крестик, карточка сцены (скругление 20), текст рядом с кнопкой 150 × 36. Отступы 12 / 20 / 16, между блоками 10. Кегль слова один на все слайды: самое широкое слово языка, не больше 15 % высоты панели. Тексты всех восьми слайдов лежат друг на друге, виден один — высота низа не прыгает. Клик по левым 30 % ниже шапки — назад, по остальному — вперёд; полосы и шапка двигают окно.
+Сверху вниз: строка из полос (3 pt, зазор 4) и крестика, место для карточки, текст рядом с кнопкой 150 × 36. Отступы 12 / 20 / 16, между блоками 10. Слова-заголовка нет, слово слайда — только заголовок для VoiceOver. Карточка обнимает сцену и стоит по центру своего места; при смене слайда пружинисто перетекает в размер следующей. Тексты всех восьми слайдов лежат друг на друге, виден один — высота низа не прыгает. Клик по левым 30 % ниже шапки — назад, по остальному — вперёд; строка с полосами двигает окно.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingView.swift`:
 
@@ -2176,9 +2173,8 @@ struct OnboardingProgressBar: View {
 import AppKit
 import SwiftUI
 
-/// The tutorial: stories over the whole journal panel, layout 1.3 of the concept
-/// (.concepts/2026-09-18-onboarding.html). Bars, a one-word title with the close cross,
-/// the scene card, and the text beside the main button.
+/// The tutorial: stories over the whole journal panel. Progress bars and the close cross on top,
+/// the scene in a card that hugs it, and the text beside the main button at the bottom.
 struct OnboardingView: View {
     @ObservedObject var controller: OnboardingController
     let l10n: L10n
@@ -2191,6 +2187,8 @@ struct OnboardingView: View {
         static let side: CGFloat = 20
         static let bottom: CGFloat = 16
         static let gap: CGFloat = 10
+        /// The bars share a row with the 28 pt close cross.
+        static let headHeight: CGFloat = 28
         static let bar: CGFloat = 3
         static let cardRadius: CGFloat = 20
         static let buttonWidth: CGFloat = 150
@@ -2213,21 +2211,14 @@ struct OnboardingView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let titleSize = OnboardingLayout.titleFontSize(
-                widestAt100: TitleMetrics.widestWord(l10n),
-                rowWidth: geometry.size.width - 2 * Metrics.side,
-                panelHeight: geometry.size.height
-            )
-            let titleHeight = max((titleSize * 0.95).rounded(), 28)
-
             ZStack(alignment: .topLeading) {
                 colors.field
 
-                zones(width: geometry.size.width, top: Metrics.top + Metrics.bar + Metrics.gap + titleHeight)
+                zones(width: geometry.size.width, top: Metrics.top + Metrics.headHeight)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    head(titleSize: titleSize, titleHeight: titleHeight)
-                    card
+                VStack(spacing: 0) {
+                    head
+                    stage
                         .padding(.top, Metrics.gap)
                     footer
                         .padding(.top, Metrics.gap)
@@ -2247,16 +2238,13 @@ struct OnboardingView: View {
 
     // MARK: Head
 
-    private func head(titleSize: CGFloat, titleHeight: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: Metrics.gap) {
+    private var head: some View {
+        HStack(spacing: 12) {
             bars
-            HStack(alignment: .top, spacing: 12) {
-                title(size: titleSize, height: titleHeight)
-                Spacer(minLength: 0)
-                closeButton
-            }
+            closeButton
         }
-        // The bars and the title row move the panel, like the journal's header.
+        .frame(height: Metrics.headHeight)
+        // The bars' row moves the panel, like the journal's header.
         .background(WindowDragHandle())
     }
 
@@ -2276,32 +2264,6 @@ struct OnboardingView: View {
         return offset == controller.index ? .current : .upcoming
     }
 
-    private func title(size: CGFloat, height: CGFloat) -> some View {
-        ZStack(alignment: .leading) {
-            Text(controller.slide.word(l10n))
-                .font(.system(size: size, weight: .heavy))
-                .tracking(-0.02 * size)
-                .foregroundStyle(colors.word)
-                .lineLimit(1)
-                .fixedSize()
-                .id(controller.slide.kind)
-                .transition(wordTransition)
-        }
-        .frame(height: height, alignment: .leading)
-        .animation(.easeOut(duration: 0.26), value: controller.index)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    private var wordTransition: AnyTransition {
-        if reduceMotion {
-            return .opacity
-        }
-        return .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: 8)).animation(.easeOut(duration: 0.26)),
-            removal: .opacity.animation(.easeOut(duration: 0.12))
-        )
-    }
-
     private var closeButton: some View {
         Button {
             controller.close()
@@ -2315,10 +2277,22 @@ struct OnboardingView: View {
         .accessibilityLabel(l10n("Close", "Закрыть"))
     }
 
-    // MARK: Card
+    // MARK: Stage
 
-    private var card: some View {
-        let isHero = controller.slide.kind == .hero
+    /// The room between the bars and the text. The card hugs the slide's scene and sits in the
+    /// middle; between slides it grows or shrinks to the next scene.
+    private var stage: some View {
+        GeometryReader { geometry in
+            let kind = controller.slide.kind
+            let scene = OnboardingSceneView.size(of: kind)
+            let card = scene.map { OnboardingLayout.cardSize(for: $0, in: geometry.size) } ?? geometry.size
+
+            self.card(size: card, hasSurface: scene != nil)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+    }
+
+    private func card(size: CGSize, hasSurface: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous)
 
         return ZStack {
@@ -2326,19 +2300,25 @@ struct OnboardingView: View {
             shape
                 .fill(palette.windowBackground)
                 .overlay(shape.fill(palette.sidebarTint))
-                .overlay(shape.strokeBorder(colorScheme == .dark ? palette.border : .clear, lineWidth: 1))
-                .shadow(color: colors.cardShadow, radius: 20, y: 12)
-                .opacity(isHero ? 0 : 1)
+                .overlay(shape.strokeBorder(palette.border, lineWidth: 1))
+                .shadow(color: colors.cardShadow, radius: 16, y: 6)
+                .opacity(hasSurface ? 1 : 0)
                 .allowsHitTesting(false)
 
+            // The first slide has no card, so nothing clips its flying tiles.
             OnboardingSceneView(slide: controller.slide, still: isStill)
-                .clipShape(shape)
+                .clipShape(hasSurface ? AnyShape(shape) : AnyShape(Rectangle().inset(by: -200)))
                 .id(controller.run)
                 .transition(.opacity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeOut(duration: 0.26), value: isHero)
+        .frame(width: size.width, height: size.height)
+        .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: controller.index)
+        .animation(.easeOut(duration: 0.26), value: hasSurface)
         .animation(.easeOut(duration: 0.2), value: controller.run)
+        // The slide's name, for VoiceOver only: the scene itself says nothing to it.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(controller.slide.word(l10n).capitalized)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private var isStill: Bool {
@@ -2384,7 +2364,7 @@ struct OnboardingView: View {
 
     // MARK: Navigation
 
-    /// Clicks below the title row: the left 30 % of the panel goes back, the rest goes on.
+    /// Clicks below the bars: the left 30 % of the panel goes back, the rest goes on.
     private func zones(width: CGFloat, top: CGFloat) -> some View {
         HStack(spacing: 0) {
             Color.clear
@@ -2456,7 +2436,7 @@ struct SnapshotTests {
     /// The whole tutorial on three slides, at the panel's smallest, default and a large size.
     @Test func tutorialFrame() throws {
         for (scheme, name) in Self.schemes {
-            for kind in [OnboardingSceneKind.hero, .paste, .access] {
+            for kind in [OnboardingSceneKind.hero, .search, .access] {
                 for size in [CGSize(width: 560, height: 360), CGSize(width: 640, height: 440), CGSize(width: 900, height: 600)] {
                     let view = OnboardingView(controller: controller(on: kind), l10n: L10n(language: .russian))
                         .frame(width: size.width, height: size.height)
@@ -2480,14 +2460,14 @@ Expected: PASS; в `/tmp/stash-snapshots` 18 файлов `frame-<слайд>-<�
 
 - [ ] **Step 7: Посмотреть снимки**
 
-Проверка вручную: Открыть `frame-paste-640-light.png` и `frame-paste-640-dark.png`. Светлый: оранжевое поле, чёрные полосы (три полные), слово «ВСТАВКА» ~66 pt, пустая светлая карточка с тенью, текст слева, чёрная капсула «Дальше». Тёмный: чёрное поле, оранжевые слово и полосы, карточка с тонкой обводкой, оранжевая кнопка. Жёлтый прямоугольник с перечёркнутым кругом над полосами и словом — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` слово 54 pt, на `frame-*-900-*` — 90 pt.
+Проверка вручную: Открыть `frame-search-640-light.png` и `frame-search-640-dark.png`. Светлый: светло-серое поле, оранжевые полосы (шесть полных) и крестик в одной строке, по центру пустая светлая карточка 480 × 240 с обводкой и мягкой тенью, текст слева, оранжевая капсула «Дальше». Тёмный: чёрное поле, карточка с тонкой обводкой. Жёлтая полоса с перечёркнутым кругом поверх строки с полосами — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` карточка уменьшена под место, на `frame-*-900-*` — того же размера, вокруг больше поля. На `frame-hero-*` карточки нет.
 
 - [ ] **Step 8: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding Tests/BufferJournalTests/SnapshotTests.swift
-git commit -m "Tutorial frame: bars, title, card and footer" -m "The stories layout 1.3 from the concept, not wired into the app yet. Scenes
-are empty placeholders until their own commits."
+git commit -m "Tutorial frame: bars, card and footer" -m "The stories layout from the concept, without the title word: the card hugs its
+scene. Not wired into the app yet; scenes are placeholders until their commits."
 ```
 
 
@@ -3369,7 +3349,7 @@ extension SnapshotTests {
         for (scheme, schemeName) in Self.schemes {
             for (language, languageName) in [(ResolvedLanguage.russian, "ru"), (.english, "en")] {
                 for slide in OnboardingSlides.all {
-                    let area = slide.kind == .hero ? CGSize(width: 600, height: 262) : OnboardingLayout.sceneSize
+                    let area = OnboardingSceneView.size(of: slide.kind) ?? CGSize(width: 600, height: 309)
                     let palette = ThemePalette.scene(scheme)
                     for (time, timeName) in [(SceneTime.end(of: slide.duration), "end"), (SceneTime(t: slide.duration * 0.4, rewind: 0), "mid")] {
                         let view = OnboardingSceneView.canvas(for: slide.kind, at: time, in: area)
@@ -3422,16 +3402,38 @@ import Testing
 /// The stop frame from the spec's "Сцены" section and the moments that lead to it.
 @MainActor
 struct HeroSceneTests {
-    @Test func heroEndsAssembledWithAllTilesCaught() {
+    @Test func heroEndsAssembledAndStill() {
         let end = HeroScene.state(at: .end(of: HeroScene.duration))
         #expect(end.iconOpacity == 1)
+        #expect(end.iconScaleX == 1 && end.iconScaleY == 1)
+        #expect(end.flash == 0 && end.shake == 0)
         #expect(end.wordOpacity == 1)
         #expect(end.wordShift == 0)
         #expect(end.tiles.allSatisfy { $0 == nil })
-        #expect(end.iconSquash == 1)
-        let flying = HeroScene.state(at: SceneTime(t: 0.6, rewind: 0))
+        #expect(end.waves.allSatisfy { $0 == nil })
+        #expect(end.sparks == nil)
+    }
+
+    @Test func tilesFlyThenHitTheIcon() {
+        let flying = HeroScene.state(at: SceneTime(t: 0.55, rewind: 0))
         #expect(flying.tiles[0] != nil)
         #expect(flying.wordOpacity == 0)
+        // Just after the first hit the icon is squashed: wider and lower.
+        let hit = HeroScene.state(at: SceneTime(t: HeroScene.hits[0] + 0.06, rewind: 0))
+        #expect(hit.iconScaleX > 1 && hit.iconScaleY < 1)
+        #expect(hit.waves[0] != nil)
+        // The last hit throws sparks and pushes the word out.
+        let last = HeroScene.state(at: SceneTime(t: HeroScene.hits[2] + 0.1, rewind: 0))
+        #expect(last.sparks != nil)
+        #expect(last.shake != 0)
+        #expect(HeroScene.state(at: SceneTime(t: HeroScene.hits[0] + 0.02, rewind: 0)).flash > 0)
+    }
+
+    @Test func eachFlightEndsInTheIcon() {
+        let icon = CGPoint(x: 200, y: 150)
+        for flight in HeroScene.flights(in: CGSize(width: 600, height: 300), to: icon) {
+            #expect(flight.point(at: 1) == icon)
+        }
     }
 }
 ```
@@ -3443,7 +3445,7 @@ Expected: FAIL: ошибка сборки `cannot find 'HeroScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Карточки нет, логотип стоит на поле. Это связка из шапки журнала (иконка 32 : шрифт 28 : зазор 2), увеличенная до 80 % ширины или высоты области; слово выровнено по заглавным, как в шапке. Иконка поднимается на 18 pt и проявляется (0–0,5 с); три плитки строк журнала — текст, фото, PDF — слетаются в неё, и иконка от каждой чуть сжимается до 0,96 (0,35–1,48 с); справа выезжает «Stash» (1,4–1,9 с). Играет один раз.
+Карточки нет, логотип стоит на поле и ничем не обрезается. Это связка из шапки журнала (иконка 32 : шрифт 28 : зазор 2), увеличенная до 80 % ширины или высоты области; слово выровнено по заглавным, как в шапке. Иконка поднимается на 24 pt и проявляется (0–0,45 с). Три плитки строк журнала — текст, фото, PDF — в две трети иконки вылетают из трёх углов (0,3, 0,48, 0,66 с) и за 0,45 с по дуге с разгоном падают в иконку сверху: кувыркаются, уменьшаются, тянут шлейф из четырёх бледнеющих копий и уходят за иконку (плитки лежат слоем под логотипом). Удар — белая вспышка по иконке, приплющивание от низа с отскоком и оранжевая волна; последний в 1,6 раза сильнее, встряхивает логотип, даёт волну крупнее и двенадцать искр, и «Stash» выезжает из-за иконки (1,12–1,66 с). Играет один раз.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/HeroScene.swift`:
 
@@ -3451,54 +3453,78 @@ Expected: FAIL: ошибка сборки `cannot find 'HeroScene' in scope`.
 import AppKit
 import SwiftUI
 
-/// ПРИВЕТ: no card. The Stash icon rises; tiles of a text, a photo and a PDF fly into it, and it
-/// gives a little each time it catches one; then "Stash" slides in. The lockup is the journal
-/// header's (icon 32 : type 28 : gap 2), scaled up.
+/// ПРИВЕТ: no card. The Stash icon rises. A text, a photo and a PDF, as journal row tiles, swoop
+/// in on arcs, tumbling and trailing, and drop into the icon from above: they pass behind it and
+/// are gone. Each hit flashes and squashes the icon and sends out a wave; the last hits hardest,
+/// shakes the lockup, throws sparks and pushes "Stash" out from behind the icon. The lockup is
+/// the journal header's (icon 32 : type 28 : gap 2), scaled up.
 struct HeroScene: View {
-    static let duration = 2.2
+    static let duration = 2.6
 
     struct State: Equatable {
         var iconOpacity: Double
         var iconRise: Double
-        /// Scale of the icon as it catches the tiles.
-        var iconSquash: Double
-        /// 0…1 along each tile's flight, nil before it starts and after it lands.
+        /// Squash and stretch from the hits, 1 when still.
+        var iconScaleX: Double
+        var iconScaleY: Double
+        /// White flash over the icon at a hit, 0…1.
+        var flash: Double
+        /// Sideways shake of the lockup after the last hit, in points.
+        var shake: Double
+        /// 0…1 along each tile's flight; nil before it sets off and after it is in.
         var tiles: [Double?]
+        /// 0…1 of the wave after each hit; nil when there is none.
+        var waves: [Double?]
+        /// 0…1 of the sparks after the last hit.
+        var sparks: Double?
         var wordOpacity: Double
         var wordShift: Double
     }
 
-    static let tileStarts = [0.35, 0.55, 0.75]
-    static let flight = 0.55
+    static let departures = [0.3, 0.48, 0.66]
+    static let flight = 0.45
+    static let hits = departures.map { $0 + flight }
+    static let waveTime = 0.45
+    static let sparkTime = 0.5
 
-    private static let iconOpacity = Track(0.0).to(1, at: 0, until: 0.5, .easeOut)
-    private static let iconRise = Track(18.0).to(0, at: 0, until: 0.5, .easeOut)
-    private static let wordOpacity = Track(0.0).to(1, at: 1.4, until: 1.9, .easeOut)
-    private static let wordShift = Track(-14.0).to(0, at: 1.4, until: 1.9, .easeOut)
+    private static let iconOpacity = Track(0.0).to(1, at: 0, until: 0.35, .easeOut)
+    private static let iconRise = Track(24.0).to(0, at: 0, until: 0.45, .easeOut)
+    private static let wordOpacity = Track(0.0).to(1, at: 1.14, until: 1.32, .easeOut)
+    /// Out from behind the icon with a little overshoot.
+    private static let wordShift = Track(-56.0).to(6, at: 1.12, until: 1.44, .easeOut).to(0, at: 1.44, until: 1.66, .easeInOut)
 
     static func state(at time: SceneTime) -> State {
         let t = time.t
-        let tiles: [Double?] = tileStarts.map { start in
-            t >= start && t < start + flight ? (t - start) / flight : nil
-        }
+        let squash = impact(at: t)
+        let last = hits[hits.count - 1]
         return State(
             iconOpacity: iconOpacity.value(at: time),
             iconRise: iconRise.value(at: time),
-            iconSquash: squash(at: t),
-            tiles: tiles,
+            iconScaleX: 1 + 0.08 * squash,
+            iconScaleY: 1 - 0.12 * squash,
+            flash: hits.map { hit in t >= hit && t < hit + 0.2 ? 0.55 * (1 - (t - hit) / 0.2) : 0 }.max() ?? 0,
+            shake: t >= last && t < last + 0.3 ? 5 * sin((t - last) * 60) * (1 - (t - last) / 0.3) : 0,
+            tiles: departures.map { start in t >= start && t < start + flight ? (t - start) / flight : nil },
+            waves: hits.map { hit in t >= hit && t < hit + waveTime ? (t - hit) / waveTime : nil },
+            sparks: t >= last && t < last + sparkTime ? (t - last) / sparkTime : nil,
             wordOpacity: wordOpacity.value(at: time),
             wordShift: wordShift.value(at: time)
         )
     }
 
-    /// Down to 0.96 and back within 0.18 s after each tile lands.
-    private static func squash(at t: Double) -> Double {
-        for start in tileStarts {
-            let since = t - (start + flight)
-            if since >= 0, since < 0.09 { return 1 - 0.04 * since / 0.09 }
-            if since >= 0.09, since < 0.18 { return 0.96 + 0.04 * (since - 0.09) / 0.09 }
+    /// Positive squashes (wider, lower), negative stretches. Each hit squashes, then springs back
+    /// past still; the last is 1.6 times as hard.
+    private static func impact(at t: Double) -> Double {
+        for (index, hit) in hits.enumerated().reversed() {
+            let since = t - hit
+            guard since >= 0, since < 0.3 else { continue }
+            let strength = index == hits.count - 1 ? 1.6 : 1
+            if since < 0.12 {
+                return strength * sin(.pi * since / 0.12)
+            }
+            return -0.45 * strength * sin(.pi * (since - 0.12) / 0.18)
         }
-        return 1
+        return 0
     }
 
     let time: SceneTime
@@ -3511,35 +3537,49 @@ struct HeroScene: View {
         let state = Self.state(at: time)
         let palette = ThemePalette.scene(colorScheme)
         let colors = OnboardingColors(isDark: colorScheme == .dark)
-        let lockup = OnboardingLayout.heroLockup(in: area, wordWidthAt28: TitleMetrics.width(of: "Stash", size: 28))
-        let wordWidth = TitleMetrics.width(of: "Stash", size: lockup.fontSize)
-        let capHeight = TitleMetrics.capHeight(size: lockup.fontSize)
-        let width = lockup.icon + lockup.gap + wordWidth
-        let iconCenter = CGPoint(x: (area.width - width) / 2 + lockup.icon / 2, y: area.height / 2)
-        let tileSize = lockup.icon * 0.42
-        let starts = [
-            CGPoint(x: area.width * 0.06, y: area.height * 0.62),
-            CGPoint(x: area.width * 0.34, y: area.height * 0.06),
-            CGPoint(x: area.width * 0.16, y: area.height * 0.94),
-        ]
-        let tiles = [
+        let lockup = OnboardingLayout.heroLockup(in: area, wordWidthAt28: WordmarkMetrics.width(size: 28))
+        let wordWidth = WordmarkMetrics.width(size: lockup.fontSize)
+        let capHeight = WordmarkMetrics.capHeight(size: lockup.fontSize)
+        let left = (area.width - (lockup.icon + lockup.gap + wordWidth)) / 2
+        let icon = CGPoint(x: left + lockup.icon / 2, y: area.height / 2)
+        let tile = lockup.icon * 0.66
+        let flights = Self.flights(in: area, to: icon)
+        let clips = [
             DemoClips.text("hero-text", Localized(en: "Address", ru: "Адрес"), l10n, at: 14, 20),
             DemoClips.image("hero-photo", .mountains, pixelSize: CGSize(width: 1600, height: 1000), at: 14, 2),
             DemoClips.file("hero-file", Localized(en: "Contract.pdf", ru: "Договор.pdf"), bytes: 1_240_000, l10n, at: 12, 10),
         ]
+        let iconImage = Image(nsImage: NSApplication.shared.applicationIconImage)
 
         ZStack(alignment: .topLeading) {
+            // Tiles fly under the lockup, so they vanish into the icon instead of covering it.
+            ForEach(Array(clips.enumerated()), id: \.element.id) { index, clip in
+                if let progress = state.tiles[index] {
+                    // A trail of fading copies behind each tile reads as speed.
+                    ForEach(Self.trail, id: \.lag) { ghost in
+                        let p = max(progress - ghost.lag, 0)
+                        EntryThumb(entry: clip.entry, thumbnail: clip.thumbnail, fileIcon: clip.fileIcon, palette: palette)
+                            .scaleEffect(tile / 42 * (1 - 0.62 * SceneCurve.easeIn(p)))
+                            .rotationEffect(.degrees(flights[index].spin * (1 - SceneCurve.easeOut(p))))
+                            .opacity(ghost.opacity * min(p / 0.1, 1))
+                            .position(flights[index].point(at: SceneCurve.easeIn(p)))
+                    }
+                }
+            }
+
             HStack(spacing: lockup.gap) {
-                Image(nsImage: NSApplication.shared.applicationIconImage)
+                iconImage
                     .resizable()
                     .interpolation(.high)
                     .frame(width: lockup.icon, height: lockup.icon)
-                    .scaleEffect(state.iconSquash)
+                    .overlay(Color.white.opacity(state.flash).mask(iconImage.resizable()))
+                    .scaleEffect(x: state.iconScaleX, y: state.iconScaleY, anchor: .bottom)
                     .offset(y: state.iconRise)
                     .opacity(state.iconOpacity)
+                    .zIndex(1)
                 Text("Stash")
                     .font(.system(size: lockup.fontSize, weight: .heavy))
-                    .foregroundStyle(colors.word)
+                    .foregroundStyle(colors.wordmark)
                     .fixedSize()
                     // Centred on the capitals, as in the journal header.
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
@@ -3547,18 +3587,75 @@ struct HeroScene: View {
                     .opacity(state.wordOpacity)
             }
             .frame(width: area.width, height: area.height)
+            .offset(x: state.shake)
 
-            ForEach(Array(tiles.enumerated()), id: \.element.id) { index, clip in
-                if let progress = state.tiles[index] {
-                    let eased = SceneCurve.easeIn(progress)
-                    EntryThumb(entry: clip.entry, thumbnail: clip.thumbnail, fileIcon: clip.fileIcon, palette: palette)
-                        .scaleEffect(tileSize / 42 * (1 - 0.65 * eased))
-                        .opacity(min(progress / 0.25, 1) * min((1 - progress) / 0.2, 1))
-                        .position(CGPoint.interpolate(starts[index], iconCenter, eased))
+            ForEach(Array(state.waves.enumerated()), id: \.offset) { index, wave in
+                if let wave {
+                    let isLast = index == state.waves.count - 1
+                    Circle()
+                        .strokeBorder(ThemePalette.orange, lineWidth: isLast ? 4 : 3)
+                        .frame(width: lockup.icon, height: lockup.icon)
+                        .scaleEffect(0.9 + (isLast ? 1.2 : 0.8) * SceneCurve.easeOut(wave))
+                        .opacity((isLast ? 0.7 : 0.5) * (1 - wave))
+                        .position(icon)
+                }
+            }
+
+            if let sparks = state.sparks {
+                ForEach(0..<12, id: \.self) { index in
+                    let angle = Double(index) / 12 * 2 * .pi + 0.26
+                    let distance = lockup.icon * (0.55 + 0.7 * SceneCurve.easeOut(sparks))
+                    Circle()
+                        .fill(ThemePalette.orange)
+                        .frame(width: 8, height: 8)
+                        .scaleEffect(1 - 0.7 * sparks)
+                        .opacity(1 - sparks)
+                        .position(x: icon.x + cos(angle) * distance, y: icon.y + sin(angle) * distance)
                 }
             }
         }
         .frame(width: area.width, height: area.height)
+    }
+
+    private struct Ghost {
+        let lag: Double
+        let opacity: Double
+    }
+
+    /// Four fading copies trail each tile; the tile itself goes last, fully opaque.
+    private static let trail = [
+        Ghost(lag: 0.2, opacity: 0.08), Ghost(lag: 0.15, opacity: 0.15),
+        Ghost(lag: 0.1, opacity: 0.25), Ghost(lag: 0.05, opacity: 0.35), Ghost(lag: 0, opacity: 1),
+    ]
+
+    /// A curved path into the icon and the turn a tile makes on it.
+    struct Flight {
+        let start: CGPoint
+        let bend: CGPoint
+        let end: CGPoint
+        /// Degrees the tile is turned when it sets off; it straightens on the way.
+        let spin: Double
+
+        /// Quadratic Bézier from `start` through the pull of `bend` to `end`.
+        func point(at p: Double) -> CGPoint {
+            let u = 1 - p
+            return CGPoint(
+                x: u * u * start.x + 2 * u * p * bend.x + p * p * end.x,
+                y: u * u * start.y + 2 * u * p * bend.y + p * p * end.y
+            )
+        }
+    }
+
+    /// From the upper left, the upper right and the lower left. Every path bends above the icon, so
+    /// each tile comes down into it from the top, like into a pocket.
+    static func flights(in area: CGSize, to icon: CGPoint) -> [Flight] {
+        let w = area.width
+        let h = area.height
+        return [
+            Flight(start: CGPoint(x: w * 0.1, y: h * 0.22), bend: CGPoint(x: icon.x - w * 0.02, y: -h * 0.15), end: icon, spin: -24),
+            Flight(start: CGPoint(x: w * 0.9, y: h * 0.18), bend: CGPoint(x: icon.x + w * 0.2, y: -h * 0.2), end: icon, spin: 28),
+            Flight(start: CGPoint(x: w * 0.16, y: h * 0.88), bend: CGPoint(x: icon.x - w * 0.25, y: -h * 0.1), end: icon, spin: -18),
+        ]
     }
 }
 ```
@@ -3590,7 +3687,7 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-hero-mid-ru-light.png` — плитки на полпути к иконке, слова нет. `scene-hero-end-ru-light.png` — иконка и чёрное «Stash» на оранжевом, `…-dark.png` — оранжевое «Stash» на чёрном. В тестах у процесса нет иконки Stash, поэтому на снимке значок папки; в приложении — иконка Stash.
+Проверка вручную: `scene-hero-mid-ru-light.png` — сразу после первого удара: иконка приплюснута и высветлена, вокруг волна, остальные плитки в полёте со шлейфом. `scene-hero-end-ru-light.png` — иконка и «Stash» оранжевым для текста на светло-сером; `…-dark.png` — оранжевое «Stash» на чёрном. В тестах у процесса нет иконки Stash, поэтому на снимке значок папки; в приложении — иконка Stash.
 
 - [ ] **Step 7: Коммит**
 
@@ -3610,7 +3707,7 @@ git commit -m "Tutorial scene: hello"
 
 **Interfaces:**
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `HotKeyScene(time:)`, `HotKeyScene.duration`, `HotKeyScene.State`, `HotKeyScene.state(at: SceneTime) -> State`.
+- Produces: `HotKeyScene(time:)`, `HotKeyScene.duration`, `HotKeyScene.size`, `HotKeyScene.State`, `HotKeyScene.state(at: SceneTime) -> State`.
 - Produces: `JournalMiniature(palette:)` — журнал 640 × 440 без стекла.
 
 - [ ] **Step 1: Тест стоп-кадра**
@@ -3738,6 +3835,8 @@ import SwiftUI
 /// ВЫЗОВ: ⌥ and V go down on a Mac keyboard, and the journal appears over another app's window.
 struct HotKeyScene: View {
     static let duration = 2.6
+    /// Two keys, and another app's window with the journal over it.
+    static let size = CGSize(width: 470, height: 234)
 
     struct State: Equatable {
         var optionDown: Bool
@@ -3772,10 +3871,10 @@ struct HotKeyScene: View {
 
         ZStack(alignment: .topLeading) {
             SceneKeycap(label: "⌥", caption: "option", pressed: state.optionDown)
-                .offset(x: 20, y: 88)
+                .offset(x: 12, y: 85)
             // On a Russian keyboard V also carries "М"; the shortcut works by key, in any layout.
             SceneKeycap(label: "V", secondary: l10n.language == .russian ? "М" : nil, pressed: state.vDown)
-                .offset(x: 96, y: 88)
+                .offset(x: 88, y: 85)
 
             SceneWindow(title: l10n("Document", "Документ"), palette: palette) {
                 VStack(alignment: .leading, spacing: 9) {
@@ -3791,7 +3890,7 @@ struct HotKeyScene: View {
                 .padding(16)
             }
             .frame(width: 290, height: 210)
-            .offset(x: 180, y: 16)
+            .offset(x: 168, y: 12)
 
             JournalMiniature(palette: palette)
                 .scaleEffect(Self.miniatureScale)
@@ -3799,14 +3898,26 @@ struct HotKeyScene: View {
                 .shadow(color: palette.shadow(0.3), radius: 14, y: 8)
                 .scaleEffect(0.96 + 0.04 * state.journal)
                 .opacity(state.journal)
-                .offset(x: 325 - journalSize.width / 2, y: 128 - journalSize.height / 2)
+                .offset(x: 313 - journalSize.width / 2, y: 117 - journalSize.height / 2)
         }
-        .frame(width: 480, height: 240, alignment: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
     }
 }
 ```
 
 - [ ] **Step 4: Сцена на своём слайде**
+
+В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
+
+```swift
+        case .hotKey: OnboardingLayout.sceneSize
+```
+
+на:
+
+```swift
+        case .hotKey: HotKeyScene.size
+```
 
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
@@ -3852,7 +3963,7 @@ git commit -m "Tutorial scene: open with ⌥V"
 
 **Interfaces:**
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `PasteScene(time:)`, `PasteScene.duration`, `PasteScene.State`, `PasteScene.state(at: SceneTime) -> State`.
+- Produces: `PasteScene(time:)`, `PasteScene.duration`, `PasteScene.size`, `PasteScene.State`, `PasteScene.state(at: SceneTime) -> State`.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -3899,6 +4010,8 @@ import SwiftUI
 /// says "Pasted", and the clip's text lands at the insertion point of a letter next to the list.
 struct PasteScene: View {
     static let duration = 3.6
+    /// The list, and the letter to its right.
+    static let size = CGSize(width: 470, height: 236)
 
     struct State: Equatable {
         var cursor: CursorState
@@ -3915,7 +4028,7 @@ struct PasteScene: View {
     private static let click = 1.5
 
     private static let cursor = CursorTrack(
-        tip: Track(CGPoint(x: 236, y: 236))
+        tip: Track(CGPoint(x: 230, y: 240))
             .to(CGPoint(x: 150, y: 117), at: 0.3, until: 0.8)
             .to(returnButton, at: 0.95, until: 1.35),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
@@ -3967,19 +4080,19 @@ struct PasteScene: View {
             if state.toast {
                 ToastOverlay(message: l10n("Pasted", "Вставлено"))
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    .position(x: 135, y: 216)
+                    .position(x: 135, y: 212)
             }
 
             SceneWindow(title: l10n("Letter", "Письмо"), palette: palette) {
                 letter(state, palette: palette)
             }
             .frame(width: 186, height: 212)
-            .offset(x: 284, y: 14)
+            .offset(x: 274, y: 10)
 
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
         }
-        .frame(width: 480, height: 240, alignment: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
         .animation(.easeOut(duration: 0.16), value: state.toast)
     }
 
@@ -4007,6 +4120,18 @@ struct PasteScene: View {
 ```
 
 - [ ] **Step 4: Сцена на своём слайде**
+
+В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
+
+```swift
+        case .paste: OnboardingLayout.sceneSize
+```
+
+на:
+
+```swift
+        case .paste: PasteScene.size
+```
 
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
@@ -4052,7 +4177,7 @@ git commit -m "Tutorial scene: paste"
 
 **Interfaces:**
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `PinScene(time:)`, `PinScene.duration`, `PinScene.State`, `PinScene.state(at: SceneTime) -> State`.
+- Produces: `PinScene(time:)`, `PinScene.duration`, `PinScene.size`, `PinScene.State`, `PinScene.state(at: SceneTime) -> State`.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -4095,6 +4220,8 @@ import SwiftUI
 /// new clips arrive at the top of "Today" and push the older ones out, while the pinned one stays.
 struct PinScene: View {
     static let duration = 4.6
+    /// The list, with room on its right for the arrow to step away.
+    static let size = CGSize(width: 310, height: 234)
 
     struct State: Equatable {
         var cursor: CursorState
@@ -4104,15 +4231,15 @@ struct PinScene: View {
         var arrived: Int
     }
 
-    /// The pin button of the address row (list x 115…365, row y 88…146).
-    static let pinButton = CGPoint(x: 284, y: 117)
+    /// The pin button of the address row (rows x 10…260, y 88…146).
+    static let pinButton = CGPoint(x: 179, y: 117)
     private static let click = 1.4
 
     private static let cursor = CursorTrack(
-        tip: Track(CGPoint(x: 380, y: 236))
-            .to(CGPoint(x: 220, y: 117), at: 0.3, until: 0.8)
+        tip: Track(CGPoint(x: 296, y: 240))
+            .to(CGPoint(x: 110, y: 117), at: 0.3, until: 0.8)
             .to(pinButton, at: 0.95, until: 1.3)
-            .to(CGPoint(x: 432, y: 176), at: 1.55, until: 1.95),
+            .to(CGPoint(x: 290, y: 172), at: 1.55, until: 1.95),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
         clicks: [click]
     )
@@ -4178,13 +4305,13 @@ struct PinScene: View {
             }
             .padding(.horizontal, 10)
             .frame(width: 270)
-            .offset(x: 105, y: 4)
+            .offset(y: 4)
             .animation(.easeOut(duration: 0.3), value: items)
 
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
         }
-        .frame(width: 480, height: 240, alignment: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
     }
 
     private var clips: [DemoClip] {
@@ -4200,6 +4327,18 @@ struct PinScene: View {
 ```
 
 - [ ] **Step 4: Сцена на своём слайде**
+
+В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
+
+```swift
+        case .pin: OnboardingLayout.sceneSize
+```
+
+на:
+
+```swift
+        case .pin: PinScene.size
+```
 
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
@@ -4245,7 +4384,7 @@ git commit -m "Tutorial scene: pin"
 
 **Interfaces:**
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `ImagesScene(time:)`, `ImagesScene.duration`, `ImagesScene.State`, `ImagesScene.state(at: SceneTime) -> State`.
+- Produces: `ImagesScene(time:)`, `ImagesScene.duration`, `ImagesScene.size`, `ImagesScene.State`, `ImagesScene.state(at: SceneTime) -> State`.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -4286,6 +4425,8 @@ import SwiftUI
 /// the list keeps the two images and shows the first; a click on it opens Preview.
 struct ImagesScene: View {
     static let duration = 4.2
+    /// A piece of the journal at full size: the list pane and the preview pane.
+    static let size = CGSize(width: 480, height: 240)
 
     struct State: Equatable {
         var cursor: CursorState
@@ -4381,7 +4522,7 @@ struct ImagesScene: View {
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
         }
-        .frame(width: 480, height: 240, alignment: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
         .clipped()
     }
 
@@ -4397,6 +4538,18 @@ struct ImagesScene: View {
 ```
 
 - [ ] **Step 4: Сцена на своём слайде**
+
+В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
+
+```swift
+        case .images: OnboardingLayout.sceneSize
+```
+
+на:
+
+```swift
+        case .images: ImagesScene.size
+```
 
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
@@ -4442,7 +4595,7 @@ git commit -m "Tutorial scene: images"
 
 **Interfaces:**
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `SearchScene(time:)`, `SearchScene.duration`, `SearchScene.State`, `SearchScene.state(at: SceneTime) -> State`.
+- Produces: `SearchScene(time:)`, `SearchScene.duration`, `SearchScene.size`, `SearchScene.State`, `SearchScene.state(at: SceneTime) -> State`.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -4501,6 +4654,8 @@ import SwiftUI
 /// the list filters by the journal's own rule. ↓ moves to the second invoice, ⏎ pastes it.
 struct SearchScene: View {
     static let duration = 4.2
+    /// The list with its search field, and the two keys to its right.
+    static let size = CGSize(width: 344, height: 246)
 
     struct State: Equatable {
         /// Letters of the query typed so far.
@@ -4571,22 +4726,23 @@ struct SearchScene: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .frame(width: 270, height: 240)
-            .offset(x: 70)
+            // Top-aligned: four rows are taller than the scene, and the field must stay in view.
+            .frame(width: 270, height: Self.size.height, alignment: .top)
+            .clipped()
             .animation(.easeOut(duration: 0.2), value: visible.map(\.id))
 
             SceneKeycap(label: "↓", size: 44, pressed: state.downPressed)
-                .offset(x: 366, y: 96)
+                .offset(x: 290, y: 96)
             SceneKeycap(label: "⏎", size: 44, pressed: state.returnPressed)
-                .offset(x: 366, y: 152)
+                .offset(x: 290, y: 152)
 
             if state.toast {
                 ToastOverlay(message: l10n("Pasted", "Вставлено"))
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    .position(x: 205, y: 216)
+                    .position(x: 135, y: 222)
             }
         }
-        .frame(width: 480, height: 240, alignment: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
         .clipped()
         .animation(.easeOut(duration: 0.16), value: state.toast)
     }
@@ -4603,6 +4759,18 @@ struct SearchScene: View {
 ```
 
 - [ ] **Step 4: Сцена на своём слайде**
+
+В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
+
+```swift
+        case .search: OnboardingLayout.sceneSize
+```
+
+на:
+
+```swift
+        case .search: SearchScene.size
+```
 
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
@@ -4648,7 +4816,7 @@ git commit -m "Tutorial scene: search"
 
 **Interfaces:**
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `SettingsScene(time:)`, `SettingsScene.duration`, `SettingsScene.State`, `SettingsScene.state(at: SceneTime) -> State`.
+- Produces: `SettingsScene(time:)`, `SettingsScene.duration`, `SettingsScene.size`, `SettingsScene.State`, `SettingsScene.state(at: SceneTime) -> State`.
 - Consumes: `StatusMenuTitles` (Task 10), `L10n.themeName(_:)`.
 
 - [ ] **Step 1: Тест стоп-кадра**
@@ -4693,6 +4861,8 @@ import SwiftUI
 /// walks over the settings, rests on Theme to open its submenu, and ends on Tutorial.
 struct SettingsScene: View {
     static let duration = 4.6
+    /// A strip of the menu bar and the menu that drops from it.
+    static let size = CGSize(width: 400, height: 240)
 
     enum Item: CaseIterable, Equatable, Sendable {
         case openStash, tutorial, pasteOnSelection, closeAfterSelection, theme, language, clearHistory, quit
@@ -4707,9 +4877,11 @@ struct SettingsScene: View {
         var highlighted: Item?
     }
 
-    // Geometry of the menu, in scene points.
-    static let statusIcon = CGPoint(x: 262, y: 12)
-    static let menuOrigin = CGPoint(x: 250, y: 26)
+    // Geometry, in scene points. The status items on the right have fixed widths (icon 26, Wi-Fi 22,
+    // battery 30, clock 40, 10 apart, 14 from the edge), so the Stash icon's centre is known. Like
+    // a real menu, this one starts under the icon unless it would run off the screen.
+    static let statusIcon = CGPoint(x: 251, y: 12)
+    static let menuOrigin = CGPoint(x: 186, y: 26)
     static let menuWidth: CGFloat = 210
     static let rowHeight: CGFloat = 22
     static let separatorHeight: CGFloat = 9
@@ -4737,7 +4909,7 @@ struct SettingsScene: View {
     private static let click = 0.9
 
     private static let cursor = CursorTrack(
-        tip: Track(CGPoint(x: 400, y: 200))
+        tip: Track(CGPoint(x: 330, y: 200))
             .to(statusIcon, at: 0.3, until: 0.8)
             .to(center(of: .pasteOnSelection), at: 1.2, until: 1.45)
             .to(center(of: .closeAfterSelection), at: 1.5, until: 1.65)
@@ -4776,8 +4948,9 @@ struct SettingsScene: View {
             menuBar(state, palette: palette)
 
             if state.highlighted == .theme {
+                // No room on the right, so the submenu opens to the left and shifts up to fit.
                 themeSubmenu(palette: palette)
-                    .offset(x: 102, y: 85)
+                    .offset(x: 38, y: 85)
             }
 
             menuPanel(state, palette: palette)
@@ -4787,32 +4960,38 @@ struct SettingsScene: View {
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
         }
-        .frame(width: 480, height: 240, alignment: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
     }
 
     // MARK: Menu bar
 
     private func menuBar(_ state: State, palette: ThemePalette) -> some View {
-        HStack(spacing: 16) {
-            Text("Finder").fontWeight(.bold)
-            Text(l10n("File", "Файл"))
-            Text(l10n("Edit", "Правка"))
-            Text(l10n("View", "Вид"))
-            Spacer(minLength: 0)
-            statusIcon
-                .frame(width: 26, height: 20)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(palette.textPrimary.opacity(state.iconHighlighted ? 0.14 : 0))
-                )
-            Image(systemName: "wifi")
-            Image(systemName: "battery.75")
-            Text("14:02")
+        ZStack {
+            HStack(spacing: 16) {
+                Text("Finder").fontWeight(.bold)
+                Text(l10n("File", "Файл"))
+                Text(l10n("Edit", "Правка"))
+                Text(l10n("View", "Вид"))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 10) {
+                statusIcon
+                    .frame(width: 26, height: 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(palette.textPrimary.opacity(state.iconHighlighted ? 0.14 : 0))
+                    )
+                Image(systemName: "wifi").frame(width: 22)
+                Image(systemName: "battery.75").frame(width: 30)
+                Text("14:02").frame(width: 40)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .font(.system(size: 12))
         .foregroundStyle(palette.textPrimary)
         .padding(.horizontal, 14)
-        .frame(width: 480, height: 24)
+        .frame(width: Self.size.width, height: 24)
         .background(menuBackground)
         .overlay(alignment: .bottom) {
             palette.separator.frame(height: 1)
@@ -4935,6 +5114,18 @@ struct SettingsScene: View {
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
 ```swift
+        case .settings: OnboardingLayout.sceneSize
+```
+
+на:
+
+```swift
+        case .settings: SettingsScene.size
+```
+
+В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
+
+```swift
         case .settings: Color.clear
 ```
 
@@ -4976,7 +5167,7 @@ git commit -m "Tutorial scene: settings"
 
 **Interfaces:**
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
-- Produces: `AccessScene(time:)`, `AccessScene.duration`, `AccessScene.State`, `AccessScene.state(at: SceneTime) -> State`.
+- Produces: `AccessScene(time:)`, `AccessScene.duration`, `AccessScene.size`, `AccessScene.State`, `AccessScene.state(at: SceneTime) -> State`.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -5016,6 +5207,8 @@ import SwiftUI
 /// The bottom of the scene stays free for the card's real "Open Settings" button.
 struct AccessScene: View {
     static let duration = 3.0
+    /// The System Settings window, and room under it for the card's real button.
+    static let size = CGSize(width: 460, height: 236)
 
     struct State: Equatable {
         var cursor: CursorState
@@ -5023,12 +5216,12 @@ struct AccessScene: View {
         var isOn: Bool
     }
 
-    /// The Stash switch: window x 20…460, content pane from x 170, list row centred at y 104.
-    static let toggle = CGPoint(x: 420, y: 104)
+    /// The Stash switch: window x 10…450, content pane from x 160, list row centred at y 106.
+    static let toggle = CGPoint(x: 410, y: 106)
     private static let click = 1.2
 
     private static let cursor = CursorTrack(
-        tip: Track(CGPoint(x: 400, y: 236)).to(toggle, at: 0.3, until: 1.0),
+        tip: Track(CGPoint(x: 390, y: 240)).to(toggle, at: 0.3, until: 1.0),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
         clicks: [click]
     )
@@ -5060,12 +5253,12 @@ struct AccessScene: View {
             .clipShape(shape)
             .overlay(shape.strokeBorder(palette.border, lineWidth: 1))
             .shadow(color: palette.shadow(0.18), radius: 16, y: 8)
-            .offset(x: 20, y: 8)
+            .offset(x: 10, y: 10)
 
             SceneRipple(ripple: state.ripple)
             SceneCursor(state: state.cursor)
         }
-        .frame(width: 480, height: 240, alignment: .topLeading)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
     }
 
     private func sidebar(palette: ThemePalette) -> some View {
@@ -5168,6 +5361,18 @@ struct SceneSwitch: View {
 В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
 
 ```swift
+        case .access: OnboardingLayout.sceneSize
+```
+
+на:
+
+```swift
+        case .access: AccessScene.size
+```
+
+В `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` заменить:
+
+```swift
         case .access: Color.clear
 ```
 
@@ -5185,7 +5390,7 @@ struct SceneSwitch: View {
 
 ```swift
             OnboardingSceneView(slide: controller.slide, still: isStill)
-                .clipShape(shape)
+                .clipShape(hasSurface ? AnyShape(shape) : AnyShape(Rectangle().inset(by: -200)))
                 .id(controller.run)
                 .transition(.opacity)
         }
@@ -5195,7 +5400,7 @@ struct SceneSwitch: View {
 
 ```swift
             OnboardingSceneView(slide: controller.slide, still: isStill)
-                .clipShape(shape)
+                .clipShape(hasSurface ? AnyShape(shape) : AnyShape(Rectangle().inset(by: -200)))
                 .id(controller.run)
                 .transition(.opacity)
 
@@ -5317,11 +5522,11 @@ Expected: PASS; 18 снимков рамки и 64 снимка сцен.
 
 - [ ] **Step 3: Приложение: первый запуск и повтор**
 
-Проверка вручную: Закрыть установленный Stash. `Scripts/build_app.sh`; `defaults delete local.buffer-journal OnboardingSeenVersion`; `open .build/Stash.app`. Пройти все слайды: на каждом сцена играет, доигрывает, за 0,5 с возвращается к началу, после паузы повторяется; первый слайд играет один раз. Полоса текущего слайда заливается за 0,3 с и стоит. «Начать» на последнем закрывает обучение, после перезапуска оно само не открывается. «Обучение» в меню — снова с первого слайда.
+Проверка вручную: Закрыть установленный Stash. `Scripts/build_app.sh`; `defaults delete local.buffer-journal OnboardingSeenVersion`; `open .build/Stash.app`. Пройти все слайды: на каждом сцена играет, доигрывает, за 0,5 с возвращается к началу, после паузы повторяется; первый слайд играет один раз — плитки падают в иконку Stash, она вспыхивает и приплющивается, после третьего удара выезжает «Stash». Полоса текущего слайда заливается за 0,3 с и стоит. «Начать» на последнем закрывает обучение, после перезапуска оно само не открывается. «Обучение» в меню — снова с первого слайда.
 
 - [ ] **Step 4: Приложение: размеры, темы, языки**
 
-Проверка вручную: Потянуть панель до минимума (560 × 360): сцена уменьшается, слово 54 pt, текст не больше трёх строк. Растянуть: сцена 1:1, вокруг поле. Переключить систему в тёмный режим: поле чёрное, слово оранжевое. В меню значка Язык → English: слова и тексты английские, кегль пересчитался. Тема Stash Light или Light: в карточке всё равно стиль Stash — непрозрачные акценты.
+Проверка вручную: Потянуть панель до минимума (560 × 360): крупные сцены уменьшаются, текст не больше трёх строк. Растянуть: карточки своего размера, вокруг поле. Листать слайды: карточка перетекает в размер следующей сцены. Переключить систему в тёмный режим: поле чёрное. В меню значка Язык → English: тексты английские. Тема Stash Light или Light: в карточке всё равно стиль Stash — непрозрачные акценты.
 
 - [ ] **Step 5: Приложение: доступ**
 
