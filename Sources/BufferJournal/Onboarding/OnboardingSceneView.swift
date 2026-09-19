@@ -49,7 +49,7 @@ struct OnboardingSceneView: View {
     @ViewBuilder
     private static func scene(_ kind: OnboardingSceneKind, at time: SceneTime, area: CGSize) -> some View {
         switch kind {
-        case .hero: Color.clear
+        case .hero: HeroScene(time: time, area: area)
         case .hotKey: Color.clear
         case .paste: Color.clear
         case .pin: Color.clear
