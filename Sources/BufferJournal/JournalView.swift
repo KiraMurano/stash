@@ -40,6 +40,7 @@ struct JournalView: View {
 
     @ObservedObject var store: ClipboardHistoryStore
     @ObservedObject var settings: AppSettings
+    @ObservedObject var access: AccessGate
     /// The journal's keys, taken as hotkeys while it is open: the panel itself never takes the keyboard.
     let keyEvents: PassthroughSubject<JournalKey, Never>
     /// Returns false when nothing was pasted.
@@ -47,6 +48,7 @@ struct JournalView: View {
     let onCopy: (ClipboardEntry) -> Void
     let onEditText: (ClipboardEntry) -> Void
     let onPreviewImage: (ClipboardEntry) -> Void
+    let onOpenAccessSettings: () -> Void
     let onClose: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -97,36 +99,12 @@ struct JournalView: View {
         ZStack {
             NativeGlassEffectView(style: .regular, cornerRadius: Layout.cornerRadius)
 
-            GeometryReader { geometry in
-                let width = sidebarWidth(in: geometry.size.width)
-
-                HStack(spacing: 0) {
-                    sidebar
-                        .frame(width: width)
-                        .background(palette.sidebarTint)
-                        .overlay(alignment: .trailing) {
-                            palette.separator.frame(width: 1)
-                        }
-                        .overlay(alignment: .trailing) {
-                            SidebarResizeHandle(
-                                palette: palette,
-                                onChanged: { translation in
-                                    let start = sidebarDragStartWidth ?? width
-                                    sidebarDragStartWidth = start
-                                    storedSidebarWidth = Double(clampedSidebarWidth(start + translation, in: geometry.size.width))
-                                },
-                                onEnded: { sidebarDragStartWidth = nil }
-                            )
-                            // Hit area spans 4 pt left of the divider to 10 pt right of it, so the
-                            // border and the grab mark light up and drag as one.
-                            .offset(x: 10)
-                        }
-                        .zIndex(1)
-
-                    detail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(palette.detailTint)
-                }
+            if access.isGranted {
+                journal
+                    .transition(.opacity)
+            } else {
+                AccessScreen(palette: palette, onOpenSettings: onOpenAccessSettings, onClose: onClose)
+                    .transition(.opacity)
             }
 
             if isClearConfirmationShown || entryPendingDeletion != nil {
@@ -185,10 +163,46 @@ struct JournalView: View {
         .padding(.bottom, Layout.gripMargin)
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
+        .animation(.easeOut(duration: 0.2), value: access.isGranted)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, l10n)
         .environment(\.solidAccents, settings.themeMode.usesSolidAccents)
         .onReceive(keyEvents) { handleKey($0) }
+    }
+
+    /// The split journal: clips on the left, the selected clip in full on the right.
+    private var journal: some View {
+        GeometryReader { geometry in
+            let width = sidebarWidth(in: geometry.size.width)
+
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: width)
+                    .background(palette.sidebarTint)
+                    .overlay(alignment: .trailing) {
+                        palette.separator.frame(width: 1)
+                    }
+                    .overlay(alignment: .trailing) {
+                        SidebarResizeHandle(
+                            palette: palette,
+                            onChanged: { translation in
+                                let start = sidebarDragStartWidth ?? width
+                                sidebarDragStartWidth = start
+                                storedSidebarWidth = Double(clampedSidebarWidth(start + translation, in: geometry.size.width))
+                            },
+                            onEnded: { sidebarDragStartWidth = nil }
+                        )
+                        // Hit area spans 4 pt left of the divider to 10 pt right of it, so the
+                        // border and the grab mark light up and drag as one.
+                        .offset(x: 10)
+                    }
+                    .zIndex(1)
+
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(palette.detailTint)
+            }
+        }
     }
 
     // MARK: Sidebar
@@ -1396,7 +1410,7 @@ struct TranslucentButtonStyle: ButtonStyle {
     }
 }
 
-private struct GlassIconButton: View {
+struct GlassIconButton: View {
     let systemName: String
     var isDestructive = false
     var tint: Color?
@@ -1710,7 +1724,7 @@ struct ThemePalette {
     }
 }
 
-private struct WindowDragHandle: NSViewRepresentable {
+struct WindowDragHandle: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         DragHandleView()
     }

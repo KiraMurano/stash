@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var monitor: ClipboardMonitor!
     private var writer: ClipboardWriter!
     private var settings: AppSettings!
+    private var access: AccessGate!
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
     private var statusItem: NSStatusItem!
@@ -22,13 +23,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         monitor = ClipboardMonitor(store: store)
         writer = ClipboardWriter(store: store, monitor: monitor)
         settings = AppSettings()
+        access = AccessGate()
         hotKeyController = HotKeyController()
         hotKeyController.install()
         panelController = JournalPanelController(
             store: store,
             writer: writer,
             settings: settings,
-            hotKeys: hotKeyController
+            hotKeys: hotKeyController,
+            access: access
         )
         hotKeyController.register(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(optionKey)) { [weak self] in
             self?.panelController.toggle()
@@ -36,6 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         configureStatusItem()
         monitor.start()
+
+        // Pasting needs Accessibility access; without it the panel opens right away on the access screen.
+        if !access.isGranted {
+            panelController.show()
+        }
     }
 
     private func configureStatusItem() {

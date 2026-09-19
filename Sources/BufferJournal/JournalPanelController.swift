@@ -22,6 +22,7 @@ final class JournalPanelController {
     private let store: ClipboardHistoryStore
     private let writer: ClipboardWriter
     private let settings: AppSettings
+    private let access: AccessGate
     private let keys: JournalKeys
     private var panel: NSPanel?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
@@ -29,10 +30,11 @@ final class JournalPanelController {
     private var isMenuOpen = false
     private var activationObservers: [NSObjectProtocol] = []
 
-    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController) {
+    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate) {
         self.store = store
         self.writer = writer
         self.settings = settings
+        self.access = access
         keys = JournalKeys(hotKeys: hotKeys)
 
         // The clip editor activates Stash and needs the arrows, Return and Esc for itself.
@@ -43,6 +45,10 @@ final class JournalPanelController {
                 }
             }
             activationObservers.append(observer)
+        }
+
+        access.onChange = { [weak self] in
+            self?.accessChanged()
         }
     }
 
@@ -57,10 +63,13 @@ final class JournalPanelController {
     func show() {
         let panel = makePanelIfNeeded()
         positionIfNeeded(panel)
+        access.refresh()
+        panel.level = .floating
         panel.alphaValue = 0
         // Never key: typing stays with the app under the panel; the journal's keys come as hotkeys.
         panel.orderFrontRegardless()
         isPanelVisible = true
+        access.setPolling(true)
         updateKeys()
 
         NSAnimationContext.runAnimationGroup { context in
@@ -77,6 +86,7 @@ final class JournalPanelController {
         }
 
         isPanelVisible = false
+        access.setPolling(false)
         updateKeys()
         savePosition(panel)
         NSAnimationContext.runAnimationGroup { context in
@@ -101,10 +111,27 @@ final class JournalPanelController {
     private func updateKeys() {
         keys.isListening = JournalKeys.shouldListen(
             panelVisible: isPanelVisible,
-            journalShown: true,
+            journalShown: access.isGranted,
             stashActive: NSApp.isActive,
             menuOpen: isMenuOpen
         )
+    }
+
+    private func accessChanged() {
+        if access.isGranted, isPanelVisible, let panel {
+            // Granted while System Settings was in front: come back over it with the journal.
+            panel.level = .floating
+            panel.orderFrontRegardless()
+        }
+        access.setPolling(isPanelVisible)
+        updateKeys()
+    }
+
+    /// Asks for access and lowers the panel to the normal window level so it does not cover
+    /// System Settings; the panel rises again once access is granted or on the next show.
+    private func openAccessSettings() {
+        access.request()
+        panel?.level = .normal
     }
 
     private func makePanelIfNeeded() -> NSPanel {
@@ -115,6 +142,7 @@ final class JournalPanelController {
         let contentView = JournalView(
             store: store,
             settings: settings,
+            access: access,
             keyEvents: keys.events,
             onPaste: { [weak self] entry in
                 self?.paste(entry) ?? false
@@ -127,6 +155,9 @@ final class JournalPanelController {
             },
             onPreviewImage: { [weak self] entry in
                 self?.openImagePreview(for: entry)
+            },
+            onOpenAccessSettings: { [weak self] in
+                self?.openAccessSettings()
             },
             onClose: { [weak self] in
                 self?.close()
@@ -166,8 +197,10 @@ final class JournalPanelController {
         return panel
     }
 
-    /// Pastes the clip into the app under the panel and returns whether it did.
+    /// Pastes the clip into the app under the panel. Without Accessibility access nothing is
+    /// pasted, the panel turns to the access screen and this returns false.
     func paste(_ entry: ClipboardEntry) -> Bool {
+        guard access.refresh() else { return false }
         perform { [writer] in writer.paste(entry) }
         return true
     }

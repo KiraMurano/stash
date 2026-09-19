@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 import Foundation
 
 @MainActor
@@ -18,26 +17,14 @@ final class ClipboardWriter {
         store.markCurrent(entry)
     }
 
+    /// Puts the clip on the pasteboard and presses ⌘V in the frontmost app. macOS lets this
+    /// through only with Accessibility access, which `JournalPanelController` checks first.
     func paste(_ entry: ClipboardEntry) {
         copy(entry)
-
-        if !isAccessibilityTrusted {
-            requestAccessibilityIfNeeded()
-        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             Self.sendCommandV()
         }
-    }
-
-    var isAccessibilityTrusted: Bool {
-        AXIsProcessTrusted()
-    }
-
-    func requestAccessibilityIfNeeded() {
-        guard !isAccessibilityTrusted else { return }
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
     }
 
     private func writeToPasteboard(_ entry: ClipboardEntry) {
