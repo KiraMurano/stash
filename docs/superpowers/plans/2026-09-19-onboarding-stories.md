@@ -1105,7 +1105,7 @@ git commit -m "Tutorial slides: words, texts and durations"
 - Test: `Tests/BufferJournalTests/OnboardingLayoutTests.swift`
 
 **Interfaces:**
-- Produces: `OnboardingLayout.sceneSize` (480 × 240 — самый большой холст, заглушка до сцен), `sceneScale(_ scene: CGSize, in area: CGSize) -> CGFloat`, `cardSize(for scene: CGSize, in area: CGSize) -> CGSize`, `struct Lockup { icon, gap, fontSize }`, `heroLockup(in:wordWidthAt28:) -> Lockup`.
+- Produces: `OnboardingLayout.sceneSize` (480 × 240 — самый большой холст, заглушка до сцен), `sceneScale(_ scene: CGSize, in area: CGSize) -> CGFloat` (во всё место с сохранением пропорций, вверх и вниз), `cardSize(for scene: CGSize, in area: CGSize) -> CGSize`, `struct Lockup { icon, gap, fontSize }`, `heroLockup(in:wordWidthAt28:) -> Lockup`.
 - Produces: `@MainActor enum WordmarkMetrics` — `width(size:) -> CGFloat` и `capHeight(size:) -> CGFloat` для «Stash» шрифтом шапки.
 
 - [ ] **Step 1: Тест**
@@ -1118,20 +1118,23 @@ import Testing
 @testable import BufferJournal
 
 struct OnboardingLayoutTests {
-    @Test func scenesAreNeverScaledUp() {
+    @Test func scenesFillTheRoomKeepingTheirShape() {
         let scene = CGSize(width: 480, height: 240)
-        #expect(OnboardingLayout.sceneScale(scene, in: CGSize(width: 600, height: 262)) == 1)
-        #expect(OnboardingLayout.sceneScale(scene, in: CGSize(width: 860, height: 371)) == 1)
+        #expect(abs(OnboardingLayout.sceneScale(scene, in: CGSize(width: 600, height: 400)) - 1.25) < 0.0001)
+        #expect(abs(OnboardingLayout.sceneScale(scene, in: CGSize(width: 860, height: 371)) - 371.0 / 240.0) < 0.0001)
         #expect(abs(OnboardingLayout.sceneScale(scene, in: CGSize(width: 520, height: 193)) - 193.0 / 240.0) < 0.0001)
         #expect(OnboardingLayout.sceneScale(scene, in: .zero) == 0)
     }
 
-    @Test func theCardHugsItsScene() {
-        let roomy = OnboardingLayout.cardSize(for: CGSize(width: 344, height: 246), in: CGSize(width: 600, height: 300))
-        #expect(roomy == CGSize(width: 344, height: 246))
-        let squeezed = OnboardingLayout.cardSize(for: CGSize(width: 480, height: 240), in: CGSize(width: 520, height: 193))
-        #expect(abs(squeezed.height - 193) < 0.001)
-        #expect(abs(squeezed.width - 386) < 0.001)
+    @Test func theCardTakesTheWholeWidthOrHeight() {
+        // A tall scene meets the height and stays as narrow as it needs.
+        let tall = OnboardingLayout.cardSize(for: CGSize(width: 344, height: 246), in: CGSize(width: 600, height: 300))
+        #expect(abs(tall.height - 300) < 0.001)
+        #expect(abs(tall.width - 344 * 300 / 246) < 0.001)
+        // A wide scene meets the width.
+        let wide = OnboardingLayout.cardSize(for: CGSize(width: 480, height: 240), in: CGSize(width: 600, height: 400))
+        #expect(abs(wide.width - 600) < 0.001)
+        #expect(abs(wide.height - 300) < 0.001)
     }
 
     @Test func heroLockupFitsItsArea() {
@@ -1168,13 +1171,15 @@ enum OnboardingLayout {
     /// stands in for a scene that is not built yet.
     static let sceneSize = CGSize(width: 480, height: 240)
 
-    /// 1:1 with the journal when there is room, smaller when there is not; never larger.
+    /// The scene grows or shrinks until it meets the width or the height of the room, keeping
+    /// its proportions.
     static func sceneScale(_ scene: CGSize, in area: CGSize) -> CGFloat {
         guard scene.width > 0, scene.height > 0, area.width > 0, area.height > 0 else { return 0 }
-        return min(1, area.width / scene.width, area.height / scene.height)
+        return min(area.width / scene.width, area.height / scene.height)
     }
 
-    /// The card hugs its scene: the scene's own size at the scale it gets in the area.
+    /// The card hugs its scene at the scale the scene gets: it takes the whole width or the whole
+    /// height of the room, and no more than the scene needs of the other.
     static func cardSize(for scene: CGSize, in area: CGSize) -> CGSize {
         let scale = sceneScale(scene, in: area)
         return CGSize(width: scene.width * scale, height: scene.height * scale)
@@ -1972,7 +1977,7 @@ struct SceneClock<Content: View>: View {
 
 - [ ] **Step 2: Выбор сцены**
 
-Каждая сцена — отдельная задача ниже; до неё её место занимает `Color.clear`, а холст — 480 × 240. У сцен 2–8 свой холст по содержимому, он уменьшается в карточку, но не увеличивается: на панели 640 × 440 сцены 1:1 с журналом. У первого слайда холста нет. `size` и `canvas` открыты для рамки и тестов-снимков.
+Каждая сцена — отдельная задача ниже; до неё её место занимает `Color.clear`, а холст — 480 × 240. У сцен 2–8 свой холст по содержимому, он растёт или уменьшается во всё свободное место с сохранением пропорций. У первого слайда холста нет. `size` и `canvas` открыты для рамки и тестов-снимков.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift`:
 
@@ -2010,7 +2015,7 @@ struct OnboardingSceneView: View {
         }
     }
 
-    /// The scene fitted into `area`: scaled in when there is no room, never scaled up.
+    /// The scene fitted into `area`, grown or shrunk to fill it and keeping its proportions.
     @ViewBuilder
     static func canvas(for kind: OnboardingSceneKind, at time: SceneTime, in area: CGSize) -> some View {
         if let size = size(of: kind) {
@@ -2042,7 +2047,7 @@ struct OnboardingSceneView: View {
 
 - [ ] **Step 3: Цвета и кнопки рамки**
 
-Цвета — таблица «Цвета» из спеки: светло-серое поле или чёрное, оранжевые полосы и кнопка, «Stash» первого слайда — оранжевым для текста.
+Цвета — таблица «Цвета» из спеки: светло-серое поле или чёрное, оранжевые полосы и кнопка, «Stash» первого слайда — оранжевым иконки.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingChrome.swift`:
 
@@ -2060,9 +2065,8 @@ struct OnboardingColors {
     var barFill: Color { ThemePalette.orange }
     var barTrack: Color { isDark ? Color.white.opacity(0.16) : Color.black.opacity(0.1) }
     var cardShadow: Color { isDark ? .clear : Color.black.opacity(0.1) }
-    /// "Stash" on the first slide. On the light field it takes the app's orange for text, which
-    /// keeps 3:1 against the grey; the brand orange would not.
-    var wordmark: Color { isDark ? ThemePalette.orange : ThemePalette(colorScheme: .light).accentText }
+    /// "Stash" on the first slide, in the icon's orange. It is a logo, so no contrast minimum applies.
+    var wordmark: Color { ThemePalette.orange }
 
     /// The main button, orange in both looks; `level` is 0 at rest, 1 hovered, 2 pressed.
     func button(_ level: Int) -> Color {
@@ -2165,7 +2169,7 @@ struct OnboardingProgressBar: View {
 
 - [ ] **Step 4: Каркас**
 
-Сверху вниз: строка из полос (3 pt, зазор 4) и крестика, место для карточки, текст рядом с кнопкой 150 × 36. Отступы 12 / 20 / 16, между блоками 10. Слова-заголовка нет, слово слайда — только заголовок для VoiceOver. Карточка обнимает сцену и стоит по центру своего места; при смене слайда пружинисто перетекает в размер следующей. Тексты всех восьми слайдов лежат друг на друге, виден один — высота низа не прыгает. Клик по левым 30 % ниже шапки — назад, по остальному — вперёд; строка с полосами двигает окно.
+Сверху вниз: строка из полос (3 pt, зазор 4) и крестика, место для карточки, текст рядом с кнопкой 150 × 36. Отступы 12 / 20 / 16, между блоками 10. Слова-заголовка нет, слово слайда — только заголовок для VoiceOver. Карточка занимает всю ширину или всю высоту свободного места и обнимает сцену; стоит по центру и при смене слайда пружинисто перетекает в размер следующей. Тексты всех восьми слайдов лежат друг на друге, виден один — высота низа не прыгает. Клик по левым 30 % ниже шапки — назад, по остальному — вперёд; строка с полосами двигает окно.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingView.swift`:
 
@@ -2460,7 +2464,7 @@ Expected: PASS; в `/tmp/stash-snapshots` 18 файлов `frame-<слайд>-<�
 
 - [ ] **Step 7: Посмотреть снимки**
 
-Проверка вручную: Открыть `frame-search-640-light.png` и `frame-search-640-dark.png`. Светлый: светло-серое поле, оранжевые полосы (шесть полных) и крестик в одной строке, по центру пустая светлая карточка 480 × 240 с обводкой и мягкой тенью, текст слева, оранжевая капсула «Дальше». Тёмный: чёрное поле, карточка с тонкой обводкой. Жёлтая полоса с перечёркнутым кругом поверх строки с полосами — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` карточка уменьшена под место, на `frame-*-900-*` — того же размера, вокруг больше поля. На `frame-hero-*` карточки нет.
+Проверка вручную: Открыть `frame-search-640-light.png` и `frame-search-640-dark.png`. Светлый: светло-серое поле, оранжевые полосы (шесть полных) и крестик в одной строке, пустая светлая карточка — холст-заглушка 480 × 240, растянутый во всю ширину места, — с обводкой и мягкой тенью, текст слева, оранжевая капсула «Дальше». Тёмный: чёрное поле, карточка с тонкой обводкой. Жёлтая полоса с перечёркнутым кругом поверх строки с полосами — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` и `frame-*-900-*` карточка так же упирается в свободное место. На `frame-hero-*` карточки нет.
 
 - [ ] **Step 8: Коммит**
 
@@ -3410,8 +3414,6 @@ struct HeroSceneTests {
         #expect(end.wordOpacity == 1)
         #expect(end.wordShift == 0)
         #expect(end.tiles.allSatisfy { $0 == nil })
-        #expect(end.waves.allSatisfy { $0 == nil })
-        #expect(end.sparks == nil)
     }
 
     @Test func tilesFlyThenHitTheIcon() {
@@ -3421,10 +3423,8 @@ struct HeroSceneTests {
         // Just after the first hit the icon is squashed: wider and lower.
         let hit = HeroScene.state(at: SceneTime(t: HeroScene.hits[0] + 0.06, rewind: 0))
         #expect(hit.iconScaleX > 1 && hit.iconScaleY < 1)
-        #expect(hit.waves[0] != nil)
-        // The last hit throws sparks and pushes the word out.
+        // The last hit shakes the lockup.
         let last = HeroScene.state(at: SceneTime(t: HeroScene.hits[2] + 0.1, rewind: 0))
-        #expect(last.sparks != nil)
         #expect(last.shake != 0)
         #expect(HeroScene.state(at: SceneTime(t: HeroScene.hits[0] + 0.02, rewind: 0)).flash > 0)
     }
@@ -3445,7 +3445,7 @@ Expected: FAIL: ошибка сборки `cannot find 'HeroScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Карточки нет, логотип стоит на поле и ничем не обрезается. Это связка из шапки журнала (иконка 32 : шрифт 28 : зазор 2), увеличенная до 80 % ширины или высоты области; слово выровнено по заглавным, как в шапке. Иконка поднимается на 24 pt и проявляется (0–0,45 с). Три плитки строк журнала — текст, фото, PDF — в две трети иконки вылетают из трёх углов (0,3, 0,48, 0,66 с) и за 0,45 с по дуге с разгоном падают в иконку сверху: кувыркаются, уменьшаются, тянут шлейф из четырёх бледнеющих копий и уходят за иконку (плитки лежат слоем под логотипом). Удар — белая вспышка по иконке, приплющивание от низа с отскоком и оранжевая волна; последний в 1,6 раза сильнее, встряхивает логотип, даёт волну крупнее и двенадцать искр, и «Stash» выезжает из-за иконки (1,12–1,66 с). Играет один раз.
+Карточки нет, логотип стоит на поле и ничем не обрезается. Это связка из шапки журнала (иконка 32 : шрифт 28 : зазор 2), увеличенная до 80 % ширины или высоты области; слово выровнено по заглавным, как в шапке. Иконка поднимается на 24 pt и проявляется (0–0,45 с). Три плитки строк журнала — текст, фото, PDF — в две трети иконки вылетают из трёх углов (0,3, 0,48, 0,66 с) и за 0,45 с по дуге с разгоном падают в иконку сверху: кувыркаются, уменьшаются, тянут шлейф из четырёх бледнеющих копий и уходят за иконку (плитки лежат слоем под логотипом). Удар — белая вспышка по иконке и приплющивание от низа с отскоком; последний в 1,6 раза сильнее и встряхивает логотип, и «Stash» выезжает из-за иконки (1,12–1,66 с). Волн и искр нет. Играет один раз.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/HeroScene.swift`:
 
@@ -3455,9 +3455,9 @@ import SwiftUI
 
 /// ПРИВЕТ: no card. The Stash icon rises. A text, a photo and a PDF, as journal row tiles, swoop
 /// in on arcs, tumbling and trailing, and drop into the icon from above: they pass behind it and
-/// are gone. Each hit flashes and squashes the icon and sends out a wave; the last hits hardest,
-/// shakes the lockup, throws sparks and pushes "Stash" out from behind the icon. The lockup is
-/// the journal header's (icon 32 : type 28 : gap 2), scaled up.
+/// are gone. Each hit flashes and squashes the icon; the last hits hardest, shakes the lockup and
+/// pushes "Stash" out from behind the icon. The lockup is the journal header's (icon 32 : type
+/// 28 : gap 2), scaled up.
 struct HeroScene: View {
     static let duration = 2.6
 
@@ -3473,10 +3473,6 @@ struct HeroScene: View {
         var shake: Double
         /// 0…1 along each tile's flight; nil before it sets off and after it is in.
         var tiles: [Double?]
-        /// 0…1 of the wave after each hit; nil when there is none.
-        var waves: [Double?]
-        /// 0…1 of the sparks after the last hit.
-        var sparks: Double?
         var wordOpacity: Double
         var wordShift: Double
     }
@@ -3484,8 +3480,6 @@ struct HeroScene: View {
     static let departures = [0.3, 0.48, 0.66]
     static let flight = 0.45
     static let hits = departures.map { $0 + flight }
-    static let waveTime = 0.45
-    static let sparkTime = 0.5
 
     private static let iconOpacity = Track(0.0).to(1, at: 0, until: 0.35, .easeOut)
     private static let iconRise = Track(24.0).to(0, at: 0, until: 0.45, .easeOut)
@@ -3505,8 +3499,6 @@ struct HeroScene: View {
             flash: hits.map { hit in t >= hit && t < hit + 0.2 ? 0.55 * (1 - (t - hit) / 0.2) : 0 }.max() ?? 0,
             shake: t >= last && t < last + 0.3 ? 5 * sin((t - last) * 60) * (1 - (t - last) / 0.3) : 0,
             tiles: departures.map { start in t >= start && t < start + flight ? (t - start) / flight : nil },
-            waves: hits.map { hit in t >= hit && t < hit + waveTime ? (t - hit) / waveTime : nil },
-            sparks: t >= last && t < last + sparkTime ? (t - last) / sparkTime : nil,
             wordOpacity: wordOpacity.value(at: time),
             wordShift: wordShift.value(at: time)
         )
@@ -3588,31 +3580,6 @@ struct HeroScene: View {
             }
             .frame(width: area.width, height: area.height)
             .offset(x: state.shake)
-
-            ForEach(Array(state.waves.enumerated()), id: \.offset) { index, wave in
-                if let wave {
-                    let isLast = index == state.waves.count - 1
-                    Circle()
-                        .strokeBorder(ThemePalette.orange, lineWidth: isLast ? 4 : 3)
-                        .frame(width: lockup.icon, height: lockup.icon)
-                        .scaleEffect(0.9 + (isLast ? 1.2 : 0.8) * SceneCurve.easeOut(wave))
-                        .opacity((isLast ? 0.7 : 0.5) * (1 - wave))
-                        .position(icon)
-                }
-            }
-
-            if let sparks = state.sparks {
-                ForEach(0..<12, id: \.self) { index in
-                    let angle = Double(index) / 12 * 2 * .pi + 0.26
-                    let distance = lockup.icon * (0.55 + 0.7 * SceneCurve.easeOut(sparks))
-                    Circle()
-                        .fill(ThemePalette.orange)
-                        .frame(width: 8, height: 8)
-                        .scaleEffect(1 - 0.7 * sparks)
-                        .opacity(1 - sparks)
-                        .position(x: icon.x + cos(angle) * distance, y: icon.y + sin(angle) * distance)
-                }
-            }
         }
         .frame(width: area.width, height: area.height)
     }
@@ -3687,7 +3654,7 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-hero-mid-ru-light.png` — сразу после первого удара: иконка приплюснута и высветлена, вокруг волна, остальные плитки в полёте со шлейфом. `scene-hero-end-ru-light.png` — иконка и «Stash» оранжевым для текста на светло-сером; `…-dark.png` — оранжевое «Stash» на чёрном. В тестах у процесса нет иконки Stash, поэтому на снимке значок папки; в приложении — иконка Stash.
+Проверка вручную: `scene-hero-mid-ru-light.png` — последняя плитка со шлейфом ныряет в иконку, иконка ещё светлее после второго удара. `scene-hero-end-ru-light.png` — иконка и «Stash» оранжевым иконки на светло-сером; `…-dark.png` — на чёрном. В тестах у процесса нет иконки Stash, поэтому на снимке значок папки; в приложении — иконка Stash.
 
 - [ ] **Step 7: Коммит**
 
@@ -5526,7 +5493,7 @@ Expected: PASS; 18 снимков рамки и 64 снимка сцен.
 
 - [ ] **Step 4: Приложение: размеры, темы, языки**
 
-Проверка вручную: Потянуть панель до минимума (560 × 360): крупные сцены уменьшаются, текст не больше трёх строк. Растянуть: карточки своего размера, вокруг поле. Листать слайды: карточка перетекает в размер следующей сцены. Переключить систему в тёмный режим: поле чёрное. В меню значка Язык → English: тексты английские. Тема Stash Light или Light: в карточке всё равно стиль Stash — непрозрачные акценты.
+Проверка вручную: Потянуть панель до минимума (560 × 360): крупные сцены уменьшаются, текст не больше трёх строк. Растянуть: карточка растёт вместе с панелью и упирается в ширину или высоту места, текст в сценах не мылится. Листать слайды: карточка перетекает в размер следующей сцены. Переключить систему в тёмный режим: поле чёрное. В меню значка Язык → English: тексты английские. Тема Stash Light или Light: в карточке всё равно стиль Stash — непрозрачные акценты.
 
 - [ ] **Step 5: Приложение: доступ**
 
