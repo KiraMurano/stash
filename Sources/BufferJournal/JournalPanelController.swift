@@ -26,9 +26,12 @@ final class JournalPanelController {
     private let keys: JournalKeys
     private var panel: NSPanel?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
+    /// Whether the panel is meant to be on screen. The journal's hotkeys follow this, not
+    /// `panel.isVisible`, which stays true through the close fade.
     private var isPanelVisible = false
-    private var isMenuOpen = false
-    private var activationObservers: [NSObjectProtocol] = []
+    /// Menus of Stash being tracked right now: the menu bar menu, a right-click menu in the preview.
+    private var trackingMenus: Set<ObjectIdentifier> = []
+    private var observers: [NSObjectProtocol] = []
 
     init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate) {
         self.store = store
@@ -39,12 +42,41 @@ final class JournalPanelController {
 
         // The clip editor activates Stash and needs the arrows, Return and Esc for itself.
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
-            let observer = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     self?.updateKeys()
                 }
-            }
-            activationObservers.append(observer)
+            })
+        }
+
+        // A menu walks its items with the arrows and closes on Esc, so the journal lets go of its
+        // keys while any menu of Stash is open.
+        for name in [NSMenu.didBeginTrackingNotification, NSMenu.didEndTrackingNotification] {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                let isBegin = notification.name == NSMenu.didBeginTrackingNotification
+                guard let menu = notification.object as AnyObject? else { return }
+                let id = ObjectIdentifier(menu)
+                MainActor.assumeIsolated {
+                    self?.menuTracking(id, began: isBegin)
+                }
+            })
+        }
+
+        // The user can no longer see the panel once the screen locks, sleeps or another user
+        // takes over; the journal must not keep Return and Esc from the lock screen.
+        for name in [NSWorkspace.screensDidSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
+            observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.close()
+                }
+            })
+        }
+        for name in ["com.apple.screenIsLocked", "com.apple.screensaver.didstart"] {
+            observers.append(DistributedNotificationCenter.default().addObserver(forName: Notification.Name(name), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.close()
+                }
+            })
         }
 
         access.onChange = { [weak self] in
@@ -53,7 +85,8 @@ final class JournalPanelController {
     }
 
     func toggle() {
-        if panel?.isVisible == true {
+        // A panel lowered behind System Settings counts as hidden: ⌥V brings it back up.
+        if isPanelVisible, panel?.level == .floating {
             close()
         } else {
             show()
@@ -80,31 +113,39 @@ final class JournalPanelController {
     }
 
     func close(completion: (@MainActor @Sendable () -> Void)? = nil) {
+        // Let go of the keys first, even when the panel is already off screen.
+        isPanelVisible = false
+        access.setPolling(false)
+        updateKeys()
+
         guard let panel, panel.isVisible else {
             completion?()
             return
         }
 
-        isPanelVisible = false
-        access.setPolling(false)
-        updateKeys()
         savePosition(panel)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.055
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().alphaValue = 0
-        } completionHandler: { [weak panel] in
+        } completionHandler: { [weak self, weak panel] in
             Task { @MainActor in
-                panel?.orderOut(nil)
+                // Shown again during the fade: stay on screen.
+                if self?.isPanelVisible != true {
+                    panel?.orderOut(nil)
+                }
                 panel?.alphaValue = 1
                 completion?()
             }
         }
     }
 
-    /// The menu bar menu walks its items with the arrows, so the journal lets go of them meanwhile.
-    func setMenuOpen(_ isOpen: Bool) {
-        isMenuOpen = isOpen
+    private func menuTracking(_ menu: ObjectIdentifier, began: Bool) {
+        if began {
+            trackingMenus.insert(menu)
+        } else {
+            trackingMenus.remove(menu)
+        }
         updateKeys()
     }
 
@@ -113,7 +154,7 @@ final class JournalPanelController {
             panelVisible: isPanelVisible,
             journalShown: access.isGranted,
             stashActive: NSApp.isActive,
-            menuOpen: isMenuOpen
+            menuOpen: !trackingMenus.isEmpty
         )
     }
 
@@ -192,6 +233,9 @@ final class JournalPanelController {
         panel.minSize = Constants.minSize
         // Stash stays inactive while the panel is open; without this its tooltips never show.
         panel.allowsToolTipsWhenApplicationIsInactive = true
+        // Hide Others in another app would hide the panel behind the journal's back and leave
+        // its keys taken; the panel stays until the user closes it.
+        panel.canHide = false
 
         self.panel = panel
         return panel

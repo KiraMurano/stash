@@ -3,7 +3,7 @@ import Carbon
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: ClipboardHistoryStore!
     private var monitor: ClipboardMonitor!
     private var writer: ClipboardWriter!
@@ -59,7 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func rebuildMenu() {
         let l10n = settings.l10n
         let menu = NSMenu()
-        menu.delegate = self
         menu.addItem(menuItem(l10n("Open Stash", "Открыть Stash"), action: #selector(openJournal)))
         menu.addItem(NSMenuItem.separator())
 
@@ -148,15 +147,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
-    }
-
-    // The journal lets go of the arrows while the menu is open: they walk its items.
-    func menuWillOpen(_ menu: NSMenu) {
-        panelController.setMenuOpen(true)
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        panelController.setMenuOpen(false)
     }
 
     private func updateSettingsMenuState() {

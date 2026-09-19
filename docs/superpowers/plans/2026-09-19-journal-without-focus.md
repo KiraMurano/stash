@@ -1039,7 +1039,7 @@ The journal never takes the keyboard: whatever you type goes to the app you are 
 - [ ] **Step 5: Сборка и тесты**
 
 Run: `swift build && swift test`
-Expected: `Build complete!` без предупреждений, 6 тестов проходят. Проверить, что хвостов не осталось: `grep -n "query\|isSearch\|KeyboardMonitor\|makeKey\|relinquishKeyFocus" Sources/BufferJournal/*.swift` ничего не находит.
+Expected: `Build complete!` без предупреждений, 6 тестов проходят. Проверить, что хвостов не осталось: `grep -n "query\|isSearch\|KeyboardMonitor\|panel.makeKey()\|relinquishKeyFocus" Sources/BufferJournal/*.swift` ничего не находит. (`makeKeyAndOrderFront` у окна редактора клипа остаётся законно.)
 
 - [ ] **Step 6: Проверка вручную**
 
@@ -2267,3 +2267,45 @@ git commit -m "Require Accessibility access with an access screen in the panel" 
   settings and lowers the panel so it does not cover them
 - Access is checked before every paste; the writer no longer asks"
 ```
+
+---
+
+### Task 8: Правки после ревью кода
+
+Ревью ветки (4ea3153..62e5087) нашло два важных места и несколько мелких. Исправлено одним коммитом, спека обновлена там же.
+
+**Files:**
+- Modify: `Sources/BufferJournal/JournalPanelController.swift`, `AppDelegate.swift`, `HotKeyController.swift`, `JournalView.swift`
+- Test: `Tests/BufferJournalTests/AccessGateTests.swift`
+- Modify: спека — разделы «Панель и фокус», «Клавиши», «Экран доступа», «Устройство», «Тесты», «Риски»
+
+**Interfaces:**
+- Removes: `JournalPanelController.setMenuOpen(_:)` и `NSMenuDelegate` у `AppDelegate` — меню отслеживает сам контроллер.
+
+- [ ] **Step 1: Хоткеи не переживают панель**
+
+Хоткеи могли остаться занятыми без панели на экране: `show()` во время угасания, «Скрыть остальные» в другом приложении, `close()` на уже невидимой панели выходил раньше, чем снимал их. В `JournalPanelController`:
+
+- `close()` сначала сбрасывает `isPanelVisible`, проверку доступа и хоткеи, и только потом проверяет `panel.isVisible`;
+- завершение угасания прячет панель, только если её не показали снова: `if self?.isPanelVisible != true { panel?.orderOut(nil) }` (захват `[weak self, weak panel]`);
+- `panel.canHide = false`;
+- `toggle()` решает по своему флагу и уровню панели: `if isPanelVisible, panel?.level == .floating { close() } else { show() }` — опущенная за Системные настройки панель по ⌥V поднимается, а не закрывается;
+- блокировка экрана (`com.apple.screenIsLocked`), заставка (`com.apple.screensaver.didstart`, обе через `DistributedNotificationCenter`), сон дисплеев (`NSWorkspace.screensDidSleepNotification`) и смена пользователя (`NSWorkspace.sessionDidResignActiveNotification`) закрывают панель.
+
+- [ ] **Step 2: Любое меню Stash отпускает клавиши**
+
+Контекстное меню в превью (правый клик → «Скопировать») не могло ходить стрелками и закрываться по Esc. Вместо делегата меню значка контроллер слушает `NSMenu.didBeginTrackingNotification` и `didEndTrackingNotification` и держит множество открытых меню `trackingMenus: Set<ObjectIdentifier>`; `menuOpen: !trackingMenus.isEmpty`. Из `AppDelegate` уходят `NSMenuDelegate`, `menu.delegate = self`, `menuWillOpen`, `menuDidClose`.
+
+- [ ] **Step 3: Мелочи**
+
+- `HotKeyController.register` возвращает `nil`, если обработчик Carbon не установлен: иначе клавиша была бы отнята у других приложений и потеряна. Комментарий у `passUnretained`: контроллер живёт всё время работы приложения.
+- Диалог подтверждения показывается только поверх журнала: `if access.isGranted, isClearConfirmationShown || entryPendingDeletion != nil`.
+- `GlassIconButton` получает `.accessibilityLabel(help)`: у кнопок-иконок VoiceOver читает подсказку, а не имя символа.
+- Тест `refreshPicksUpARevocationAndPollsAgain`: отзыв доступа меняет `isGranted`, зовёт `onChange`, и проверка снова запускается.
+
+Не исправлено сознательно (записано в риски спеки): проверка состояния клавиши через `CGEventSource.keyState` в таймере повтора, лишнее отпускание клавиши после закрытия по Esc или Return, выход из активности после редактора клипа.
+
+- [ ] **Step 4: Сборка, тесты, коммит**
+
+Run: `swift build && swift test && Scripts/build_app.sh`
+Expected: `Build complete!` без предупреждений, 13 тестов в трёх наборах проходят, `.build/Stash.app` собран.

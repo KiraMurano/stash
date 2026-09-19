@@ -55,6 +55,7 @@ final class HotKeyController {
             },
             eventTypes.count,
             &eventTypes,
+            // Unretained: AppDelegate keeps the controller for the life of the app.
             Unmanaged.passUnretained(self).toOpaque(),
             &eventHandler
         )
@@ -72,6 +73,9 @@ final class HotKeyController {
         onPress: @escaping () -> Void,
         onRelease: (() -> Void)? = nil
     ) -> Registration? {
+        // Without the handler a registered key would be taken from other apps and dropped.
+        guard eventHandler != nil else { return nil }
+
         let id = nextID
         nextID += 1
 

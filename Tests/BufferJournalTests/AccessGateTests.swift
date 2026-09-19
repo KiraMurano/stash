@@ -39,6 +39,23 @@ struct AccessGateTests {
         #expect(changes == 1)
     }
 
+    @Test func refreshPicksUpARevocationAndPollsAgain() {
+        let fake = FakeAccess()
+        fake.granted = true
+        let gate = AccessGate(access: fake.access)
+        var changes = 0
+        gate.onChange = { changes += 1 }
+
+        fake.granted = false
+        #expect(!gate.refresh())
+        #expect(!gate.isGranted)
+        #expect(changes == 1)
+
+        gate.setPolling(true)
+        #expect(gate.isPolling)
+        gate.setPolling(false)
+    }
+
     @Test func requestAsksTheSystem() {
         let fake = FakeAccess()
         AccessGate(access: fake.access).request()

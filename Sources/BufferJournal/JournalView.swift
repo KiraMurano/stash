@@ -107,7 +107,8 @@ struct JournalView: View {
                     .transition(.opacity)
             }
 
-            if isClearConfirmationShown || entryPendingDeletion != nil {
+            // Dialogs belong to the journal; the access screen never shows one left over.
+            if access.isGranted, isClearConfirmationShown || entryPendingDeletion != nil {
                 ZStack {
                     palette.dialogBackdrop
                         .contentShape(Rectangle())
@@ -1425,6 +1426,8 @@ struct GlassIconButton: View {
         }
         .buttonStyle(TranslucentButtonStyle(tone: tint != nil ? .accent : (isDestructive ? .destructive : .neutral), cornerRadius: 8))
         .help(help)
+        // Icon-only: VoiceOver reads the tooltip text instead of the symbol name.
+        .accessibilityLabel(help)
     }
 }
 
