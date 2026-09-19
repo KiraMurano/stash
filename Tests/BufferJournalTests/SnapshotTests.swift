@@ -87,3 +87,25 @@ struct SnapshotTests {
         }
     }
 }
+
+extension SnapshotTests {
+    /// Every scene's stop frame and its middle, on the card's surface, in both themes and languages.
+    @Test func sceneFrames() throws {
+        for (scheme, schemeName) in Self.schemes {
+            for (language, languageName) in [(ResolvedLanguage.russian, "ru"), (.english, "en")] {
+                for slide in OnboardingSlides.all {
+                    let area = OnboardingSceneView.size(of: slide.kind) ?? CGSize(width: 600, height: 309)
+                    let palette = ThemePalette.scene(scheme)
+                    for (time, timeName) in [(SceneTime.end(of: slide.duration), "end"), (SceneTime(t: slide.duration * 0.4, rewind: 0), "mid")] {
+                        let view = OnboardingSceneView.canvas(for: slide.kind, at: time, in: area)
+                            .background(slide.kind == .hero ? AnyView(OnboardingColors(isDark: scheme == .dark).field) : AnyView(palette.listSurface))
+                            .environment(\.colorScheme, scheme)
+                            .environment(\.l10n, L10n(language: language))
+                            .environment(\.solidAccents, true)
+                        try render(view, name: "scene-\(slide.kind.rawValue)-\(timeName)-\(languageName)-\(schemeName)")
+                    }
+                }
+            }
+        }
+    }
+}
