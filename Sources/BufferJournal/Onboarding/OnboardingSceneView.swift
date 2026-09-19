@@ -27,7 +27,7 @@ struct OnboardingSceneView: View {
         case .pin: PinScene.size
         case .images: ImagesScene.size
         case .keys: KeysScene.size
-        case .settings: OnboardingLayout.sceneSize
+        case .settings: SettingsScene.size
         case .access: OnboardingLayout.sceneSize
         }
     }
@@ -55,7 +55,7 @@ struct OnboardingSceneView: View {
         case .pin: PinScene(time: time)
         case .images: ImagesScene(time: time)
         case .keys: KeysScene(time: time)
-        case .settings: Color.clear
+        case .settings: SettingsScene(time: time)
         case .access: Color.clear
         }
     }
