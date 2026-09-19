@@ -116,8 +116,11 @@ final class JournalPanelController {
             store: store,
             settings: settings,
             keyEvents: keys.events,
-            onSelect: { [weak self] entry in
-                self?.handleSelection(entry)
+            onPaste: { [weak self] entry in
+                self?.paste(entry) ?? false
+            },
+            onCopy: { [weak self] entry in
+                self?.copy(entry)
             },
             onEditText: { [weak self] entry in
                 self?.openTextEditor(for: entry)
@@ -163,19 +166,22 @@ final class JournalPanelController {
         return panel
     }
 
-    private func handleSelection(_ entry: ClipboardEntry) {
-        let performSelection: @MainActor @Sendable () -> Void = { [writer, settings] in
-            if settings.pasteOnSelection {
-                writer.paste(entry)
-            } else {
-                writer.copy(entry)
-            }
-        }
+    /// Pastes the clip into the app under the panel and returns whether it did.
+    func paste(_ entry: ClipboardEntry) -> Bool {
+        perform { [writer] in writer.paste(entry) }
+        return true
+    }
 
+    func copy(_ entry: ClipboardEntry) {
+        perform { [writer] in writer.copy(entry) }
+    }
+
+    /// Runs a paste or copy, closing the panel first when Close After Selection is on.
+    private func perform(_ action: @escaping @MainActor @Sendable () -> Void) {
         if settings.closeAfterSelection {
-            close(completion: performSelection)
+            close(completion: action)
         } else {
-            performSelection()
+            action()
         }
     }
 

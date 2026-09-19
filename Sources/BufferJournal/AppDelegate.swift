@@ -11,7 +11,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
     private var statusItem: NSStatusItem!
-    private var pasteOnSelectionItem: NSMenuItem!
     private var closeAfterSelectionItem: NSMenuItem!
     private var themeItems: [ThemeMode: NSMenuItem] = [:]
     private var languageItems: [AppLanguage: NSMenuItem] = [:]
@@ -55,9 +54,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.addItem(menuItem(l10n("Open Stash", "Открыть Stash"), action: #selector(openJournal)))
         menu.addItem(NSMenuItem.separator())
-
-        pasteOnSelectionItem = menuItem(l10n("Paste on Selection", "Вставлять при выборе"), action: #selector(togglePasteOnSelection))
-        menu.addItem(pasteOnSelectionItem)
 
         closeAfterSelectionItem = menuItem(l10n("Close After Selection", "Закрывать после выбора"), action: #selector(toggleCloseAfterSelection))
         menu.addItem(closeAfterSelectionItem)
@@ -113,11 +109,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.clear()
     }
 
-    @objc private func togglePasteOnSelection() {
-        settings.pasteOnSelection.toggle()
-        updateSettingsMenuState()
-    }
-
     @objc private func toggleCloseAfterSelection() {
         settings.closeAfterSelection.toggle()
         updateSettingsMenuState()
@@ -161,7 +152,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateSettingsMenuState() {
-        pasteOnSelectionItem?.state = settings.pasteOnSelection ? .on : .off
         closeAfterSelectionItem?.state = settings.closeAfterSelection ? .on : .off
         for (themeMode, item) in themeItems {
             item.state = settings.themeMode == themeMode ? .on : .off

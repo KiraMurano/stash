@@ -42,7 +42,9 @@ struct JournalView: View {
     @ObservedObject var settings: AppSettings
     /// The journal's keys, taken as hotkeys while it is open: the panel itself never takes the keyboard.
     let keyEvents: PassthroughSubject<JournalKey, Never>
-    let onSelect: (ClipboardEntry) -> Void
+    /// Returns false when nothing was pasted.
+    let onPaste: (ClipboardEntry) -> Bool
+    let onCopy: (ClipboardEntry) -> Void
     let onEditText: (ClipboardEntry) -> Void
     let onPreviewImage: (ClipboardEntry) -> Void
     let onClose: () -> Void
@@ -338,8 +340,7 @@ struct JournalView: View {
             isSelected: entry.id == selectedEntry?.id,
             isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
             palette: palette,
-            quickPasteTitle: settings.pasteOnSelection ? l10n("Paste", "Вставить") : l10n("Copy", "Скопировать"),
-            onQuickPaste: { select(entry) },
+            onQuickPaste: { paste(entry) },
             onExpand: expandAction(for: entry),
             onTogglePin: { togglePin(entry) },
             onDelete: { entryPendingDeletion = entry }
@@ -352,7 +353,7 @@ struct JournalView: View {
         .onTapGesture {
             selectedID = entry.id
         }
-        .simultaneousGesture(TapGesture(count: 2).onEnded { select(entry) })
+        .simultaneousGesture(TapGesture(count: 2).onEnded { paste(entry) })
     }
 
     // MARK: Detail
@@ -542,11 +543,17 @@ struct JournalView: View {
 
             Spacer()
 
+            GlassIconButton(
+                systemName: "doc.on.doc",
+                help: l10n("Copy to clipboard", "Скопировать в буфер"),
+                action: { copy(entry) }
+            )
+
             Button {
-                select(entry)
+                paste(entry)
             } label: {
                 HStack(spacing: 6) {
-                    Text(settings.pasteOnSelection ? l10n("Paste", "Вставить") : l10n("Copy", "Скопировать"))
+                    Text(l10n("Paste", "Вставить"))
                     Image(systemName: "return")
                         .font(.system(size: 11, weight: .semibold))
                 }
@@ -739,7 +746,7 @@ struct JournalView: View {
             keyboardScrollTarget = next == 0 ? .top : (next == entries.count - 1 ? .bottom : .entry(entries[next].id))
         case .paste:
             if let entry = selectedEntry {
-                select(entry)
+                paste(entry)
             }
         case .closeDialog:
             isClearConfirmationShown = false
@@ -772,12 +779,19 @@ struct JournalView: View {
         }
     }
 
-    private func select(_ entry: ClipboardEntry) {
+    private func paste(_ entry: ClipboardEntry) {
         selectedID = entry.id
+        guard onPaste(entry) else { return }
         if !settings.closeAfterSelection {
-            showToast(settings.pasteOnSelection ? l10n("Pasted", "Вставлено") : l10n("Copied", "Скопировано"))
+            showToast(l10n("Pasted", "Вставлено"))
         }
-        onSelect(entry)
+    }
+
+    private func copy(_ entry: ClipboardEntry) {
+        onCopy(entry)
+        if !settings.closeAfterSelection {
+            showToast(l10n("Copied", "Скопировано"))
+        }
     }
 
     private func showToast(_ message: String) {
@@ -805,7 +819,6 @@ private struct EntryRow: View {
     let isSelected: Bool
     let isCurrent: Bool
     let palette: ThemePalette
-    let quickPasteTitle: String
     let onQuickPaste: () -> Void
     let onExpand: (() -> Void)?
     let onTogglePin: () -> Void
@@ -910,7 +923,7 @@ private struct EntryRow: View {
                         action: onTogglePin
                     )
                     rowAction("trash", tone: .destructive, help: l10n("Delete clip", "Удалить"), action: onDelete)
-                    rowAction("return", tone: accentTone, help: quickPasteTitle, action: onQuickPaste)
+                    rowAction("return", tone: accentTone, help: l10n("Paste", "Вставить"), action: onQuickPaste)
                 }
                 .padding(.trailing, 8)
                 .transition(.opacity)

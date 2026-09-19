@@ -6,8 +6,8 @@ Stash is a minimal macOS clipboard history app inspired by Windows clipboard jou
 
 - Global `Option+V` shortcut opens the journal.
 - Text and images are saved from the system pasteboard.
-- The journal is split: clips on the left, the selected clip in full on the right. Hover a clip and press the orange return button, double-click it, or press Paste to put it back on the pasteboard. Drag the divider to resize the list; clicking an image opens it in Preview. The journal never takes the keyboard: whatever you type goes to the app you are typing in. While it is open, ↑/↓ move the selection, Return pastes and Esc closes it.
-- Menu settings can also paste immediately after selection, close the journal after selection, and switch theme and interface language (System, English, Русский).
+- The journal is split: clips on the left, the selected clip in full on the right. Hover a clip and press the orange return button, double-click it, or press Paste to paste it where your cursor is; the copy button next to Paste only puts it on the pasteboard. Drag the divider to resize the list; clicking an image opens it in Preview. The journal never takes the keyboard: whatever you type goes to the app you are typing in. While it is open, ↑/↓ move the selection, Return pastes and Esc closes it.
+- Menu settings close the journal after a paste or copy and switch theme and interface language (System, English, Русский).
 - History keeps up to 20 clips for 24 hours and is stored locally in `~/Library/Application Support/BufferJournal`.
 - The app runs as a menu bar accessory with a frosted-glass SwiftUI panel with orange accents. The app icon is built from `Resources/AppIconSource.png` with `swift Scripts/make_icon.swift`; the menu bar icon is built from `Resources/StatusIconSource.png` with `swift Scripts/make_status_icon.swift`.
 
@@ -39,6 +39,6 @@ Scripts/release.sh
 
 ## Run
 
-Open the generated app bundle. Copy text or an image, press `Option+V`, then click a card to copy it back into the system pasteboard. If `Paste on Selection` is enabled in the menu bar menu, Stash also sends `Cmd+V` without refocusing the target app.
+Open the generated app bundle. Copy text or an image, press `Option+V`, then double-click a clip: Stash pastes it into the app you are typing in by sending `Cmd+V`.
 
 The app was previously called Buffer Journal. The bundle identifier (`local.buffer-journal`) and the storage folder (`~/Library/Application Support/BufferJournal`) keep their old names so settings and history carry over.
