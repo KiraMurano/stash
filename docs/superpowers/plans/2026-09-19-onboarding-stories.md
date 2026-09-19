@@ -928,7 +928,7 @@ git commit -m "Default to Stash Auto when no theme was picked" -m "Settings also
 **Interfaces:**
 - Produces: `enum OnboardingSceneKind: String, CaseIterable` — `hero, hotKey, paste, pin, images, search, settings, access`.
 - Produces: `struct Localized { en, ru; callAsFunction(_ l10n: L10n) -> String }`.
-- Produces: `struct OnboardingSlide: Identifiable` — `kind`, `duration: Double`, `loops: Bool`, `word: Localized`, `text: Localized`, `id == kind`.
+- Produces: `struct OnboardingSlide: Identifiable` — `kind`, `duration: Double`, `loops: Bool`, `word: Localized` (на первом слайде — видимый заголовок «ПРИВЕТ, ЭТО», у остальных — заголовок для VoiceOver), `text: Localized`, `id == kind`.
 - Produces: `OnboardingSlides.all` (8 слайдов по спеке) и `OnboardingSlides.visible(includeAccess: Bool) -> [OnboardingSlide]`.
 
 - [ ] **Step 1: Тест**
@@ -1001,6 +1001,7 @@ struct OnboardingSlide: Identifiable, Equatable, Sendable {
     let duration: Double
     /// The first slide plays once and stays assembled; the others loop.
     let loops: Bool
+    /// Shown as a big title on the first slide only; for the others it is the VoiceOver heading.
     let word: Localized
     let text: Localized
 
@@ -1013,7 +1014,7 @@ enum OnboardingSlides {
     static let all: [OnboardingSlide] = [
         OnboardingSlide(
             kind: .hero, duration: 2.6, loops: false,
-            word: Localized(en: "HELLO", ru: "ПРИВЕТ"),
+            word: Localized(en: "HELLO, THIS IS", ru: "ПРИВЕТ, ЭТО"),
             text: Localized(
                 en: "Stash remembers everything you copy: text, images and files. Copy something new, and the old one stays in the journal.",
                 ru: "Stash запоминает всё, что вы копируете: текст, картинки и файлы. Скопировали новое — старое осталось в журнале."
@@ -1060,7 +1061,7 @@ enum OnboardingSlides {
             )
         ),
         OnboardingSlide(
-            kind: .settings, duration: 5.4, loops: true,
+            kind: .settings, duration: 4.7, loops: true,
             word: Localized(en: "SETTINGS", ru: "НАСТРОЙКИ"),
             text: Localized(
                 en: "The Stash icon in the menu bar opens settings: paste and close on selection, theme and language. Tutorial replays this tour.",
@@ -1105,8 +1106,8 @@ git commit -m "Tutorial slides: words, texts and durations"
 - Test: `Tests/BufferJournalTests/OnboardingLayoutTests.swift`
 
 **Interfaces:**
-- Produces: `OnboardingLayout.sceneSize` (480 × 240 — самый большой холст, заглушка до сцен), `sceneScale(_ scene: CGSize, in area: CGSize) -> CGFloat` (во всё место с сохранением пропорций, вверх и вниз), `cardSize(for scene: CGSize, in area: CGSize) -> CGSize`, `struct Lockup { icon, gap, fontSize }`, `heroLockup(in:wordWidthAt28:) -> Lockup`.
-- Produces: `@MainActor enum WordmarkMetrics` — `width(size:) -> CGFloat` и `capHeight(size:) -> CGFloat` для «Stash» шрифтом шапки.
+- Produces: `OnboardingLayout.sceneSize` (480 × 240 — самый большой холст, заглушка до сцен), `sceneScale(_ scene: CGSize, in area: CGSize) -> CGFloat` (во всё место с сохранением пропорций, вверх и вниз), `cardSize(for scene: CGSize, in area: CGSize) -> CGSize`, `struct Lockup { icon, gap, fontSize }`, `heroLockup(in:wordWidthAt28:) -> Lockup`, `titleFontSize(widthAt100:rowWidth:panelHeight:) -> CGFloat` — кегль заголовка первого слайда.
+- Produces: `@MainActor enum HeavyTextMetrics` — `width(_ text: String, size:, tracking: = 0) -> CGFloat` и `capHeight(size:) -> CGFloat` шрифтом `.heavy`.
 
 - [ ] **Step 1: Тест**
 
@@ -1146,10 +1147,21 @@ struct OnboardingLayoutTests {
         #expect(abs(lockup.fontSize / lockup.icon - 28.0 / 32.0) < 0.0001)
     }
 
+    @Test func theTitleStopsAtTenPercentOfThePanel() {
+        #expect(OnboardingLayout.titleFontSize(widthAt100: 500, rowWidth: 600, panelHeight: 440) == 44)
+        #expect(OnboardingLayout.titleFontSize(widthAt100: 500, rowWidth: 520, panelHeight: 360) == 36)
+    }
+
+    @Test func aLongTitleShrinksToItsRow() {
+        // 100 × 600 / (2000 × 1.02) = 29.4
+        #expect(OnboardingLayout.titleFontSize(widthAt100: 2000, rowWidth: 600, panelHeight: 440) == 29)
+    }
+
     @MainActor
-    @Test func theWordmarkIsMeasuredInTheHeaderFont() {
-        #expect(WordmarkMetrics.width(size: 56) > 2 * WordmarkMetrics.width(size: 27))
-        #expect(WordmarkMetrics.capHeight(size: 28) > 15)
+    @Test func heavyTextIsMeasuredInTheHeaderFont() {
+        #expect(HeavyTextMetrics.width("Stash", size: 56) > 2 * HeavyTextMetrics.width("Stash", size: 27))
+        #expect(HeavyTextMetrics.width("ПРИВЕТ, ЭТО", size: 100, tracking: -2) < HeavyTextMetrics.width("ПРИВЕТ, ЭТО", size: 100))
+        #expect(HeavyTextMetrics.capHeight(size: 28) > 15)
     }
 }
 ```
@@ -1203,14 +1215,27 @@ enum OnboardingLayout {
         let k = min(area.width * 0.8 / width, area.height * 0.8 / natural.icon)
         return Lockup(icon: natural.icon * k, gap: natural.gap * k, fontSize: natural.fontSize * k)
     }
+
+    /// Spare width for the title, and the share of the panel height it may take.
+    static let titleSlack: CGFloat = 1.02
+    static let titleHeightShare: CGFloat = 0.1
+
+    /// The first slide's title: as wide as its row allows, capped at 10 % of the panel height.
+    /// `widthAt100` is the title's width at 100 pt.
+    static func titleFontSize(widthAt100: CGFloat, rowWidth: CGFloat, panelHeight: CGFloat) -> CGFloat {
+        let cap = (panelHeight * titleHeightShare).rounded()
+        guard widthAt100 > 0 else { return max(cap, 1) }
+        let byWidth = floor(100 * rowWidth / (widthAt100 * titleSlack))
+        return max(1, min(byWidth, cap))
+    }
 }
 
-/// The "Stash" wordmark in the heavy system font, as in the journal header.
+/// Widths of text in the heavy system font: the "Stash" wordmark and the first slide's title.
 @MainActor
-enum WordmarkMetrics {
-    static func width(size: CGFloat) -> CGFloat {
+enum HeavyTextMetrics {
+    static func width(_ text: String, size: CGFloat, tracking: CGFloat = 0) -> CGFloat {
         let font = NSFont.systemFont(ofSize: size, weight: .heavy)
-        return ceil(NSAttributedString(string: "Stash", attributes: [.font: font]).size().width)
+        return ceil(NSAttributedString(string: text, attributes: [.font: font, .kern: tracking]).size().width)
     }
 
     static func capHeight(size: CGFloat) -> CGFloat {
@@ -1222,13 +1247,13 @@ enum WordmarkMetrics {
 - [ ] **Step 4: Запустить — проходит**
 
 Run: `swift test --filter OnboardingLayoutTests`
-Expected: PASS: 4 теста.
+Expected: PASS: 6 тестов.
 
 - [ ] **Step 5: Коммит**
 
 ```bash
 git add Sources/BufferJournal/Onboarding/OnboardingLayout.swift Tests/BufferJournalTests/OnboardingLayoutTests.swift
-git commit -m "Tutorial layout: scene scale, card size and the hero lockup"
+git commit -m "Tutorial layout: scene scale, card size, the hero lockup and its title"
 ```
 
 
@@ -1928,18 +1953,19 @@ git commit -m "Tutorial controller: showing, slides, keys and access"
 - Create: `Sources/BufferJournal/Onboarding/OnboardingSceneView.swift` — выбор сцены и её холста; пока сцены `Color.clear`, холсты 480 × 240
 - Create: `Sources/BufferJournal/Onboarding/OnboardingChrome.swift` — цвета, кнопки, полоса прогресса
 - Create: `Sources/BufferJournal/Onboarding/OnboardingView.swift` — каркас
-- Test: `Tests/BufferJournalTests/SnapshotTests.swift` — PNG рамки в трёх размерах панели
+- Test: `Tests/BufferJournalTests/SnapshotTests.swift` — PNG рамки в трёх размерах панели; `Tests/BufferJournalTests/OnboardingViewTests.swift`
 
 **Interfaces:**
 - Consumes: `OnboardingController` (Task 8), `OnboardingLayout` (Task 6), `SceneTime`, `SceneLoop` (Task 7), `WindowDragHandle`, `ThemePalette`, `TranslucentButtonStyle` (Task 2), `FakeAccess` (Task 8, тесты).
 - Produces: `SceneClock(duration:loops:still:content:)`; `OnboardingSceneView(slide:still:)`, `static func size(of: OnboardingSceneKind) -> CGSize?` (у первого слайда `nil`) и `static func canvas(for:at:in:) -> some View`.
-- Produces: `OnboardingColors(isDark:)` — `field`, `close`, `text`, `barFill`, `barTrack`, `cardShadow`, `wordmark`, `button(_ level: Int)`; `OnboardingPrimaryButtonStyle`, `OnboardingCloseButtonStyle`, `OnboardingProgressBar`.
-- Produces: `OnboardingView(controller:l10n:)`.
+- Produces: `OnboardingColors(isDark:)` — `field`, `close`, `text`, `barFill`, `barTrack`, `cardShadow`, `wordmark`, `title`, `button(_ level: Int)`; `OnboardingPrimaryButtonStyle`, `OnboardingCloseButtonStyle`, `OnboardingProgressBar`.
+- Produces: `OnboardingView(controller:l10n:)`, `static func spoken(_ word: String) -> String` — слово слайда предложением для VoiceOver.
+- Produces: `EnvironmentValues.scenesHoldStopFrame` — тесты-снимки держат сцены на стоп-кадре.
 - Produces (тесты): `SnapshotTests.render(_:name:)`, `SnapshotTests.schemes`, `controller(on:)`.
 
 - [ ] **Step 1: Часы сцены**
 
-Сцена играет с момента появления: `TimelineView(.animation)` даёт время, `SceneLoop` превращает его в круг. «Меньше движения» и слайд «ДОСТУП» с полученным доступом держат стоп-кадр. Сцена без круга перестаёт просить кадры, когда доиграла.
+Сцена играет с момента появления: `TimelineView(.animation)` даёт время, `SceneLoop` превращает его в круг. «Меньше движения» и слайд «ДОСТУП» с полученным доступом держат стоп-кадр; тесты-снимки держат его через `scenesHoldStopFrame`. Сцена без круга перестаёт просить кадры, когда доиграла.
 
 Создать `Sources/BufferJournal/Onboarding/SceneClock.swift`:
 
@@ -1954,11 +1980,12 @@ struct SceneClock<Content: View>: View {
     let still: Bool
     @ViewBuilder let content: (SceneTime) -> Content
 
+    @Environment(\.scenesHoldStopFrame) private var holdStopFrame
     @State private var start = Date()
     @State private var finished = false
 
     var body: some View {
-        if still || finished {
+        if still || finished || holdStopFrame {
             content(.end(of: duration))
         } else {
             TimelineView(.animation) { context in
@@ -1971,6 +1998,18 @@ struct SceneClock<Content: View>: View {
                 finished = true
             }
         }
+    }
+}
+
+private struct HoldStopFrameKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Snapshot tests set it to see each scene's stop frame instead of its first frame.
+    var scenesHoldStopFrame: Bool {
+        get { self[HoldStopFrameKey.self] }
+        set { self[HoldStopFrameKey.self] = newValue }
     }
 }
 ```
@@ -2067,6 +2106,8 @@ struct OnboardingColors {
     var cardShadow: Color { isDark ? .clear : Color.black.opacity(0.1) }
     /// "Stash" on the first slide, in the icon's orange. It is a logo, so no contrast minimum applies.
     var wordmark: Color { ThemePalette.orange }
+    /// The first slide's big title.
+    var title: Color { ThemePalette.orange }
 
     /// The main button, orange in both looks; `level` is 0 at rest, 1 hovered, 2 pressed.
     func button(_ level: Int) -> Color {
@@ -2169,7 +2210,7 @@ struct OnboardingProgressBar: View {
 
 - [ ] **Step 4: Каркас**
 
-Сверху вниз: строка из полос (3 pt, зазор 4) и крестика, место для карточки, текст рядом с кнопкой 150 × 36. Отступы 12 / 20 / 16, между блоками 10. Слова-заголовка нет, слово слайда — только заголовок для VoiceOver. Карточка занимает всю ширину или всю высоту свободного места и обнимает сцену; стоит по центру и при смене слайда пружинисто перетекает в размер следующей. Тексты всех восьми слайдов лежат друг на друге, виден один — высота низа не прыгает. Клик по левым 30 % ниже шапки — назад, по остальному — вперёд; строка с полосами двигает окно.
+Сверху вниз: строка из полос (3 pt, зазор 4) и крестика, место для карточки, текст рядом с кнопкой 150 × 36. Отступы 12 / 20 / 16, между блоками 10. На первом слайде под шапкой большой оранжевый заголовок — его слово, «ПРИВЕТ, ЭТО»: `.heavy`, трекинг −2 %, кегль по ширине строки, но не больше 10 % высоты панели. У остальных слайдов заголовка нет, слово — только заголовок карточки для VoiceOver, прочитанный предложением. Карточка занимает всю ширину или всю высоту свободного места и обнимает сцену; стоит по центру и при смене слайда пружинисто перетекает в размер следующей. Тексты всех восьми слайдов лежат друг на друге, виден один — высота низа не прыгает. Клик по левым 30 % ниже шапки — назад, по остальному — вперёд; строка с полосами двигает окно.
 
 Создать `Sources/BufferJournal/Onboarding/OnboardingView.swift`:
 
@@ -2178,7 +2219,8 @@ import AppKit
 import SwiftUI
 
 /// The tutorial: stories over the whole journal panel. Progress bars and the close cross on top,
-/// the scene in a card that hugs it, and the text beside the main button at the bottom.
+/// the first slide's big title under them, the scene in a card that hugs it, and the text beside
+/// the main button at the bottom.
 struct OnboardingView: View {
     @ObservedObject var controller: OnboardingController
     let l10n: L10n
@@ -2222,11 +2264,17 @@ struct OnboardingView: View {
 
                 VStack(spacing: 0) {
                     head
+                    if controller.slide.kind == .hero {
+                        title(rowWidth: geometry.size.width - 2 * Metrics.side, panelHeight: geometry.size.height)
+                            .padding(.top, Metrics.gap)
+                            .transition(.opacity)
+                    }
                     stage
                         .padding(.top, Metrics.gap)
                     footer
                         .padding(.top, Metrics.gap)
                 }
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.26), value: controller.slide.kind == .hero)
                 .padding(.top, Metrics.top)
                 .padding(.horizontal, Metrics.side)
                 .padding(.bottom, Metrics.bottom)
@@ -2281,6 +2329,27 @@ struct OnboardingView: View {
         .accessibilityLabel(l10n("Close", "Закрыть"))
     }
 
+    /// "HELLO, THIS IS" on the first slide: big, orange, in the top left corner, as the slides'
+    /// words once were, and no taller than 10 % of the panel.
+    private func title(rowWidth: CGFloat, panelHeight: CGFloat) -> some View {
+        let text = controller.slide.word(l10n)
+        let size = OnboardingLayout.titleFontSize(
+            widthAt100: HeavyTextMetrics.width(text, size: 100, tracking: -2),
+            rowWidth: rowWidth,
+            panelHeight: panelHeight
+        )
+        let height = (size * 0.95).rounded()
+        return Text(text)
+            .font(.system(size: size, weight: .heavy))
+            .tracking(-0.02 * size)
+            .foregroundStyle(colors.title)
+            .lineLimit(1)
+            .fixedSize()
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+            // The card's heading already says it to VoiceOver.
+            .accessibilityHidden(true)
+    }
+
     // MARK: Stage
 
     /// The room between the bars and the text. The card hugs the slide's scene and sits in the
@@ -2319,9 +2388,9 @@ struct OnboardingView: View {
         .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: controller.index)
         .animation(.easeOut(duration: 0.26), value: hasSurface)
         .animation(.easeOut(duration: 0.2), value: controller.run)
-        // The slide's name, for VoiceOver only: the scene itself says nothing to it.
+        // The slide's name, for VoiceOver: the scene itself says nothing to it.
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(controller.slide.word(l10n).capitalized)
+        .accessibilityLabel(Self.spoken(controller.slide.word(l10n)))
         .accessibilityAddTraits(.isHeader)
     }
 
@@ -2383,6 +2452,12 @@ struct OnboardingView: View {
         .accessibilityHidden(true)
     }
 
+    /// "ПРИВЕТ, ЭТО" read as "Привет, это": capitals only where a sentence has them.
+    static func spoken(_ word: String) -> String {
+        let lower = word.lowercased()
+        return lower.prefix(1).uppercased() + lower.dropFirst()
+    }
+
     private func announce(_ index: Int) {
         let count = controller.slides.count
         let message = l10n("Slide \(index + 1) of \(count)", "Слайд \(index + 1) из \(count)")
@@ -2398,9 +2473,9 @@ struct OnboardingView: View {
 }
 ```
 
-- [ ] **Step 5: Тест-снимок**
+- [ ] **Step 5: Тесты рамки**
 
-Тесты рисуют обучение в PNG через `ImageRenderer`. Без `SNAPSHOT_DIR` они только проверяют, что всё рисуется.
+Тесты-снимки рисуют обучение в PNG через `ImageRenderer`, сцены — на стоп-кадре. Без `SNAPSHOT_DIR` они только проверяют, что всё рисуется.
 
 Создать `Tests/BufferJournalTests/SnapshotTests.swift`:
 
@@ -2445,6 +2520,7 @@ struct SnapshotTests {
                     let view = OnboardingView(controller: controller(on: kind), l10n: L10n(language: .russian))
                         .frame(width: size.width, height: size.height)
                         .environment(\.colorScheme, scheme)
+                        .environment(\.scenesHoldStopFrame, true)
                     try render(view, name: "frame-\(kind.rawValue)-\(Int(size.width))-\(name)")
                 }
             }
@@ -2452,6 +2528,22 @@ struct SnapshotTests {
     }
 }
 
+```
+
+Создать `Tests/BufferJournalTests/OnboardingViewTests.swift`:
+
+```swift
+import Testing
+@testable import BufferJournal
+
+@MainActor
+struct OnboardingViewTests {
+    @Test func voiceOverReadsSlideWordsAsSentences() {
+        #expect(OnboardingView.spoken("ПРИВЕТ, ЭТО") == "Привет, это")
+        #expect(OnboardingView.spoken("HELLO, THIS IS") == "Hello, this is")
+        #expect(OnboardingView.spoken("ЗАКРЕП") == "Закреп")
+    }
+}
 ```
 
 - [ ] **Step 6: Сборка, тесты, снимки**
@@ -2464,14 +2556,14 @@ Expected: PASS; в `/tmp/stash-snapshots` 18 файлов `frame-<слайд>-<�
 
 - [ ] **Step 7: Посмотреть снимки**
 
-Проверка вручную: Открыть `frame-search-640-light.png` и `frame-search-640-dark.png`. Светлый: светло-серое поле, оранжевые полосы (шесть полных) и крестик в одной строке, пустая светлая карточка — холст-заглушка 480 × 240, растянутый во всю ширину места, — с обводкой и мягкой тенью, текст слева, оранжевая капсула «Дальше». Тёмный: чёрное поле, карточка с тонкой обводкой. Жёлтая полоса с перечёркнутым кругом поверх строки с полосами — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` и `frame-*-900-*` карточка так же упирается в свободное место. На `frame-hero-*` карточки нет.
+Проверка вручную: Открыть `frame-hero-640-light.png`: под полосами слева оранжевое «ПРИВЕТ, ЭТО» 44 pt, ниже пустое место под логотип. Открыть `frame-search-640-light.png` и `frame-search-640-dark.png`. Светлый: светло-серое поле, оранжевые полосы (шесть полных) и крестик в одной строке, пустая светлая карточка — холст-заглушка 480 × 240, растянутый во всю ширину места, — с обводкой и мягкой тенью, текст слева, оранжевая капсула «Дальше». Тёмный: чёрное поле, карточка с тонкой обводкой. Жёлтая полоса с перечёркнутым кругом поверх строки с полосами — так `ImageRenderer` рисует AppKit-ручку перетаскивания; в приложении её не видно. На `frame-*-560-*` и `frame-*-900-*` карточка так же упирается в свободное место. На `frame-hero-*` карточки нет.
 
 - [ ] **Step 8: Коммит**
 
 ```bash
-git add Sources/BufferJournal/Onboarding Tests/BufferJournalTests/SnapshotTests.swift
-git commit -m "Tutorial frame: bars, card and footer" -m "The stories layout from the concept, without the title word: the card hugs its
-scene. Not wired into the app yet; scenes are placeholders until their commits."
+git add Sources/BufferJournal/Onboarding Tests/BufferJournalTests/SnapshotTests.swift Tests/BufferJournalTests/OnboardingViewTests.swift
+git commit -m "Tutorial frame: bars, card and footer" -m "The stories layout from the concept. Only the first slide keeps a big title;
+the card hugs its scene. Not wired into the app yet; scenes are placeholders."
 ```
 
 
@@ -3445,7 +3537,7 @@ Expected: FAIL: ошибка сборки `cannot find 'HeroScene' in scope`.
 
 - [ ] **Step 3: Сцена**
 
-Карточки нет, логотип стоит на поле и ничем не обрезается. Это связка из шапки журнала (иконка 32 : шрифт 28 : зазор 2), увеличенная до 80 % ширины или высоты области; слово выровнено по заглавным, как в шапке. Иконка поднимается на 24 pt и проявляется (0–0,45 с). Три плитки строк журнала — текст, фото, PDF — в две трети иконки вылетают из трёх углов (0,3, 0,48, 0,66 с) и за 0,45 с по дуге с разгоном падают в иконку сверху: кувыркаются, уменьшаются, тянут шлейф из четырёх бледнеющих копий и уходят за иконку (плитки лежат слоем под логотипом). Удар — белая вспышка по иконке и приплющивание от низа с отскоком; последний в 1,6 раза сильнее и встряхивает логотип, и «Stash» выезжает из-за иконки (1,12–1,66 с). Волн и искр нет. Играет один раз.
+Карточки нет, логотип стоит на поле и ничем не обрезается; над ним в рамке заголовок «ПРИВЕТ, ЭТО» (Task 9), и экран читается «Привет, это Stash». Логотип — связка из шапки журнала (иконка 32 : шрифт 28 : зазор 2), слово выровнено по заглавным, всё вместе — до 80 % ширины или высоты области. Иконка поднимается на 24 pt и проявляется (0,1–0,55 с). Три плитки строк журнала — текст, фото, PDF — в две трети иконки вылетают из трёх углов (0,3, 0,48, 0,66 с) и за 0,45 с по дуге с разгоном падают в иконку сверху: кувыркаются, уменьшаются, тянут шлейф из четырёх бледнеющих копий и уходят за иконку (плитки лежат слоем под логотипом). Удар — белая вспышка по иконке и приплющивание от низа с отскоком; последний в 1,6 раза сильнее и встряхивает логотип, и «Stash» выезжает из-за иконки (1,12–1,66 с). Волн и искр нет. Слой прибит к углу области (`.frame(…, alignment: .topLeading)`): без летящих плиток он иначе сожмётся и съедет к центру. Играет один раз.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/HeroScene.swift`:
 
@@ -3453,7 +3545,8 @@ Expected: FAIL: ошибка сборки `cannot find 'HeroScene' in scope`.
 import AppKit
 import SwiftUI
 
-/// ПРИВЕТ: no card. The Stash icon rises. A text, a photo and a PDF, as journal row tiles, swoop
+/// ПРИВЕТ, ЭТО: no card; the slide's title above says "Hello, this is". The Stash icon rises. A text,
+/// a photo and a PDF, as journal row tiles, swoop
 /// in on arcs, tumbling and trailing, and drop into the icon from above: they pass behind it and
 /// are gone. Each hit flashes and squashes the icon; the last hits hardest, shakes the lockup and
 /// pushes "Stash" out from behind the icon. The lockup is the journal header's (icon 32 : type
@@ -3481,8 +3574,8 @@ struct HeroScene: View {
     static let flight = 0.45
     static let hits = departures.map { $0 + flight }
 
-    private static let iconOpacity = Track(0.0).to(1, at: 0, until: 0.35, .easeOut)
-    private static let iconRise = Track(24.0).to(0, at: 0, until: 0.45, .easeOut)
+    private static let iconOpacity = Track(0.0).to(1, at: 0.1, until: 0.45, .easeOut)
+    private static let iconRise = Track(24.0).to(0, at: 0.1, until: 0.55, .easeOut)
     private static let wordOpacity = Track(0.0).to(1, at: 1.14, until: 1.32, .easeOut)
     /// Out from behind the icon with a little overshoot.
     private static let wordShift = Track(-56.0).to(6, at: 1.12, until: 1.44, .easeOut).to(0, at: 1.44, until: 1.66, .easeInOut)
@@ -3529,11 +3622,12 @@ struct HeroScene: View {
         let state = Self.state(at: time)
         let palette = ThemePalette.scene(colorScheme)
         let colors = OnboardingColors(isDark: colorScheme == .dark)
-        let lockup = OnboardingLayout.heroLockup(in: area, wordWidthAt28: WordmarkMetrics.width(size: 28))
-        let wordWidth = WordmarkMetrics.width(size: lockup.fontSize)
-        let capHeight = WordmarkMetrics.capHeight(size: lockup.fontSize)
+        let lockup = OnboardingLayout.heroLockup(in: area, wordWidthAt28: HeavyTextMetrics.width("Stash", size: 28))
+        let wordWidth = HeavyTextMetrics.width("Stash", size: lockup.fontSize)
+        let capHeight = HeavyTextMetrics.capHeight(size: lockup.fontSize)
         let left = (area.width - (lockup.icon + lockup.gap + wordWidth)) / 2
-        let icon = CGPoint(x: left + lockup.icon / 2, y: area.height / 2)
+        let top = (area.height - lockup.icon) / 2
+        let icon = CGPoint(x: left + lockup.icon / 2, y: top + lockup.icon / 2)
         let tile = lockup.icon * 0.66
         let flights = Self.flights(in: area, to: icon)
         let clips = [
@@ -3578,10 +3672,11 @@ struct HeroScene: View {
                     .offset(x: state.wordShift)
                     .opacity(state.wordOpacity)
             }
-            .frame(width: area.width, height: area.height)
-            .offset(x: state.shake)
+            .frame(height: lockup.icon)
+            .offset(x: left + state.shake, y: top)
         }
-        .frame(width: area.width, height: area.height)
+        // Pinned to the area's corner: the offsets above count from it, flying tiles or not.
+        .frame(width: area.width, height: area.height, alignment: .topLeading)
     }
 
     private struct Ghost {
@@ -3654,7 +3749,7 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-hero-mid-ru-light.png` — последняя плитка со шлейфом ныряет в иконку, иконка ещё светлее после второго удара. `scene-hero-end-ru-light.png` — иконка и «Stash» оранжевым иконки на светло-сером; `…-dark.png` — на чёрном. В тестах у процесса нет иконки Stash, поэтому на снимке значок папки; в приложении — иконка Stash.
+Проверка вручную: `scene-hero-mid-ru-light.png` — последняя плитка со шлейфом ныряет в иконку. `scene-hero-end-ru-light.png` — иконка и «Stash» оранжевым иконки на светло-сером; `…-dark.png` — на чёрном. `frame-hero-640-light.png` — над логотипом заголовок «ПРИВЕТ, ЭТО». В тестах у процесса нет иконки Stash, поэтому на снимке значок папки; в приложении — иконка Stash.
 
 - [ ] **Step 7: Коммит**
 
@@ -4787,7 +4882,7 @@ git commit -m "Tutorial scene: search"
 - Consumes: набор для сцен (Task 11), `Track`, `CursorTrack`, `SceneTime` (Task 7), `Localized` (Task 5).
 - Produces: `SettingsScene(time:)`, `SettingsScene.duration`, `SettingsScene.size`, `SettingsScene.State`, `SettingsScene.state(at: SceneTime) -> State`.
 - Consumes: `StatusMenuTitles` (Task 10), `L10n.themeName(_:)`.
-- Produces: `SettingsScene.menuOrigin`, `menuWidth`, `submenuWidth`, `submenuOrigin`, `rowHeight`, `separatorHeight`, `menuPadding`, `frame(of:)`, `iconClicks`, `itemClicks`, `blinkOff`, `menuCloses` — геометрия и моменты для тестов.
+- Produces: `SettingsScene.menuOrigin`, `menuWidth`, `submenuWidth`, `submenuOrigin`, `rowHeight`, `separatorHeight`, `menuPadding`, `frame(of:)`, `iconClick`, `itemClicks`, `blinkOff` — геометрия и моменты для тестов.
 
 - [ ] **Step 1: Тест стоп-кадра**
 
@@ -4807,21 +4902,22 @@ struct SettingsSceneTests {
         #expect(end.iconHighlighted)
         #expect(end.highlighted == .tutorial)
         #expect(end.closeChecked)
-        let onTheme = SettingsScene.state(at: SceneTime(t: 3.1, rewind: 0))
+        let onTheme = SettingsScene.state(at: SceneTime(t: 2.5, rewind: 0))
         #expect(onTheme.highlighted == .theme)
     }
 
-    @Test func clickingCloseAfterSelectionBlinksClosesAndTicksIt() {
+    @Test func clickingCloseAfterSelectionBlinksAndTicksItWithTheMenuOpen() {
         let click = SettingsScene.itemClicks[0]
         let ripple = SettingsScene.state(at: SceneTime(t: click + 0.01, rewind: 0)).ripple
         #expect(ripple.map { SettingsScene.frame(of: .closeAfterSelection).contains($0.center) } == true)
         let blink = SettingsScene.state(at: SceneTime(t: click + 0.09, rewind: 0))
-        #expect(blink.menuOpen && blink.highlighted == nil)
-        #expect(SettingsScene.state(at: SceneTime(t: click + 0.15, rewind: 0)).highlighted == .closeAfterSelection)
-        let closed = SettingsScene.state(at: SceneTime(t: SettingsScene.menuCloses + 0.05, rewind: 0))
-        #expect(!closed.menuOpen && closed.closeChecked)
-        let reopened = SettingsScene.state(at: SceneTime(t: SettingsScene.iconClicks[1] + 0.1, rewind: 0))
-        #expect(reopened.menuOpen && reopened.closeChecked)
+        #expect(blink.menuOpen && blink.highlighted == nil && !blink.closeChecked)
+        let after = SettingsScene.state(at: SceneTime(t: click + 0.2, rewind: 0))
+        #expect(after.menuOpen && after.highlighted == .closeAfterSelection && after.closeChecked)
+        // From the first click on, the menu never closes before the loop goes back.
+        for t in stride(from: SettingsScene.iconClick + 0.05, through: SettingsScene.duration, by: 0.05) {
+            #expect(SettingsScene.state(at: SceneTime(t: t, rewind: 0)).menuOpen)
+        }
     }
 
     @Test func tutorialIsClickedAtTheEnd() {
@@ -4855,7 +4951,7 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 
 - [ ] **Step 3: Сцена**
 
-Сверху правый край строки меню — только трей: слева значок Stash (настоящий ресурс `StatusIcon` в своих 14 × 18 pt; в тестах — запасной символ, как в `AppDelegate`), справа системные значки и часы. Указатель жмёт значок (0,9 с): значок подсвечен, под ним выпадает меню в составе из Task 10. Указатель проходит по «Вставлять при выборе» (с галочкой) и жмёт «Закрывать после выбора» (1,6 с): как в macOS, пункт на 0,06 с гаснет и снова загорается, и меню закрывается (1,8 с). Указатель снова жмёт значок (2,3 с) — у «Закрывать после выбора» теперь галочка. Указатель встаёт на «Тему» — справа открывается подменю тем с галочкой у Stash Auto, — поднимается к «Обучению» и жмёт его (3,95 с), пункт так же мигает. Подсветка — системный акцент, и она всегда у пункта под указателем, как в настоящем меню. Меню открыто по флагу, а не по плавной дорожке: на возврате круга оно закрывается сразу, и указатель по дороге к началу ничего не подсвечивает.
+Сверху правый край строки меню — только трей: слева значок Stash (настоящий ресурс `StatusIcon` в своих 14 × 18 pt; в тестах — запасной символ, как в `AppDelegate`), справа системные значки и часы. Указатель жмёт значок (0,9 с): значок подсвечен, под ним выпадает меню в составе из Task 10. Указатель проходит по «Вставлять при выборе» (с галочкой) и жмёт «Закрывать после выбора» (1,6 с): пункт на 0,06 с гаснет и снова загорается, и у него появляется галочка. Меню остаётся открытым. Указатель встаёт на «Тему» — справа открывается подменю тем с галочкой у Stash Auto, — поднимается к «Обучению» и жмёт его (3,35 с), пункт так же мигает. Подсветка — системный акцент, и она всегда у пункта под указателем. Меню открыто по флагу, а не по плавной дорожке: на возврате круга оно закрывается сразу, и указатель по дороге к началу ничего не подсвечивает.
 
 Создать `Sources/BufferJournal/Onboarding/Scenes/SettingsScene.swift`:
 
@@ -4863,11 +4959,11 @@ Expected: FAIL: ошибка сборки `cannot find 'SettingsScene' in scope`
 import AppKit
 import SwiftUI
 
-/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon and then "Close After Selection":
-/// like a real menu, the item blinks and the menu closes. The arrow opens it again, and the item now
-/// has its check. It rests on Theme to open the submenu on the right and ends clicking Tutorial.
+/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon, then "Close After Selection",
+/// which blinks and gets its check; the menu stays open. The arrow rests on Theme to open the
+/// submenu on the right and ends clicking Tutorial.
 struct SettingsScene: View {
-    static let duration = 5.4
+    static let duration = 4.7
     /// The tray end of the menu bar, the menu under the Stash icon and the theme submenu beside it.
     static let size = CGSize(width: 380, height: 280)
 
@@ -4919,29 +5015,26 @@ struct SettingsScene: View {
         CGPoint(x: menuOrigin.x + 90, y: frame(of: item).midY)
     }
 
-    // Clicks: the icon, "Close After Selection", the icon again, Tutorial.
-    static let iconClicks = [0.9, 2.3]
-    static let itemClicks = [1.6, 3.95]
-    /// A clicked item goes dark for a moment and lights up again before the menu acts, as in macOS.
+    // Clicks: the icon, "Close After Selection", Tutorial. The menu stays open throughout.
+    static let iconClick = 0.9
+    static let itemClicks = [1.6, 3.35]
+    /// A clicked item goes dark for a moment and lights up again, as in macOS.
     static let blinkOff = 0.06...0.12
-    /// The menu closes after the first item's blink.
-    static let menuCloses = 1.8
 
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 300, y: 262))
             .to(statusIcon, at: 0.3, until: 0.8)
             .to(center(of: .pasteOnSelection), at: 1.15, until: 1.35)
             .to(center(of: .closeAfterSelection), at: 1.38, until: 1.5)
-            .to(statusIcon, at: 1.95, until: 2.2)
-            .to(center(of: .closeAfterSelection), at: 2.45, until: 2.7)
-            .to(center(of: .theme), at: 2.75, until: 2.9)
-            .to(center(of: .tutorial), at: 3.4, until: 3.8),
+            .to(center(of: .theme), at: 1.9, until: 2.1)
+            .to(center(of: .tutorial), at: 2.8, until: 3.2),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
-        clicks: (iconClicks + itemClicks).sorted()
+        clicks: [iconClick] + itemClicks
     )
-    private static let iconHighlighted = Track(false).set(true, at: iconClicks[0]).set(false, at: menuCloses).set(true, at: iconClicks[1])
-    private static let menuOpen = Track(false).set(true, at: iconClicks[0] + 0.05).set(false, at: menuCloses).set(true, at: iconClicks[1] + 0.05)
-    private static let closeChecked = Track(false).set(true, at: menuCloses)
+    private static let iconHighlighted = Track(false).set(true, at: iconClick)
+    private static let menuOpen = Track(false).set(true, at: iconClick + 0.05)
+    /// The check appears as the clicked item lights up again.
+    private static let closeChecked = Track(false).set(true, at: itemClicks[0] + blinkOff.upperBound)
 
     static func state(at time: SceneTime) -> State {
         let cursor = cursor.state(at: time)
@@ -5174,7 +5267,7 @@ Expected: `Build complete!`, все тесты PASS.
 Run: `SNAPSHOT_DIR=/tmp/stash-snapshots swift test --filter SnapshotTests`
 Expected: PASS.
 
-Проверка вручную: `scene-settings-mid-ru-light.png` (2,16 с) — меню закрыто после клика, указатель на пути к значку. `scene-settings-end-ru-light.png` — меню под значком, подсвечено «Обучение», галочки у «Вставлять при выборе» и «Закрывать после выбора».
+Проверка вручную: `scene-settings-mid-ru-light.png` (1,88 с) — меню открыто, галочки у обоих переключателей, указатель на пути к «Теме». `scene-settings-end-ru-light.png` — подсвечено «Обучение», подменю закрыто.
 
 - [ ] **Step 7: Коммит**
 
