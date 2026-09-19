@@ -189,6 +189,14 @@ struct OnboardingView: View {
                 .clipShape(hasSurface ? AnyShape(shape) : AnyShape(Rectangle().inset(by: -200)))
                 .id(controller.run)
                 .transition(.opacity)
+
+            // In the tutorial the access slide carries a real button under its scene; shown alone,
+            // the slide has none and the main button at the bottom asks instead.
+            if controller.slide.kind == .access, AccessSlide.showsCardButton(isAccessOnly: controller.isAccessOnly) {
+                AccessRequestButton(hasAccess: access.isGranted, palette: palette, l10n: l10n)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 10)
+            }
         }
         .frame(width: size.width, height: size.height)
         .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: controller.index)
@@ -208,7 +216,12 @@ struct OnboardingView: View {
 
     private var footer: some View {
         HStack(alignment: .center, spacing: 16) {
-            texts
+            if controller.slide.kind == .access {
+                // The slide's own text, with the title over it and the footnote under it.
+                AccessPrompt(palette: palette, l10n: l10n)
+            } else {
+                texts
+            }
             Button {
                 if controller.isAccessOnly {
                     onOpenSettings()
