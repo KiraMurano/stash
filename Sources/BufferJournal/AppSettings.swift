@@ -28,10 +28,19 @@ enum ThemeMode: String, CaseIterable {
 @MainActor
 final class AppSettings: ObservableObject {
     private enum Keys {
+        static let openAtCaret = "OpenAtCaret"
         static let interceptKeys = "InterceptKeys"
         static let closeAfterSelection = "CloseAfterSelection"
         static let themeMode = "ThemeMode"
         static let language = "Language"
+    }
+
+    /// The panel opens next to the text cursor of the app the user is typing in, like Win+V.
+    /// Turned off, it opens where it was left, as before.
+    @Published var openAtCaret: Bool {
+        didSet {
+            UserDefaults.standard.set(openAtCaret, forKey: Keys.openAtCaret)
+        }
     }
 
     /// While the journal is open it takes Up, Down, Return and Esc from the app underneath.
@@ -67,6 +76,10 @@ final class AppSettings: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
 
+        if defaults.object(forKey: Keys.openAtCaret) == nil {
+            defaults.set(true, forKey: Keys.openAtCaret)
+        }
+
         if defaults.object(forKey: Keys.interceptKeys) == nil {
             defaults.set(true, forKey: Keys.interceptKeys)
         }
@@ -77,6 +90,7 @@ final class AppSettings: ObservableObject {
             defaults.set(true, forKey: Keys.closeAfterSelection)
         }
 
+        openAtCaret = defaults.bool(forKey: Keys.openAtCaret)
         interceptKeys = defaults.bool(forKey: Keys.interceptKeys)
         closeAfterSelection = defaults.bool(forKey: Keys.closeAfterSelection)
         themeMode = ThemeMode(rawValue: defaults.string(forKey: Keys.themeMode) ?? "") ?? .system

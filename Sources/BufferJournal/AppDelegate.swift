@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
     private var statusItem: NSStatusItem!
+    private var openAtCaretItem: NSMenuItem!
     private var interceptKeysItem: NSMenuItem!
     private var closeAfterSelectionItem: NSMenuItem!
     private var themeItems: [ThemeMode: NSMenuItem] = [:]
@@ -69,6 +70,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         interceptKeysItem = menuItem(l10n("Intercept Keys", "Перехватывать клавиши"), action: #selector(toggleInterceptKeys))
         menu.addItem(interceptKeysItem)
 
+        openAtCaretItem = menuItem(l10n("Open at the Cursor", "Открывать у курсора"), action: #selector(toggleOpenAtCaret))
+        menu.addItem(openAtCaretItem)
+
         let themeItem = NSMenuItem(title: l10n("Theme", "Тема"), action: nil, keyEquivalent: "")
         let themeMenu = NSMenu()
         themeItems = [:]
@@ -125,6 +129,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateSettingsMenuState()
     }
 
+    @objc private func toggleOpenAtCaret() {
+        settings.openAtCaret.toggle()
+        updateSettingsMenuState()
+    }
+
     @objc private func toggleInterceptKeys() {
         settings.interceptKeys.toggle()
         updateSettingsMenuState()
@@ -162,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateSettingsMenuState() {
         closeAfterSelectionItem?.state = settings.closeAfterSelection ? .on : .off
         interceptKeysItem?.state = settings.interceptKeys ? .on : .off
+        openAtCaretItem?.state = settings.openAtCaret ? .on : .off
         for (themeMode, item) in themeItems {
             item.state = settings.themeMode == themeMode ? .on : .off
         }

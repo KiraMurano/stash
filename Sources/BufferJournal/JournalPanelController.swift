@@ -337,6 +337,19 @@ final class JournalPanelController {
     }
 
     private func positionIfNeeded(_ panel: NSPanel) {
+        // Next to the text cursor, like Win+V. The panel is read before it is ordered in, while
+        // the app the user types in still holds the focus.
+        if settings.openAtCaret, let anchor = CaretLocator.anchor()?.rect {
+            let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
+            if
+                let visibleFrame = screen?.visibleFrame,
+                let origin = PanelPlacement.origin(anchor: anchor, panelSize: panel.frame.size, visibleFrame: visibleFrame)
+            {
+                panel.setFrameOrigin(origin)
+                return
+            }
+        }
+
         if let savedOrigin = savedOrigin {
             panel.setFrameOrigin(validOrigin(savedOrigin, for: panel))
             return
