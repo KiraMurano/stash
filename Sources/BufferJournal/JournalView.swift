@@ -302,12 +302,7 @@ struct JournalView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(sections, id: \.title) { section in
-                        Text(section.title)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(palette.textTertiary)
-                            .padding(.leading, 8)
-                            .padding(.top, 6)
-                            .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .leading)
+                        SectionHeader(title: section.title, palette: palette)
                             .id(section.title)
 
                         ForEach(section.entries) { entry in

@@ -14,9 +14,15 @@ struct EntryRow: View {
     let onExpand: (() -> Void)?
     let onTogglePin: () -> Void
     let onDelete: () -> Void
+    /// Tutorial scenes show hover without a mouse; the journal leaves it nil.
+    var hoverOverride: Bool? = nil
 
     @Environment(\.l10n) private var l10n
-    @State private var isHovered = false
+    @State private var isMouseOver = false
+
+    private var isHovered: Bool {
+        hoverOverride ?? isMouseOver
+    }
 
     private static let actionSize: CGFloat = 26
     private static let actionSpacing: CGFloat = 4
@@ -30,12 +36,7 @@ struct EntryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            thumb
-                .frame(width: 42, height: 42)
-                .background(palette.placeholderBackground)
-                .background(palette.sidebarTint)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: palette.controlShadow, radius: ThemePalette.controlShadowRadius, y: 1)
+            EntryThumb(entry: entry, thumbnail: thumbnail, fileIcon: fileIcon, palette: palette)
 
             Group {
                 if entry.isText {
@@ -121,7 +122,7 @@ struct EntryRow: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
-        .onHover { isHovered = $0 }
+        .onHover { isMouseOver = $0 }
     }
 
     private var accentTone: TranslucentButtonStyle.Tone {
@@ -154,32 +155,5 @@ struct EntryRow: View {
             .font(.system(size: 11))
             .foregroundStyle(isSelected ? palette.onAccentSecondary : palette.textTertiary)
             .lineLimit(1)
-    }
-
-    @ViewBuilder
-    private var thumb: some View {
-        switch entry.payload {
-        case .image:
-            if let thumbnail {
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .interpolation(.medium)
-                    .scaledToFill()
-            }
-        case .file:
-            if let fileIcon {
-                Image(nsImage: fileIcon)
-                    .resizable()
-                    .padding(4)
-            } else {
-                Image(systemName: "doc")
-                    .font(.system(size: 16))
-                    .foregroundStyle(palette.textSecondary)
-            }
-        case let .text(text):
-            Text(String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(palette.textSecondary)
-        }
     }
 }
