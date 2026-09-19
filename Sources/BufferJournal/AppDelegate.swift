@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import SwiftUI
 
 @MainActor
@@ -22,16 +23,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor = ClipboardMonitor(store: store)
         writer = ClipboardWriter(store: store, monitor: monitor)
         settings = AppSettings()
+        hotKeyController = HotKeyController()
+        hotKeyController.install()
         panelController = JournalPanelController(store: store, writer: writer, settings: settings)
-        hotKeyController = HotKeyController { [weak self] in
-            Task { @MainActor in
-                self?.panelController.toggle()
-            }
+        hotKeyController.register(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(optionKey)) { [weak self] in
+            self?.panelController.toggle()
         }
 
         configureStatusItem()
         monitor.start()
-        hotKeyController.register()
     }
 
     private func configureStatusItem() {

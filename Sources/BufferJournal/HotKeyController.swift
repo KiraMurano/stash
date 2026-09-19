@@ -1,33 +1,39 @@
 import Carbon
 import Foundation
 
+/// Global hotkeys through the Carbon hotkey API: ⌥V for the journal, and the journal's own keys
+/// while it is open. macOS hands a registered key to Stash instead of the frontmost app.
+@MainActor
 final class HotKeyController {
-    private var hotKeyRef: EventHotKeyRef?
+    struct Registration: Hashable {
+        fileprivate let id: UInt32
+    }
+
+    private struct Handler {
+        let ref: EventHotKeyRef
+        let onPress: () -> Void
+        let onRelease: (() -> Void)?
+    }
+
+    private static let signature = OSType("BJRN".fourCharCode)
+
     private var eventHandler: EventHandlerRef?
-    private let onPressed: () -> Void
+    private var handlers: [UInt32: Handler] = [:]
+    private var nextID: UInt32 = 1
 
-    init(onPressed: @escaping () -> Void) {
-        self.onPressed = onPressed
-    }
-
-    deinit {
-        if let hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
-        }
-        if let eventHandler {
-            RemoveEventHandler(eventHandler)
-        }
-    }
-
-    func register() {
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyPressed))
+    /// Installs one Carbon handler for hotkey presses and releases; call once at launch.
+    func install() {
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyReleased)),
+        ]
 
         let status = InstallEventHandler(
             GetApplicationEventTarget(),
             { _, event, userData in
-                guard let userData else { return noErr }
+                guard let event, let userData else { return OSStatus(eventNotHandledErr) }
                 var hotKeyID = EventHotKeyID()
-                GetEventParameter(
+                let status = GetEventParameter(
                     event,
                     EventParamName(kEventParamDirectObject),
                     EventParamType(typeEventHotKeyID),
@@ -36,39 +42,71 @@ final class HotKeyController {
                     nil,
                     &hotKeyID
                 )
+                guard status == noErr else { return status }
 
-                guard hotKeyID.id == 1 else { return noErr }
-                let controller = Unmanaged<HotKeyController>.fromOpaque(userData).takeUnretainedValue()
-                controller.onPressed()
-                return noErr
+                let id = hotKeyID.id
+                let isPress = GetEventKind(event) == UInt32(kEventHotKeyPressed)
+                nonisolated(unsafe) let pointer = userData
+                // Carbon delivers hotkey events on the main thread.
+                return MainActor.assumeIsolated {
+                    let controller = Unmanaged<HotKeyController>.fromOpaque(pointer).takeUnretainedValue()
+                    return controller.handle(id: id, isPress: isPress) ? noErr : OSStatus(eventNotHandledErr)
+                }
             },
-            1,
-            &eventType,
+            eventTypes.count,
+            &eventTypes,
             Unmanaged.passUnretained(self).toOpaque(),
             &eventHandler
         )
 
-        guard status == noErr else {
+        if status != noErr {
             NSLog("BufferJournal: failed to install hotkey handler: \(status)")
-            return
         }
+    }
 
-        let hotKeyID = EventHotKeyID(signature: OSType("BJRN".fourCharCode), id: 1)
-        let modifiers = UInt32(optionKey)
-        let keyCode = UInt32(kVK_ANSI_V)
+    /// Registers a global hotkey. Returns nil, and logs, when macOS refuses the combination.
+    @discardableResult
+    func register(
+        keyCode: UInt32,
+        modifiers: UInt32,
+        onPress: @escaping () -> Void,
+        onRelease: (() -> Void)? = nil
+    ) -> Registration? {
+        let id = nextID
+        nextID += 1
 
-        let hotKeyStatus = RegisterEventHotKey(
+        var ref: EventHotKeyRef?
+        let status = RegisterEventHotKey(
             keyCode,
             modifiers,
-            hotKeyID,
+            EventHotKeyID(signature: Self.signature, id: id),
             GetApplicationEventTarget(),
             0,
-            &hotKeyRef
+            &ref
         )
 
-        if hotKeyStatus != noErr {
-            NSLog("BufferJournal: failed to register Option+V: \(hotKeyStatus)")
+        guard status == noErr, let ref else {
+            NSLog("BufferJournal: failed to register hotkey \(keyCode) with modifiers \(modifiers): \(status)")
+            return nil
         }
+
+        handlers[id] = Handler(ref: ref, onPress: onPress, onRelease: onRelease)
+        return Registration(id: id)
+    }
+
+    func unregister(_ registration: Registration) {
+        guard let handler = handlers.removeValue(forKey: registration.id) else { return }
+        UnregisterEventHotKey(handler.ref)
+    }
+
+    private func handle(id: UInt32, isPress: Bool) -> Bool {
+        guard let handler = handlers[id] else { return false }
+        if isPress {
+            handler.onPress()
+        } else {
+            handler.onRelease?()
+        }
+        return true
     }
 }
 
