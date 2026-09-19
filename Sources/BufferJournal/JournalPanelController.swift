@@ -32,6 +32,7 @@ final class JournalPanelController {
     /// Menus of Stash being tracked right now: the menu bar menu, a right-click menu in the preview.
     private var trackingMenus: Set<ObjectIdentifier> = []
     private var observers: [NSObjectProtocol] = []
+    private var outsideClickMonitor: Any?
 
     init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate) {
         self.store = store
@@ -104,6 +105,7 @@ final class JournalPanelController {
         isPanelVisible = true
         access.setPolling(true)
         updateKeys()
+        updateOutsideClicks()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
@@ -117,6 +119,7 @@ final class JournalPanelController {
         isPanelVisible = false
         access.setPolling(false)
         updateKeys()
+        updateOutsideClicks()
 
         guard let panel, panel.isVisible else {
             completion?()
@@ -172,6 +175,25 @@ final class JournalPanelController {
         }
         access.setPolling(isPanelVisible)
         updateKeys()
+        updateOutsideClicks()
+    }
+
+    /// The journal closes when the user clicks elsewhere, like Win+V. A global monitor never sees
+    /// clicks on Stash itself, so whatever it reports happened in another app. The access screen
+    /// keeps watching nothing: a click there is usually the trip to System Settings.
+    private func updateOutsideClicks() {
+        let shouldWatch = isPanelVisible && access.isGranted
+
+        if shouldWatch, outsideClickMonitor == nil {
+            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.close()
+                }
+            }
+        } else if !shouldWatch, let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
     }
 
     /// Asks for access and lowers the panel to the normal window level so it does not cover

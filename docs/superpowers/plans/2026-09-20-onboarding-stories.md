@@ -2662,7 +2662,7 @@ scenes are placeholders."
 - Test: `Tests/BufferJournalTests/JournalKeysTests.swift` (переписан под режимы), `Tests/BufferJournalTests/JournalKeyActionTests.swift`
 
 **Interfaces:**
-- Consumes: `OnboardingController` (Task 8) — `init(defaults:access:)`, `isPresented`, `isAccessOnly`, `slide`, `present(replay:)`, `presentAccessOnly()`, `restartScene()`, `requestAccess()`, `handleKey(_ key: JournalKey) -> Bool`, `shouldShowOnLaunch`; `OnboardingView(controller:access:l10n:onOpenSettings:onClosePanel:)` (Task 9); `OnboardingSceneKind.access` (Task 5); `AccessGate` (уже в приложении).
+- Consumes: `OnboardingController` (Task 8) — `init(defaults:access:)`, `isPresented`, `isAccessOnly`, `slide`, `present(replay:)`, `presentAccessOnly()`, `restartScene()`, `requestAccess()`, `handleKey(_ key: JournalKey) -> Bool`, `shouldShowOnLaunch`; закрытие панели по клику мимо неё (`updateOutsideClicks`) переводится на `panelContent`; `OnboardingView(controller:access:l10n:onOpenSettings:onClosePanel:)` (Task 9); `OnboardingSceneKind.access` (Task 5); `AccessGate` (уже в приложении).
 - Produces: `enum JournalKey` — добавлены `.left` и `.right`; `JournalKeys.Mode` (`off`, `journal`, `onboarding`), `JournalKeys.PanelContent` (`journal`, `onboarding`, `access`), `JournalKeys.mode(intercepts:panelVisible:content:stashActive:menuOpen:) -> Mode`, `var mode: Mode`.
 - Produces: `StatusMenuTitles(l10n:)` — `openStash`, `tutorial`, `closeAfterSelection`, `interceptKeys`, `openAtCaret`, `theme`, `language`, `clearHistory`, `quit`. Меню значка и сцена «НАСТРОЙКИ» (Task 18) берут названия отсюда.
 - Produces: `JournalPanelController(store:writer:settings:hotKeys:access:onboarding:)`, `showOnboarding(replay: Bool)`; `JournalView(store:settings:access:onboarding:keyEvents:…)`.
@@ -3205,6 +3205,22 @@ import SwiftUI
         }
         return onboarding.slide.kind == .access ? .access : .onboarding
     }
+```
+
+В `Sources/BufferJournal/JournalPanelController.swift` заменить:
+
+```swift
+    private func updateOutsideClicks() {
+        let shouldWatch = isPanelVisible && access.isGranted
+```
+
+на:
+
+```swift
+    private func updateOutsideClicks() {
+        // Only the journal closes on an outside click: the tutorial and the access slide stay put,
+        // a click past them is usually the trip to System Settings.
+        let shouldWatch = isPanelVisible && panelContent == .journal
 ```
 
 В `Sources/BufferJournal/JournalPanelController.swift` заменить:
