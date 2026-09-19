@@ -22,7 +22,7 @@ struct OnboardingSceneView: View {
     static func size(of kind: OnboardingSceneKind) -> CGSize? {
         switch kind {
         case .hero: nil
-        case .hotKey: OnboardingLayout.sceneSize
+        case .hotKey: HotKeyScene.size
         case .paste: OnboardingLayout.sceneSize
         case .pin: OnboardingLayout.sceneSize
         case .images: OnboardingLayout.sceneSize
@@ -50,7 +50,7 @@ struct OnboardingSceneView: View {
     private static func scene(_ kind: OnboardingSceneKind, at time: SceneTime, area: CGSize) -> some View {
         switch kind {
         case .hero: HeroScene(time: time, area: area)
-        case .hotKey: Color.clear
+        case .hotKey: HotKeyScene(time: time)
         case .paste: Color.clear
         case .pin: Color.clear
         case .images: Color.clear

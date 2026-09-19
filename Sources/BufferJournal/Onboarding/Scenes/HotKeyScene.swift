@@ -1,0 +1,104 @@
+import SwiftUI
+
+/// ВЫЗОВ: ⌥ and V go down on a Mac keyboard, and the journal opens right under the line the
+/// insertion point stands on, as it does on screen.
+struct HotKeyScene: View {
+    static let duration = 2.6
+    /// Two keys, and another app's window with the journal under its caret.
+    static let size = CGSize(width: 470, height: 234)
+
+    struct State: Equatable {
+        var optionDown: Bool
+        var vDown: Bool
+        /// 0…1: the journal appearing under the caret.
+        var journal: Double
+    }
+
+    private static let option = Track(false).set(true, at: 0.3).set(false, at: 1.0)
+    private static let v = Track(false).set(true, at: 0.5).set(false, at: 1.02)
+    private static let journal = Track(0.0).to(1, at: 0.6, until: 0.9, .easeOut)
+
+    static func state(at time: SceneTime) -> State {
+        State(optionDown: option.value(at: time), vDown: v.value(at: time), journal: journal.value(at: time))
+    }
+
+    /// The journal is shown at this share of its real size: what is left under the caret once the
+    /// window and the app's own gap have taken their room.
+    static let miniatureScale: CGFloat = 0.3
+
+    // MARK: Geometry, in canvas coordinates
+
+    /// The other app's window with the document text.
+    static let window = CGRect(x: 142, y: 6, width: 312, height: 150)
+    /// SceneWindow draws a 24 pt title bar above its content.
+    private static let titleBar: CGFloat = 24
+    private static let textInset = CGSize(width: 14, height: 12)
+    /// Grey lines of the document; the caret stands at the end of the second one.
+    private static let lines: [CGFloat] = [190, 64, 168, 212, 140]
+    private static let lineHeight: CGFloat = 6
+    private static let lineSpacing: CGFloat = 9
+    private static let caretLine = 1
+    private static let caretHeight: CGFloat = 13
+
+    /// The insertion point: at the end of its line, centred on it.
+    static let caret = CGRect(
+        x: window.minX + textInset.width + lines[caretLine] + 4,
+        y: window.minY + titleBar + textInset.height
+            + CGFloat(caretLine) * (lineHeight + lineSpacing) + lineHeight / 2 - caretHeight / 2,
+        width: 1.5,
+        height: caretHeight
+    )
+
+    /// Where the journal lands: left edge at the caret, top edge a gap below its line — the same
+    /// placement `PanelPlacement` computes on screen.
+    static let journalFrame = CGRect(
+        x: caret.minX,
+        y: caret.maxY + PanelPlacement.gap,
+        width: JournalView.Layout.width * miniatureScale,
+        height: JournalView.Layout.height * miniatureScale
+    )
+
+    let time: SceneTime
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.l10n) private var l10n
+
+    var body: some View {
+        let state = Self.state(at: time)
+        let palette = ThemePalette.scene(colorScheme)
+
+        ZStack(alignment: .topLeading) {
+            SceneKeycap(label: "⌥", caption: "option", size: 60, pressed: state.optionDown)
+                .offset(x: 10, y: 84)
+            // On a Russian keyboard V also carries "М"; the shortcut works by key, in any layout.
+            SceneKeycap(label: "V", secondary: l10n.language == .russian ? "М" : nil, size: 60, pressed: state.vDown)
+                .offset(x: 78, y: 84)
+
+            SceneWindow(title: l10n("Document", "Документ"), palette: palette) {
+                VStack(alignment: .leading, spacing: Self.lineSpacing) {
+                    ForEach(Array(Self.lines.enumerated()), id: \.offset) { _, width in
+                        SceneTextLine(width: width, palette: palette)
+                    }
+                }
+                .padding(.leading, Self.textInset.width)
+                .padding(.top, Self.textInset.height)
+            }
+            .frame(width: Self.window.width, height: Self.window.height)
+            .offset(x: Self.window.minX, y: Self.window.minY)
+
+            // Drawn over the window at the canvas's own coordinates, so the caret and the journal
+            // under it come from the same numbers.
+            SceneCaret(height: Self.caret.height, visible: SceneCaret.isVisible(at: time, duration: Self.duration))
+                .offset(x: Self.caret.minX, y: Self.caret.minY)
+
+            JournalMiniature(palette: palette)
+                .scaleEffect(Self.miniatureScale)
+                .frame(width: Self.journalFrame.width, height: Self.journalFrame.height)
+                .shadow(color: palette.shadow(0.3), radius: 14, y: 8)
+                .scaleEffect(0.96 + 0.04 * state.journal, anchor: .top)
+                .opacity(state.journal)
+                .offset(x: Self.journalFrame.minX, y: Self.journalFrame.minY)
+        }
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+    }
+}
