@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import QuartzCore
 import SwiftUI
 
@@ -23,9 +24,11 @@ final class JournalPanelController {
     private let writer: ClipboardWriter
     private let settings: AppSettings
     private let access: AccessGate
+    private let onboarding: OnboardingController
     private let presentation = PanelPresentation()
     private let keys: JournalKeys
     private var panel: NSPanel?
+    private var onboardingObserver: AnyCancellable?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
     /// Whether the panel is meant to be on screen. The journal's hotkeys follow this, not
     /// `panel.isVisible`, which stays true through the close fade.
@@ -35,12 +38,21 @@ final class JournalPanelController {
     private var observers: [NSObjectProtocol] = []
     private var outsideClickMonitor: Any?
 
-    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate) {
+    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate, onboarding: OnboardingController) {
         self.store = store
         self.writer = writer
         self.settings = settings
         self.access = access
+        self.onboarding = onboarding
         keys = JournalKeys(hotKeys: hotKeys)
+
+        // Which slide is on screen decides the keys, and the access slide takes none.
+        // `objectWillChange` fires before the change, so the mode is read a turn of the run loop later.
+        onboardingObserver = onboarding.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in
+                self?.updateKeys()
+            }
+        }
 
         // The clip editor activates Stash and needs the arrows, Return and Esc for itself.
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
@@ -95,10 +107,28 @@ final class JournalPanelController {
         }
     }
 
+    /// Opens the tutorial on its first slide, showing the panel if it is hidden.
+    func showOnboarding(replay: Bool) {
+        onboarding.present(replay: replay)
+        // Already on screen: move it to the middle for the stories and take the tutorial's keys.
+        if isPanelVisible, let panel, panel.level == .floating {
+            positionIfNeeded(panel)
+            updateKeys()
+        } else {
+            show()
+        }
+    }
+
     func show() {
         let panel = makePanelIfNeeded()
-        positionIfNeeded(panel)
         access.refresh()
+        // Without access there is no journal to show: the panel puts up the access slide alone.
+        if !access.isGranted, !onboarding.isPresented {
+            onboarding.presentAccessOnly()
+        }
+        // A tutorial left open while the panel was hidden starts its scene over.
+        onboarding.restartScene()
+        positionIfNeeded(panel)
         panel.level = .floating
         panel.alphaValue = 0
         presentation.isOpen = false
@@ -170,13 +200,22 @@ final class JournalPanelController {
     }
 
     private func updateKeys() {
-        keys.isListening = JournalKeys.shouldListen(
+        keys.mode = JournalKeys.mode(
             intercepts: settings.interceptKeys,
             panelVisible: isPanelVisible,
-            journalShown: access.isGranted,
+            content: panelContent,
             stashActive: NSApp.isActive,
             menuOpen: !trackingMenus.isEmpty
         )
+    }
+
+    /// What the panel shows right now. The access slide counts the same in both of its looks —
+    /// last in the tutorial and on its own — because both send the user to System Settings.
+    private var panelContent: JournalKeys.PanelContent {
+        guard onboarding.isPresented else {
+            return access.isGranted ? .journal : .access
+        }
+        return onboarding.slide.kind == .access ? .access : .onboarding
     }
 
     private func accessChanged() {
@@ -194,7 +233,9 @@ final class JournalPanelController {
     /// clicks on Stash itself, so whatever it reports happened in another app. The access screen
     /// keeps watching nothing: a click there is usually the trip to System Settings.
     private func updateOutsideClicks() {
-        let shouldWatch = isPanelVisible && access.isGranted
+        // Only the journal closes on an outside click: the tutorial and the access slide stay put,
+        // a click past them is usually the trip to System Settings.
+        let shouldWatch = isPanelVisible && panelContent == .journal
 
         if shouldWatch, outsideClickMonitor == nil {
             outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
@@ -211,7 +252,7 @@ final class JournalPanelController {
     /// Asks for access and lowers the panel to the normal window level so it does not cover
     /// System Settings; the panel rises again once access is granted or on the next show.
     private func openAccessSettings() {
-        access.request()
+        onboarding.requestAccess()
         panel?.level = .normal
     }
 
@@ -224,6 +265,7 @@ final class JournalPanelController {
             store: store,
             settings: settings,
             access: access,
+            onboarding: onboarding,
             presentation: presentation,
             keyEvents: keys.events,
             onPaste: { [weak self] entry in
@@ -372,6 +414,13 @@ final class JournalPanelController {
     }
 
     private func positionIfNeeded(_ panel: NSPanel) {
+        // The stories open in the middle of the screen: nobody is typing while they play, so
+        // "Open at the Cursor" does not apply to them.
+        if onboarding.isPresented {
+            center(panel)
+            return
+        }
+
         // Next to the text cursor, like Win+V. The panel is read before it is ordered in, while
         // the app the user types in still holds the focus.
         if settings.openAtCaret, let anchor = CaretLocator.anchor()?.rect {
@@ -395,6 +444,11 @@ final class JournalPanelController {
             return
         }
 
+        center(panel)
+    }
+
+    /// The middle of the screen, a touch above centre.
+    private func center(_ panel: NSPanel) {
         guard let screen = NSScreen.main else {
             panel.center()
             return

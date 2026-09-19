@@ -113,13 +113,20 @@ final class OnboardingController: ObservableObject {
         access.request()
     }
 
-    /// Keys while the tutorial is open: Return goes on ("Start" on the last slide), Escape closes
-    /// the tutorial but not the panel. Up and Down are none of the tutorial's business — they stay
-    /// with the journal. The access slide has no keys at all: Return and Escape belong to System
-    /// Settings, where the person is headed, and that slide is turned with the mouse and buttons.
+    /// Keys while the tutorial is open: Right and Return go on ("Start" on the last slide), Left
+    /// goes back, Escape closes the tutorial but not the panel. Up and Down are none of the
+    /// tutorial's business — they stay with the journal. The access slide has no keys at all:
+    /// Return and Escape belong to System Settings, where the person is headed, and that slide is
+    /// turned with the mouse and buttons.
     func handleKey(_ key: JournalKey) -> Bool {
         guard isPresented, !isAccessOnly, slide.kind != .access else { return false }
         switch key {
+        case .right:
+            next()
+            return true
+        case .left:
+            back()
+            return true
         case .enter:
             primaryAction()
             return true

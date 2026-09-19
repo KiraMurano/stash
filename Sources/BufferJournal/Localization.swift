@@ -69,6 +69,21 @@ struct L10n {
     }
 }
 
+/// Titles of the menu bar menu. The tutorial's settings scene draws the same menu.
+struct StatusMenuTitles {
+    let l10n: L10n
+
+    var openStash: String { l10n("Open Stash", "Открыть Stash") }
+    var tutorial: String { l10n("Tutorial", "Обучение") }
+    var closeAfterSelection: String { l10n("Close After Selection", "Закрывать после выбора") }
+    var interceptKeys: String { l10n("Intercept Keys", "Перехватывать клавиши") }
+    var openAtCaret: String { l10n("Open at the Cursor", "Открывать у курсора") }
+    var theme: String { l10n("Theme", "Тема") }
+    var language: String { l10n("Language", "Язык") }
+    var clearHistory: String { l10n("Clear History", "Очистить историю") }
+    var quit: String { l10n("Quit", "Выйти") }
+}
+
 private struct SolidAccentsKey: EnvironmentKey {
     static let defaultValue = false
 }

@@ -175,6 +175,18 @@ struct OnboardingControllerTests {
         #expect(!controller.isPresented)
     }
 
+    @Test func arrowsTurnTheSlides() {
+        let (controller, _) = make()
+        controller.present(replay: false)
+        #expect(controller.handleKey(.right))
+        #expect(controller.index == 1)
+        #expect(controller.handleKey(.left))
+        #expect(controller.index == 0)
+        // Nowhere to go back to, but the tutorial still owns the key.
+        #expect(controller.handleKey(.left))
+        #expect(controller.index == 0)
+    }
+
     @Test func theTutorialLeavesOtherKeysAlone() {
         let (controller, _) = make()
         controller.present(replay: false)

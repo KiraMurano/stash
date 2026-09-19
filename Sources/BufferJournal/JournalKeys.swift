@@ -2,10 +2,13 @@ import AppKit
 import Carbon
 import Combine
 
-/// Keys the journal takes while it is open: plain Up, Down, Return (or keypad Enter) and Escape.
+/// Keys Stash takes while the panel is open: the journal's plain Up, Down, Return (or keypad
+/// Enter) and Escape, and the tutorial's Left and Right.
 enum JournalKey: Equatable {
     case up
     case down
+    case left
+    case right
     case enter
     case escape
 }
@@ -28,45 +31,83 @@ enum JournalKeyAction: Equatable {
         switch key {
         case .up: return .moveUp
         case .down: return .moveDown
+        // The tutorial's arrows never reach the journal: they are taken only while it is open.
+        case .left, .right: return .ignore
         case .enter: return hasSelection ? .paste : .ignore
         case .escape: return .closePanel
         }
     }
 }
 
-/// The journal's hotkeys. While listening, plain Up, Down, Return, keypad Enter and Escape are
-/// registered as global hotkeys, so macOS hands them to Stash instead of the app under the panel.
-/// macOS swallows the auto-repeats of a held hotkey, so Up and Down repeat on a timer at the
-/// system key-repeat rate.
+/// Stash's hotkeys while the panel is open. The keys of the mode in force are registered as
+/// global hotkeys, so macOS hands them to Stash instead of the app under the panel. macOS
+/// swallows the auto-repeats of a held hotkey, so Up and Down repeat on a timer at the system
+/// key-repeat rate.
 @MainActor
 final class JournalKeys {
-    /// Listen only while Intercept Keys is on, the journal is on screen, Stash is not the active
+    /// What the panel shows right now.
+    enum PanelContent: Equatable {
+        case journal
+        case onboarding
+        case access
+    }
+
+    /// Which keys are registered.
+    enum Mode: Equatable {
+        /// None: every key stays with the app the user is typing in.
+        case off
+        /// Up, Down, Return, keypad Enter, Escape.
+        case journal
+        /// Left, Right, Return, keypad Enter, Escape.
+        case onboarding
+    }
+
+    /// Take keys only while Intercept Keys is on, the panel is on screen, Stash is not the active
     /// app (its clip editor needs these keys) and no menu of Stash is open (menus are walked with
-    /// the arrows). Turned off, every key stays with the app the user is typing in.
-    nonisolated static func shouldListen(intercepts: Bool, panelVisible: Bool, journalShown: Bool, stashActive: Bool, menuOpen: Bool) -> Bool {
-        intercepts && panelVisible && journalShown && !stashActive && !menuOpen
+    /// the arrows). The access screen takes none: the user is on their way to System Settings,
+    /// where Return and Escape are theirs.
+    nonisolated static func mode(intercepts: Bool, panelVisible: Bool, content: PanelContent, stashActive: Bool, menuOpen: Bool) -> Mode {
+        guard intercepts, panelVisible, !stashActive, !menuOpen else { return .off }
+
+        switch content {
+        case .journal: return .journal
+        case .onboarding: return .onboarding
+        case .access: return .off
+        }
     }
 
     let events = PassthroughSubject<JournalKey, Never>()
 
-    var isListening = false {
+    var mode: Mode = .off {
         didSet {
-            guard isListening != oldValue else { return }
-            if isListening {
-                register()
-            } else {
-                unregister()
-            }
+            guard mode != oldValue else { return }
+            unregister()
+            register()
         }
     }
 
-    private static let bindings: [(keyCode: Int, key: JournalKey)] = [
-        (kVK_UpArrow, .up),
-        (kVK_DownArrow, .down),
-        (kVK_Return, .enter),
-        (kVK_ANSI_KeypadEnter, .enter),
-        (kVK_Escape, .escape),
-    ]
+    private static func bindings(for mode: Mode) -> [(keyCode: Int, key: JournalKey)] {
+        switch mode {
+        case .off:
+            return []
+        case .journal:
+            return [
+                (kVK_UpArrow, .up),
+                (kVK_DownArrow, .down),
+                (kVK_Return, .enter),
+                (kVK_ANSI_KeypadEnter, .enter),
+                (kVK_Escape, .escape),
+            ]
+        case .onboarding:
+            return [
+                (kVK_LeftArrow, .left),
+                (kVK_RightArrow, .right),
+                (kVK_Return, .enter),
+                (kVK_ANSI_KeypadEnter, .enter),
+                (kVK_Escape, .escape),
+            ]
+        }
+    }
 
     private let hotKeys: HotKeyController
     private var registrations: [HotKeyController.Registration] = []
@@ -78,7 +119,7 @@ final class JournalKeys {
     }
 
     private func register() {
-        for binding in Self.bindings {
+        for binding in Self.bindings(for: mode) {
             let key = binding.key
             let registration = hotKeys.register(
                 keyCode: UInt32(binding.keyCode),

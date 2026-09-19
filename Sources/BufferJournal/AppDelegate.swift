@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var writer: ClipboardWriter!
     private var settings: AppSettings!
     private var access: AccessGate!
+    private var onboarding: OnboardingController!
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
     private var statusItem: NSStatusItem!
@@ -26,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         writer = ClipboardWriter(store: store, monitor: monitor)
         settings = AppSettings()
         access = AccessGate()
+        onboarding = OnboardingController(defaults: .standard, access: access)
         hotKeyController = HotKeyController()
         hotKeyController.install()
         panelController = JournalPanelController(
@@ -33,7 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             writer: writer,
             settings: settings,
             hotKeys: hotKeyController,
-            access: access
+            access: access,
+            onboarding: onboarding
         )
         hotKeyController.register(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(optionKey)) { [weak self] in
             self?.panelController.toggle()
@@ -42,8 +45,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItem()
         monitor.start()
 
-        // Pasting needs Accessibility access; without it the panel opens right away on the access screen.
-        if !access.isGranted {
+        // The tour runs once, on the first launch after the update, and its last slide asks for
+        // access. Later on, pasting still needs that access, and without it the panel opens right
+        // away on the access slide alone.
+        if onboarding.shouldShowOnLaunch {
+            panelController.showOnboarding(replay: false)
+        } else if !access.isGranted {
             panelController.show()
         }
     }
@@ -60,20 +67,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu() {
         let l10n = settings.l10n
+        let titles = StatusMenuTitles(l10n: l10n)
         let menu = NSMenu()
-        menu.addItem(menuItem(l10n("Open Stash", "Открыть Stash"), action: #selector(openJournal)))
+        menu.addItem(menuItem(titles.openStash, action: #selector(openJournal)))
+        // Next to "Open Stash": both open the panel. Away from "Clear History", which asks nothing.
+        menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial)))
         menu.addItem(NSMenuItem.separator())
 
-        closeAfterSelectionItem = menuItem(l10n("Close After Selection", "Закрывать после выбора"), action: #selector(toggleCloseAfterSelection))
+        closeAfterSelectionItem = menuItem(titles.closeAfterSelection, action: #selector(toggleCloseAfterSelection))
         menu.addItem(closeAfterSelectionItem)
 
-        interceptKeysItem = menuItem(l10n("Intercept Keys", "Перехватывать клавиши"), action: #selector(toggleInterceptKeys))
+        interceptKeysItem = menuItem(titles.interceptKeys, action: #selector(toggleInterceptKeys))
         menu.addItem(interceptKeysItem)
 
-        openAtCaretItem = menuItem(l10n("Open at the Cursor", "Открывать у курсора"), action: #selector(toggleOpenAtCaret))
+        openAtCaretItem = menuItem(titles.openAtCaret, action: #selector(toggleOpenAtCaret))
         menu.addItem(openAtCaretItem)
 
-        let themeItem = NSMenuItem(title: l10n("Theme", "Тема"), action: nil, keyEquivalent: "")
+        let themeItem = NSMenuItem(title: titles.theme, action: nil, keyEquivalent: "")
         let themeMenu = NSMenu()
         themeItems = [:]
         for themeMode in ThemeMode.allCases {
@@ -88,7 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         themeItem.submenu = themeMenu
         menu.addItem(themeItem)
 
-        let languageItem = NSMenuItem(title: l10n("Language", "Язык"), action: nil, keyEquivalent: "")
+        let languageItem = NSMenuItem(title: titles.language, action: nil, keyEquivalent: "")
         let languageMenu = NSMenu()
         languageItems = [:]
         for language in AppLanguage.allCases {
@@ -104,8 +114,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(languageItem)
 
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(menuItem(l10n("Clear History", "Очистить историю"), action: #selector(clearHistory)))
-        menu.addItem(menuItem(l10n("Quit", "Выйти"), action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(menuItem(titles.clearHistory, action: #selector(clearHistory)))
+        menu.addItem(menuItem(titles.quit, action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
         updateSettingsMenuState()
     }
@@ -118,6 +128,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openJournal() {
         panelController.show()
+    }
+
+    @objc private func openTutorial() {
+        panelController.showOnboarding(replay: true)
     }
 
     @objc private func clearHistory() {

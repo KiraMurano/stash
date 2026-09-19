@@ -41,6 +41,7 @@ struct JournalView: View {
     @ObservedObject var store: ClipboardHistoryStore
     @ObservedObject var settings: AppSettings
     @ObservedObject var access: AccessGate
+    @ObservedObject var onboarding: OnboardingController
     /// Opening and closing: the panel grows into place and shrinks back.
     @ObservedObject var presentation: PanelPresentation
     /// The journal's keys, taken as hotkeys while it is open: the panel itself never takes the keyboard.
@@ -101,15 +102,9 @@ struct JournalView: View {
         ZStack {
             NativeGlassEffectView(style: .regular, cornerRadius: Layout.cornerRadius)
 
-            if access.isGranted {
-                journal
-                    .transition(.opacity)
-            } else {
-                AccessScreen(palette: palette, onOpenSettings: onOpenAccessSettings, onClose: onClose)
-                    .transition(.opacity)
-            }
+            journal
 
-            // Dialogs belong to the journal; the access screen never shows one left over.
+            // Dialogs belong to the journal; the access slide over it never shows one left over.
             if access.isGranted, isClearConfirmationShown || entryPendingDeletion != nil {
                 ZStack {
                     palette.dialogBackdrop
@@ -151,6 +146,19 @@ struct JournalView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     .zIndex(30)
             }
+
+            // The tutorial, and the access slide on its own, cover the whole panel.
+            if onboarding.isPresented {
+                OnboardingView(
+                    controller: onboarding,
+                    access: access,
+                    l10n: l10n,
+                    onOpenSettings: onOpenAccessSettings,
+                    onClosePanel: onClose
+                )
+                .transition(.opacity)
+                .zIndex(40)
+            }
         }
         .frame(minWidth: Layout.minWidth, idealWidth: Layout.width, minHeight: Layout.minHeight, idealHeight: Layout.height)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -167,7 +175,7 @@ struct JournalView: View {
         .scaleEffect(presentation.isOpen ? 1 : PanelPresentation.closedScale)
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
-        .animation(.easeOut(duration: 0.2), value: access.isGranted)
+        .animation(.easeOut(duration: 0.2), value: onboarding.isPresented)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, l10n)
         .environment(\.solidAccents, settings.themeMode.usesSolidAccents)
@@ -713,8 +721,11 @@ struct JournalView: View {
         }
     }
 
-    /// Keys arrive as hotkeys while the journal is open (see `JournalKeys`).
+    /// Keys arrive as hotkeys while the panel is open (see `JournalKeys`).
     private func handleKey(_ key: JournalKey) {
+        // The tutorial covers the journal and takes the keys it knows while it is open.
+        if onboarding.isPresented, onboarding.handleKey(key) { return }
+
         let action = JournalKeyAction.resolve(
             key,
             dialogShown: isClearConfirmationShown || entryPendingDeletion != nil,

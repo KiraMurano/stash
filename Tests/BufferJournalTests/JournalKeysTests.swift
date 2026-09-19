@@ -2,18 +2,29 @@ import Testing
 @testable import BufferJournal
 
 struct JournalKeysTests {
-    @Test func listensToTheOpenJournalOverAnotherApp() {
-        #expect(JournalKeys.shouldListen(intercepts: true, panelVisible: true, journalShown: true, stashActive: false, menuOpen: false))
+    @Test func theOpenJournalTakesItsOwnKeys() {
+        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .journal, stashActive: false, menuOpen: false) == .journal)
+    }
+
+    @Test func theTutorialTakesTheArrowsItNeeds() {
+        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .onboarding, stashActive: false, menuOpen: false) == .onboarding)
+    }
+
+    @Test func theAccessScreenTakesNone() {
+        // The user is on their way to System Settings, where Return and Esc are theirs.
+        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .access, stashActive: false, menuOpen: false) == .off)
     }
 
     @Test func letsTheKeysGoOtherwise() {
-        #expect(!JournalKeys.shouldListen(intercepts: true, panelVisible: false, journalShown: true, stashActive: false, menuOpen: false))
-        #expect(!JournalKeys.shouldListen(intercepts: true, panelVisible: true, journalShown: false, stashActive: false, menuOpen: false))
-        #expect(!JournalKeys.shouldListen(intercepts: true, panelVisible: true, journalShown: true, stashActive: true, menuOpen: false))
-        #expect(!JournalKeys.shouldListen(intercepts: true, panelVisible: true, journalShown: true, stashActive: false, menuOpen: true))
+        for content in [JournalKeys.PanelContent.journal, .onboarding] {
+            #expect(JournalKeys.mode(intercepts: true, panelVisible: false, content: content, stashActive: false, menuOpen: false) == .off)
+            #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: content, stashActive: true, menuOpen: false) == .off)
+            #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: content, stashActive: false, menuOpen: true) == .off)
+        }
     }
 
     @Test func staysOutOfTheWayWithInterceptKeysOff() {
-        #expect(!JournalKeys.shouldListen(intercepts: false, panelVisible: true, journalShown: true, stashActive: false, menuOpen: false))
+        #expect(JournalKeys.mode(intercepts: false, panelVisible: true, content: .journal, stashActive: false, menuOpen: false) == .off)
+        #expect(JournalKeys.mode(intercepts: false, panelVisible: true, content: .onboarding, stashActive: false, menuOpen: false) == .off)
     }
 }
