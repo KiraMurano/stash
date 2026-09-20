@@ -40,7 +40,7 @@ enum OnboardingLayout {
 
     /// Spare width for the title, and the share of the panel height it may take.
     static let titleSlack: CGFloat = 1.02
-    static let titleHeightShare: CGFloat = 0.1
+    static let titleHeightShare: CGFloat = 0.085
 
     /// The first slide's title: as wide as its row allows, capped at 10 % of the panel height.
     /// `widthAt100` is the title's width at 100 pt.

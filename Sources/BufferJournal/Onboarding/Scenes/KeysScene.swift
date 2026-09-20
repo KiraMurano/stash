@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// КЛАВИШИ: no pointer. The journal is open next to a document, and the letters still go to the
-/// document. ↓ and ↓ move the selection, ⏎ pastes the third clip behind the typed word and the
+/// document. ↓ moves the selection, ⏎ pastes the third clip behind the typed lead-in and the
 /// journal goes away.
 struct KeysScene: View {
     static let duration = 4.2
@@ -21,12 +21,15 @@ struct KeysScene: View {
         var pasted: Double
     }
 
-    /// The word being typed while the journal is open.
-    static let word = Localized(en: "typ", ru: "нап")
-    static let letters = 3
+    /// The lead-in being typed while the journal is open. The pasted clip finishes the line,
+    /// so the two read as one sentence instead of two loose words.
+    static let word = Localized(en: "Code: ", ru: "Код: ")
+    static let letters = 6
 
-    // Typing starts at 0.4 s and a letter lands every 0.2 s; the word stands by 1.0 s.
-    private static let typed = Track(0).set(1, at: 0.4).set(2, at: 0.6).set(3, at: 0.8)
+    /// Typing starts at 0.4 s and a letter lands every 0.1 s, so the lead-in stands by 1.0 s.
+    private static let typed: Track<Int> = (1...letters).reduce(Track(0)) { track, letter in
+        track.set(letter, at: 0.4 + 0.1 * Double(letter - 1))
+    }
     private static let down = Track(false)
         .set(true, at: 1.6).set(false, at: 1.72)
         .set(true, at: 2.0).set(false, at: 2.12)
@@ -120,8 +123,8 @@ struct KeysScene: View {
         .padding(.top, 12)
     }
 
-    /// The clip ⏎ pastes: the third row of the list.
-    private static let promo = Localized(en: "Promo code AUTUMN25", ru: "Промокод AUTUMN25")
+    /// The clip ⏎ pastes: the third row of the list, and the end of the line being typed.
+    private static let promo = Localized(en: "AUTUMN25", ru: "AUTUMN25")
 
     private var clips: [DemoClip] {
         [

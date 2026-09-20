@@ -51,6 +51,7 @@ final class JournalPanelController {
         onboardingObserver = onboarding.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in
                 self?.updateKeys()
+                self?.updateOutsideClicks()
             }
         }
 
@@ -114,6 +115,8 @@ final class JournalPanelController {
         if isPanelVisible, let panel, panel.level == .floating {
             positionIfNeeded(panel)
             updateKeys()
+            // The journal was watching for clicks past the panel; the tutorial is not.
+            updateOutsideClicks()
         } else {
             show()
         }

@@ -84,15 +84,6 @@ struct AccessSlideTests {
         #expect(gate.isGranted)
     }
 
-    @Test func theSlideHasNoKeys() {
-        let (controller, _, _) = onAccessSlide()
-        for key in [JournalKey.left, .right, .up, .down, .enter, .escape] {
-            #expect(!controller.handleKey(key))
-        }
-        #expect(controller.slide.kind == .access)
-        #expect(controller.isPresented)
-    }
-
     @Test func aloneItIsTheOnlySlideAndItsMainButtonAsksForAccess() {
         let (controller, spy, _) = controller(granted: false)
         controller.presentAccessOnly()

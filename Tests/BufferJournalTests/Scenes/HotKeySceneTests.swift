@@ -5,7 +5,7 @@ import Testing
 /// The stop frame from the spec's "Сцены" section and the moments that lead to it.
 @MainActor
 struct HotKeySceneTests {
-    @Test func hotKeyEndsWithTheJournalUnderTheCaretAndKeysUp() {
+    @Test func hotKeyEndsWithTheJournalOpenAndKeysUp() {
         let end = HotKeyScene.state(at: .end(of: HotKeyScene.duration))
         #expect(end.journal == 1)
         #expect(!end.optionDown && !end.vDown)
@@ -13,12 +13,12 @@ struct HotKeySceneTests {
         #expect(pressed.optionDown && pressed.vDown)
     }
 
-    @Test func theJournalOpensUnderTheCaretWithTheAppsOwnGap() {
-        // The scene places the journal the way PanelPlacement does on screen: left edge at the
-        // caret, top edge a gap below the line it stands on.
-        #expect(HotKeyScene.journalFrame.minX == HotKeyScene.caret.minX)
-        #expect(HotKeyScene.journalFrame.minY == HotKeyScene.caret.maxY + PanelPlacement.gap)
-        #expect(HotKeyScene.journalFrame.maxX <= HotKeyScene.size.width)
-        #expect(HotKeyScene.journalFrame.maxY <= HotKeyScene.size.height)
+    @Test func theJournalOpensOverTheWindow() {
+        // The slide only says the keys open the journal, so it sits in the middle of the window
+        // in front rather than repeating the app's caret placement.
+        #expect(HotKeyScene.journalFrame.midX == HotKeyScene.window.midX)
+        #expect(HotKeyScene.journalFrame.midY == HotKeyScene.window.midY)
+        #expect(HotKeyScene.journalFrame.minX >= HotKeyScene.window.minX)
+        #expect(HotKeyScene.journalFrame.maxY <= HotKeyScene.window.maxY)
     }
 }

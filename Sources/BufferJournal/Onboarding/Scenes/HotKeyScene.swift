@@ -1,16 +1,16 @@
 import SwiftUI
 
-/// ВЫЗОВ: ⌥ and V go down on a Mac keyboard, and the journal opens right under the line the
-/// insertion point stands on, as it does on screen.
+/// ВЫЗОВ: ⌥ and V go down on a Mac keyboard, and the journal opens over the window in front.
+/// Where exactly it lands is not the point here — that it answers these two keys is.
 struct HotKeyScene: View {
     static let duration = 2.6
-    /// Two keys, and another app's window with the journal under its caret.
+    /// Two keys, and another app's window with the journal over it.
     static let size = CGSize(width: 470, height: 234)
 
     struct State: Equatable {
         var optionDown: Bool
         var vDown: Bool
-        /// 0…1: the journal appearing under the caret.
+        /// 0…1: the journal appearing over the window.
         var journal: Double
     }
 
@@ -22,8 +22,7 @@ struct HotKeyScene: View {
         State(optionDown: option.value(at: time), vDown: v.value(at: time), journal: journal.value(at: time))
     }
 
-    /// The journal is shown at this share of its real size: what is left under the caret once the
-    /// window and the app's own gap have taken their room.
+    /// The journal is shown at this share of its real size: as large as the window holding it.
     static let miniatureScale: CGFloat = 0.3
 
     // MARK: Geometry, in canvas coordinates
@@ -49,14 +48,19 @@ struct HotKeyScene: View {
         height: caretHeight
     )
 
-    /// Where the journal lands: left edge at the caret, top edge a gap below its line — the same
-    /// placement `PanelPlacement` computes on screen.
-    static let journalFrame = CGRect(
-        x: caret.minX,
-        y: caret.maxY + PanelPlacement.gap,
-        width: JournalView.Layout.width * miniatureScale,
-        height: JournalView.Layout.height * miniatureScale
-    )
+    /// The journal opens over the window, in the middle of it.
+    static let journalFrame: CGRect = {
+        let size = CGSize(
+            width: JournalView.Layout.width * miniatureScale,
+            height: JournalView.Layout.height * miniatureScale
+        )
+        return CGRect(
+            x: window.midX - size.width / 2,
+            y: window.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+    }()
 
     let time: SceneTime
 
@@ -86,8 +90,7 @@ struct HotKeyScene: View {
             .frame(width: Self.window.width, height: Self.window.height)
             .offset(x: Self.window.minX, y: Self.window.minY)
 
-            // Drawn over the window at the canvas's own coordinates, so the caret and the journal
-            // under it come from the same numbers.
+            // Drawn over the window at the canvas's own coordinates, like the journal above it.
             SceneCaret(height: Self.caret.height, visible: SceneCaret.isVisible(at: time, duration: Self.duration))
                 .offset(x: Self.caret.minX, y: Self.caret.minY)
 
@@ -95,7 +98,7 @@ struct HotKeyScene: View {
                 .scaleEffect(Self.miniatureScale)
                 .frame(width: Self.journalFrame.width, height: Self.journalFrame.height)
                 .shadow(color: palette.shadow(0.3), radius: 14, y: 8)
-                .scaleEffect(0.96 + 0.04 * state.journal, anchor: .top)
+                .scaleEffect(0.96 + 0.04 * state.journal)
                 .opacity(state.journal)
                 .offset(x: Self.journalFrame.minX, y: Self.journalFrame.minY)
         }

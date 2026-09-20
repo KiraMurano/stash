@@ -2,7 +2,7 @@ import Foundation
 
 /// The scene a slide plays; also the slide's identity.
 enum OnboardingSceneKind: String, CaseIterable, Sendable {
-    case hero, hotKey, paste, pin, images, keys, settings, access
+    case hero, hotKey, paste, pin, keys, settings, access
 }
 
 /// A string in both interface languages.
@@ -61,7 +61,7 @@ enum OnboardingSlides {
             )
         ),
         OnboardingSlide(
-            kind: .paste, duration: 3.6, loops: true,
+            kind: .paste, duration: 5.6, loops: true,
             word: Localized(en: "PASTE", ru: "ВСТАВКА"),
             text: Localized(
                 en: "Hover a clip and click the orange arrow: it lands where your cursor was and the journal closes. Double-click or Return does the same.",
@@ -77,19 +77,11 @@ enum OnboardingSlides {
             )
         ),
         OnboardingSlide(
-            kind: .images, duration: 4.2, loops: true,
-            word: Localized(en: "IMAGES", ru: "КАРТИНКИ"),
-            text: Localized(
-                en: "Screenshots and files are saved too. The filter on top keeps one type of clip, and clicking an image opens it in Preview.",
-                ru: "Скриншоты и файлы тоже сохраняются. Фильтр сверху оставит клипы одного типа, а клик по картинке откроет её в Просмотре."
-            )
-        ),
-        OnboardingSlide(
             kind: .keys, duration: 4.2, loops: true,
             word: Localized(en: "KEYS", ru: "КЛАВИШИ"),
             text: Localized(
-                en: "The journal never takes the keyboard: keep typing and your letters go to your text. ↑↓ pick a clip, Return pastes, Esc closes.",
-                ru: "Журнал не забирает клавиатуру: печатайте дальше, буквы идут в ваш текст. ↑ и ↓ выбирают клип, Return вставляет, Esc закрывает."
+                en: "With Intercept Keys on, ↑ and ↓ pick the clip you need in the journal and Return pastes it.",
+                ru: "Если включено «Перехватывать клавиши», стрелками ↑ и ↓ можно выбрать нужный клип и вставить его клавишей Return."
             )
         ),
         OnboardingSlide(

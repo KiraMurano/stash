@@ -17,12 +17,6 @@ struct JournalKeyActionTests {
         #expect(JournalKeyAction.resolve(.escape, dialogShown: false, hasSelection: true) == .closePanel)
     }
 
-    @Test func theJournalIgnoresTheTutorialsArrows() {
-        // Left and Right are registered only while the tutorial is open; the journal drops them.
-        #expect(JournalKeyAction.resolve(.left, dialogShown: false, hasSelection: true) == .ignore)
-        #expect(JournalKeyAction.resolve(.right, dialogShown: false, hasSelection: true) == .ignore)
-    }
-
     @Test func aDialogIgnoresArrowsAndReturn() {
         for key in [JournalKey.up, .down, .enter] {
             #expect(JournalKeyAction.resolve(key, dialogShown: true, hasSelection: true) == .ignore)

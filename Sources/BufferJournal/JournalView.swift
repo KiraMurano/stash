@@ -723,8 +723,9 @@ struct JournalView: View {
 
     /// Keys arrive as hotkeys while the panel is open (see `JournalKeys`).
     private func handleKey(_ key: JournalKey) {
-        // The tutorial covers the journal and takes the keys it knows while it is open.
-        if onboarding.isPresented, onboarding.handleKey(key) { return }
+        // Nothing is registered while the tutorial covers the journal, and a key that slips
+        // through a mode change is not the journal's to act on either.
+        guard !onboarding.isPresented else { return }
 
         let action = JournalKeyAction.resolve(
             key,

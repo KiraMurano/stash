@@ -3,14 +3,14 @@ import Testing
 
 struct OnboardingSlidesTests {
     @Test func slidesComeInTheSpecOrderWithAccessLast() {
-        #expect(OnboardingSlides.all.map(\.kind) == [.hero, .hotKey, .paste, .pin, .images, .keys, .settings, .access])
+        #expect(OnboardingSlides.all.map(\.kind) == [.hero, .hotKey, .paste, .pin, .keys, .settings, .access])
     }
 
-    @Test func theSixthSlideIsAboutKeys() {
-        let sixth = OnboardingSlides.all[5]
-        #expect(sixth.kind == .keys)
-        #expect(sixth.word.ru == "КЛАВИШИ")
-        #expect(sixth.word.en == "KEYS")
+    @Test func theFifthSlideIsAboutKeys() {
+        let fifth = OnboardingSlides.all[4]
+        #expect(fifth.kind == .keys)
+        #expect(fifth.word.ru == "КЛАВИШИ")
+        #expect(fifth.word.en == "KEYS")
     }
 
     /// The spec keeps every text within 140 characters, so it takes at most three lines on a
@@ -29,11 +29,11 @@ struct OnboardingSlidesTests {
     }
 
     @Test func theAccessSlideIsOnlyForThoseWithoutAccess() {
-        #expect(OnboardingSlides.slides(hasAccess: false).count == 8)
+        #expect(OnboardingSlides.slides(hasAccess: false).count == 7)
         #expect(OnboardingSlides.slides(hasAccess: false).last?.kind == .access)
 
         let withAccess = OnboardingSlides.slides(hasAccess: true)
-        #expect(withAccess.map(\.kind) == [.hero, .hotKey, .paste, .pin, .images, .keys, .settings])
+        #expect(withAccess.map(\.kind) == [.hero, .hotKey, .paste, .pin, .keys, .settings])
     }
 
     @Test func theAccessSlideStandsAlone() {

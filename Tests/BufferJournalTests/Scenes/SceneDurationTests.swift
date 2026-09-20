@@ -10,7 +10,6 @@ struct SceneDurationTests {
         .hotKey: HotKeyScene.duration,
         .paste: PasteScene.duration,
         .pin: PinScene.duration,
-        .images: ImagesScene.duration,
         .keys: KeysScene.duration,
         .settings: SettingsScene.duration,
         .access: AccessScene.duration,

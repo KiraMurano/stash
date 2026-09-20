@@ -13,8 +13,8 @@ struct OnboardingColors {
     var cardShadow: Color { isDark ? .clear : Color.black.opacity(0.1) }
     /// "Stash" on the first slide, in the icon's orange. It is a logo, so no contrast minimum applies.
     var wordmark: Color { ThemePalette.orange }
-    /// The first slide's big title.
-    var title: Color { ThemePalette.orange }
+    /// The first slide's big title: plain black, white in the dark look.
+    var title: Color { isDark ? .white : .black }
 
     /// The main button, orange in both looks; `level` is 0 at rest, 1 hovered, 2 pressed.
     func button(_ level: Int) -> Color {

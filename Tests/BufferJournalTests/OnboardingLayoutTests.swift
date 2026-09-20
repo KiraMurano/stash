@@ -31,9 +31,9 @@ struct OnboardingLayoutTests {
         #expect(abs(lockup.fontSize / lockup.icon - 28.0 / 32.0) < 0.0001)
     }
 
-    @Test func theTitleStopsAtTenPercentOfThePanel() {
-        #expect(OnboardingLayout.titleFontSize(widthAt100: 500, rowWidth: 600, panelHeight: 440) == 44)
-        #expect(OnboardingLayout.titleFontSize(widthAt100: 500, rowWidth: 520, panelHeight: 360) == 36)
+    @Test func theTitleStopsAtItsShareOfThePanel() {
+        #expect(OnboardingLayout.titleFontSize(widthAt100: 500, rowWidth: 600, panelHeight: 440) == 37)
+        #expect(OnboardingLayout.titleFontSize(widthAt100: 500, rowWidth: 520, panelHeight: 360) == 31)
     }
 
     @Test func aLongTitleShrinksToItsRow() {

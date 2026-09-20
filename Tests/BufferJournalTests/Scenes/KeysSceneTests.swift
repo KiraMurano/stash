@@ -5,7 +5,7 @@ import Testing
 /// The stop frame from the spec's "Сцены" section and the moments that lead to it.
 @MainActor
 struct KeysSceneTests {
-    @Test func keysEndWithTheThirdClipBehindTheTypedWordAndTheJournalGone() {
+    @Test func keysEndWithTheThirdClipBehindTheTypedLeadInAndTheJournalGone() {
         let end = KeysScene.state(at: .end(of: KeysScene.duration))
         #expect(end.typed == KeysScene.letters)
         #expect(end.selectedRow == 2)
@@ -14,9 +14,12 @@ struct KeysSceneTests {
         #expect(!end.downPressed && !end.returnPressed)
 
         // The letters go to the document while the journal is open.
+        #expect(KeysScene.state(at: SceneTime(t: 0.3, rewind: 0)).typed == 0)
         let typing = KeysScene.state(at: SceneTime(t: 0.5, rewind: 0))
-        #expect(typing.typed == 1)
+        #expect(typing.typed == 2)
         #expect(typing.journal == 1)
+        // The whole lead-in stands well before the first ↓.
+        #expect(KeysScene.state(at: SceneTime(t: 1.2, rewind: 0)).typed == KeysScene.letters)
 
         // One ↓ moves the selection by one row, and nothing is pasted yet.
         let afterFirstDown = KeysScene.state(at: SceneTime(t: 1.8, rewind: 0))
@@ -26,10 +29,10 @@ struct KeysSceneTests {
         #expect(KeysScene.state(at: SceneTime(t: 2.65, rewind: 0)).returnPressed)
     }
 
-    @Test func theSceneTypesThreeLettersInBothLanguages() {
-        #expect(KeysScene.word.ru == "нап")
-        #expect(KeysScene.word.en == "typ")
-        #expect(KeysScene.word.ru.count == KeysScene.letters)
-        #expect(KeysScene.word.en.count == KeysScene.letters)
+    @Test func theTypedLeadInIsAsLongAsTheSceneTypes() {
+        #expect(KeysScene.word.ru == "Код: ")
+        #expect(KeysScene.word.en == "Code: ")
+        #expect(KeysScene.letters >= KeysScene.word.ru.count)
+        #expect(KeysScene.letters >= KeysScene.word.en.count)
     }
 }

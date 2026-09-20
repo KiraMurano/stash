@@ -6,8 +6,9 @@ struct JournalKeysTests {
         #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .journal, stashActive: false, menuOpen: false) == .journal)
     }
 
-    @Test func theTutorialTakesTheArrowsItNeeds() {
-        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .onboarding, stashActive: false, menuOpen: false) == .onboarding)
+    @Test func theTutorialTakesNone() {
+        // The tutorial is turned with the mouse: every key stays with the app underneath.
+        #expect(JournalKeys.mode(intercepts: true, panelVisible: true, content: .onboarding, stashActive: false, menuOpen: false) == .off)
     }
 
     @Test func theAccessScreenTakesNone() {

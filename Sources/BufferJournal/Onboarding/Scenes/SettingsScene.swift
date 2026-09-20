@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon, then "Intercept Keys",
-/// which blinks and gets its check; the menu stays open. The arrow rests on Theme to open the
-/// submenu on the right and ends clicking Tutorial.
+/// НАСТРОЙКИ: the menu bar tray. The arrow clicks the Stash icon, then the three switches one
+/// after another — each blinks and loses its check — and finally opens Theme and picks Dark.
+/// The menu stays open throughout.
 struct SettingsScene: View {
     static let duration = 4.7
     /// The tray end of the menu bar, the menu under the Stash icon and the theme submenu beside it.
@@ -19,8 +19,16 @@ struct SettingsScene: View {
         var iconHighlighted: Bool
         var menuOpen: Bool
         var highlighted: Item?
-        /// "Intercept Keys" has been switched on by the click.
-        var interceptChecked: Bool
+        /// The three switches, each still checked until its own click turns it off.
+        var closeAfterSelectionChecked: Bool
+        var interceptKeysChecked: Bool
+        var openAtCaretChecked: Bool
+        /// The theme submenu, open from the moment the arrow reaches Theme.
+        var submenuOpen: Bool
+        /// The theme row under the arrow inside the submenu.
+        var submenuHighlighted: ThemeMode?
+        /// Dark has been picked; until then the check stands on Stash Auto.
+        var darkPicked: Bool
     }
 
     // Geometry, in scene points. The Stash icon opens the tray; a real menu hangs from its status
@@ -57,24 +65,50 @@ struct SettingsScene: View {
         CGPoint(x: menuOrigin.x + menuWidth - 4, y: frame(of: .theme).minY - menuPadding)
     }
 
-    /// Checks in the demo menu: closing after a selection is on from the start, intercepting keys
-    /// is switched on by the click. Opening at the cursor stays off so only the story's two
-    /// switches carry a check.
+    /// The theme rows of the submenu, in the app's own order; nil is the separator.
+    static let themeRows: [ThemeMode?] = [.system, .light, .dark, nil, .stashAuto, .stashLight, .stashDark]
+
+    /// Where a theme sits inside the submenu, in scene points.
+    static func submenuFrame(of mode: ThemeMode) -> CGRect {
+        var y = submenuOrigin.y + menuPadding
+        for row in themeRows {
+            if row == mode {
+                return CGRect(x: submenuOrigin.x, y: y, width: submenuWidth, height: rowHeight)
+            }
+            y += row == nil ? separatorHeight : rowHeight
+        }
+        return .zero
+    }
+
+    /// Checks in the demo menu: all three switches are on when the menu opens, and each goes out
+    /// under its own click.
     static func isChecked(_ item: Item, _ state: State) -> Bool {
         switch item {
-        case .closeAfterSelection: true
-        case .interceptKeys: state.interceptChecked
+        case .closeAfterSelection: state.closeAfterSelectionChecked
+        case .interceptKeys: state.interceptKeysChecked
+        case .openAtCaret: state.openAtCaretChecked
         default: false
         }
+    }
+
+    /// The theme carrying the check: Stash Auto until Dark is picked.
+    static func checkedTheme(_ state: State) -> ThemeMode {
+        state.darkPicked ? .dark : .stashAuto
     }
 
     private static func center(of item: Item) -> CGPoint {
         CGPoint(x: menuOrigin.x + 90, y: frame(of: item).midY)
     }
 
-    // Clicks: the icon, "Intercept Keys", Tutorial. The menu stays open throughout.
+    private static func center(of mode: ThemeMode) -> CGPoint {
+        CGPoint(x: submenuOrigin.x + submenuWidth / 2, y: submenuFrame(of: mode).midY)
+    }
+
+    // Clicks: the icon, the three switches, then Dark in the theme submenu. The menu stays open.
     static let iconClick = 0.9
-    static let itemClicks = [1.6, 3.35]
+    static let switchClicks = [1.35, 1.7, 2.05]
+    static let themeClick = 3.2
+    static var itemClicks: [Double] { switchClicks + [themeClick] }
     /// A clicked item goes dark for a moment and lights up again, as in macOS.
     static let blinkOff = 0.06...0.12
 
@@ -82,16 +116,22 @@ struct SettingsScene: View {
         tip: Track(CGPoint(x: 300, y: 262))
             .to(statusIcon, at: 0.3, until: 0.8)
             .to(center(of: .closeAfterSelection), at: 1.05, until: 1.3)
-            .to(center(of: .interceptKeys), at: 1.42, until: 1.55)
-            .to(center(of: .theme), at: 1.9, until: 2.1)
-            .to(center(of: .tutorial), at: 2.8, until: 3.2),
+            .to(center(of: .interceptKeys), at: 1.45, until: 1.65)
+            .to(center(of: .openAtCaret), at: 1.8, until: 2.0)
+            .to(center(of: .theme), at: 2.2, until: 2.4)
+            .to(center(of: .dark), at: 2.75, until: 3.15),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
-        clicks: [iconClick] + itemClicks
+        clicks: [iconClick] + switchClicks + [themeClick]
     )
     private static let iconHighlighted = Track(false).set(true, at: iconClick)
     private static let menuOpen = Track(false).set(true, at: iconClick + 0.05)
-    /// The check appears as the clicked item lights up again.
-    private static let interceptChecked = Track(false).set(true, at: itemClicks[0] + blinkOff.upperBound)
+    /// Each check goes out as its item lights up again after the click.
+    private static let closeAfterSelectionChecked = Track(true).set(false, at: switchClicks[0] + blinkOff.upperBound)
+    private static let interceptKeysChecked = Track(true).set(false, at: switchClicks[1] + blinkOff.upperBound)
+    private static let openAtCaretChecked = Track(true).set(false, at: switchClicks[2] + blinkOff.upperBound)
+    /// The submenu opens when the arrow reaches Theme and stays open while it walks into it.
+    private static let submenuOpen = Track(false).set(true, at: 2.4)
+    private static let darkPicked = Track(false).set(true, at: themeClick + blinkOff.upperBound)
 
     static func state(at time: SceneTime) -> State {
         let cursor = cursor.state(at: time)
@@ -100,14 +140,26 @@ struct SettingsScene: View {
         // item blinks. While the loop goes back to its start the menu is closed, so the arrow passing
         // over it lights nothing up.
         let blinking = time.rewind == 0 && itemClicks.contains { blinkOff.contains(time.t - $0) }
-        let highlighted = menuOpen && !blinking ? Item.allCases.first { frame(of: $0).contains(cursor.tip) } : nil
+        let submenuOpen = menuOpen && submenuOpen.value(at: time)
+        let submenuHighlighted = submenuOpen && !blinking
+            ? themeRows.compactMap { $0 }.first { submenuFrame(of: $0).contains(cursor.tip) }
+            : nil
+        // While the arrow is inside the submenu, Theme keeps the highlight, as a real menu does.
+        let highlighted = menuOpen && !blinking
+            ? Item.allCases.first { frame(of: $0).contains(cursor.tip) } ?? (submenuOpen ? .theme : nil)
+            : nil
         return State(
             cursor: cursor,
             ripple: Self.cursor.ripple(at: time),
             iconHighlighted: iconHighlighted.value(at: time),
             menuOpen: menuOpen,
             highlighted: highlighted,
-            interceptChecked: interceptChecked.value(at: time)
+            closeAfterSelectionChecked: closeAfterSelectionChecked.value(at: time),
+            interceptKeysChecked: interceptKeysChecked.value(at: time),
+            openAtCaretChecked: openAtCaretChecked.value(at: time),
+            submenuOpen: submenuOpen,
+            submenuHighlighted: submenuHighlighted,
+            darkPicked: darkPicked.value(at: time)
         )
     }
 
@@ -127,8 +179,8 @@ struct SettingsScene: View {
                 menuPanel(state, palette: palette)
                     .offset(x: Self.menuOrigin.x, y: Self.menuOrigin.y)
 
-                if state.highlighted == .theme {
-                    themeSubmenu(palette: palette)
+                if state.submenuOpen {
+                    themeSubmenu(state, palette: palette)
                         .offset(x: Self.submenuOrigin.x, y: Self.submenuOrigin.y)
                 }
             }
@@ -216,13 +268,19 @@ struct SettingsScene: View {
         .background(menuSurface(palette: palette))
     }
 
-    private func themeSubmenu(palette: ThemePalette) -> some View {
+    private func themeSubmenu(_ state: State, palette: ThemePalette) -> some View {
         // The app's own order, with the separator before Stash Auto, as in AppDelegate.
-        let modes: [ThemeMode?] = [.system, .light, .dark, nil, .stashAuto, .stashLight, .stashDark]
-        return VStack(spacing: 0) {
-            ForEach(Array(modes.enumerated()), id: \.offset) { _, mode in
+        VStack(spacing: 0) {
+            ForEach(Array(Self.themeRows.enumerated()), id: \.offset) { _, mode in
                 if let mode {
-                    menuRow(title: l10n.themeName(mode), checked: mode == .stashAuto, submenu: false, shortcut: nil, highlighted: false, palette: palette)
+                    menuRow(
+                        title: l10n.themeName(mode),
+                        checked: mode == Self.checkedTheme(state),
+                        submenu: false,
+                        shortcut: nil,
+                        highlighted: state.submenuHighlighted == mode,
+                        palette: palette
+                    )
                 } else {
                     separator(palette: palette)
                 }
