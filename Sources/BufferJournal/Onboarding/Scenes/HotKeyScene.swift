@@ -4,8 +4,8 @@ import SwiftUI
 /// Where exactly it lands is not the point here — that it answers these two keys is.
 struct HotKeyScene: View {
     static let duration = 2.6
-    /// Two keys, and another app's window with the journal over it.
-    static let size = CGSize(width: 470, height: 234)
+    /// Another app's window with the journal over it, and the two keys under it.
+    static let size = CGSize(width: 470, height: 240)
 
     struct State: Equatable {
         var optionDown: Bool
@@ -27,8 +27,8 @@ struct HotKeyScene: View {
 
     // MARK: Geometry, in canvas coordinates
 
-    /// The other app's window with the document text.
-    static let window = CGRect(x: 142, y: 6, width: 312, height: 150)
+    /// The other app's window with the document text, in the middle of the canvas.
+    static let window = CGRect(x: (size.width - 312) / 2, y: 6, width: 312, height: 150)
     /// SceneWindow draws a 24 pt title bar above its content.
     private static let titleBar: CGFloat = 24
     private static let textInset = CGSize(width: 14, height: 12)
@@ -62,6 +62,24 @@ struct HotKeyScene: View {
         )
     }()
 
+    /// The keys sit under the window, side by side and centred on it.
+    static let keySize: CGFloat = 60
+    private static let keyGap: CGFloat = 8
+    private static let keysTop = window.maxY + 16
+    private static let keysLeft = window.midX - keySize - keyGap / 2
+
+    /// Where the two keys are drawn, for the tests.
+    static var keyFrames: [CGRect] {
+        [0, 1].map { index in
+            CGRect(
+                x: keysLeft + CGFloat(index) * (keySize + keyGap),
+                y: keysTop,
+                width: keySize,
+                height: keySize
+            )
+        }
+    }
+
     let time: SceneTime
 
     @Environment(\.colorScheme) private var colorScheme
@@ -72,11 +90,11 @@ struct HotKeyScene: View {
         let palette = ThemePalette.scene(colorScheme)
 
         ZStack(alignment: .topLeading) {
-            SceneKeycap(label: "⌥", caption: "option", size: 60, pressed: state.optionDown)
-                .offset(x: 10, y: 84)
+            SceneKeycap(label: "⌥", caption: "option", size: Self.keySize, pressed: state.optionDown)
+                .offset(x: Self.keysLeft, y: Self.keysTop)
             // On a Russian keyboard V also carries "М"; the shortcut works by key, in any layout.
-            SceneKeycap(label: "V", secondary: l10n.language == .russian ? "М" : nil, size: 60, pressed: state.vDown)
-                .offset(x: 78, y: 84)
+            SceneKeycap(label: "V", secondary: l10n.language == .russian ? "М" : nil, size: Self.keySize, pressed: state.vDown)
+                .offset(x: Self.keysLeft + Self.keySize + Self.keyGap, y: Self.keysTop)
 
             SceneWindow(title: l10n("Document", "Документ"), palette: palette) {
                 VStack(alignment: .leading, spacing: Self.lineSpacing) {
