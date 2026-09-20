@@ -49,6 +49,17 @@ struct PasteSceneTests {
         #expect(afterImage.pastedImage == 1)
     }
 
+    /// The first click of a double click already turns the row orange, so the second wave has to
+    /// be white to be seen at all.
+    @Test func theSecondWaveOfADoubleClickIsLight() {
+        for clicks in [PasteScene.textDoubleClick, PasteScene.imageDoubleClick] {
+            #expect(!PasteScene.state(at: SceneTime(t: clicks[0] + 0.01, rewind: 0)).isRippleLight)
+            #expect(PasteScene.state(at: SceneTime(t: clicks[1] + 0.01, rewind: 0)).isRippleLight)
+            // Once the wave is over, nothing is light any more.
+            #expect(!PasteScene.state(at: SceneTime(t: clicks[1] + 0.4, rewind: 0)).isRippleLight)
+        }
+    }
+
     @Test func theJournalLeavesOnlyAfterTheSecondPaste() {
         // Close After Selection is on, but the scene shows both clips first.
         #expect(PasteScene.state(at: SceneTime(t: 3.4, rewind: 0)).journal == 1)

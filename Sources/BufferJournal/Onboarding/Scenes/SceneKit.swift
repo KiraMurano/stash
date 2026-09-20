@@ -41,11 +41,13 @@ struct SceneCursor: View {
 /// The orange wave a click sends out.
 struct SceneRipple: View {
     let ripple: ClickRipple?
+    /// White instead of orange where the wave lands on something orange already — a selected row.
+    var isLight = false
 
     var body: some View {
         if let ripple {
             Circle()
-                .fill(ThemePalette.orange)
+                .fill(isLight ? Color.white : ThemePalette.orange)
                 .frame(width: 28, height: 28)
                 .scaleEffect(0.5 + 1.4 * ripple.progress)
                 .opacity(0.45 * (1 - ripple.progress))

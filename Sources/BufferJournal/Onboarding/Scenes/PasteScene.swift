@@ -13,6 +13,8 @@ struct PasteScene: View {
         var ripple: ClickRipple?
         var hoveredRow: Int?
         var selectedRow: Int?
+        /// The wave of a click that lands on the row the first click has already selected.
+        var isRippleLight: Bool
         /// 1 while the journal is there, 0 once it has dissolved.
         var journal: Double
         /// 0…1 each: the text and the image appearing in the letter.
@@ -45,6 +47,15 @@ struct PasteScene: View {
     static let textDoubleClick = [1.1, 1.27]
     static let imageDoubleClick = [2.5, 2.67]
 
+    /// A double click selects the row on its first click, so the second wave would be orange on
+    /// orange. It goes white instead.
+    private static func isRippleLight(at time: SceneTime) -> Bool {
+        guard time.rewind == 0 else { return false }
+        return [textDoubleClick[1], imageDoubleClick[1]].contains {
+            time.t >= $0 && time.t < $0 + CursorTrack.rippleTime
+        }
+    }
+
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 230, y: 240))
             .to(rowCenter(textRow), at: 0.3, until: 0.8)
@@ -55,9 +66,11 @@ struct PasteScene: View {
     private static let hovered = Track<Int?>(nil)
         .set(textRow, at: 0.62)
         .set(imageRow, at: 2.05)
+    // The first click of the pair selects the row, as a single click does in the journal; the
+    // second one pastes it.
     private static let selected = Track<Int?>(nil)
-        .set(textRow, at: textDoubleClick[1] + 0.04)
-        .set(imageRow, at: imageDoubleClick[1] + 0.04)
+        .set(textRow, at: textDoubleClick[0] + 0.04)
+        .set(imageRow, at: imageDoubleClick[0] + 0.04)
     // The panel's own fade is 0.13 s — too quick to follow; the spec gives the scene 0.2 s.
     private static let journal = Track(1.0).to(0, at: 3.45, until: 3.65, .easeOut)
     private static let pastedText = Track(0.0).to(1, at: 1.45, until: 1.75, .easeOut)
@@ -69,6 +82,7 @@ struct PasteScene: View {
             ripple: cursor.ripple(at: time),
             hoveredRow: hovered.value(at: time),
             selectedRow: selected.value(at: time),
+            isRippleLight: isRippleLight(at: time),
             journal: journal.value(at: time),
             pastedText: pastedText.value(at: time),
             pastedImage: pastedImage.value(at: time)
@@ -110,7 +124,7 @@ struct PasteScene: View {
             .frame(width: 186, height: 212)
             .offset(x: 274, y: 10)
 
-            SceneRipple(ripple: state.ripple)
+            SceneRipple(ripple: state.ripple, isLight: state.isRippleLight)
             SceneCursor(state: state.cursor)
         }
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
