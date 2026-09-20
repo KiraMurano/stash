@@ -95,7 +95,7 @@ Stash живёт в строке меню и после установки ни�
 
 | # | Слово | Сцена | Длит. | Текст |
 |---|---|---|---|---|
-| 1 | ПРИВЕТ, ЭТО / HELLO, THIS IS | логотип | 2,6 с, один раз | Stash запоминает всё, что вы копируете: текст, картинки и файлы. Скопировали новое — старое осталось в журнале. / Stash remembers everything you copy: text, images and files. Copy something new, and the old one stays in the journal. |
+| 1 | ПРИВЕТ, ЭТО / HELLO, THIS IS | логотип | 2,6 с, один раз | Stash запоминает всё, что вы копируете: тексты, изображения и файлы всегда будут под рукой. / Stash remembers everything you copy: text, images and files are always at hand. |
 | 2 | ВЫЗОВ / OPEN | ⌥V | 2,6 с | Нажмите ⌥V, чтобы открыть Stash. / Press ⌥V to open Stash. |
 | 3 | ВСТАВКА / PASTE | вставка | 4,0 с | Кликните дважды по клипу, чтобы вставить его. / Double-click a clip to paste it. |
 | 4 | КЛАВИШИ / KEYS | клавиши | 4,2 с | Также нужный клип можно выбрать клавишами со стрелками и вставить нажатием Return. / You can also pick the clip you need with the arrow keys and paste it with Return. |

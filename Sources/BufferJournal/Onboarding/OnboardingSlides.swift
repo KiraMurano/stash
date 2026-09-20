@@ -48,8 +48,8 @@ enum OnboardingSlides {
             kind: .hero, duration: 2.6, loops: false,
             word: Localized(en: "HELLO, THIS IS", ru: "ПРИВЕТ, ЭТО"),
             text: Localized(
-                en: "Stash remembers everything you copy: text, images and files. Copy something new, and the old one stays in the journal.",
-                ru: "Stash запоминает всё, что вы копируете: текст, картинки и файлы. Скопировали новое — старое осталось в журнале."
+                en: "Stash remembers everything you copy: text, images and files are always at hand.",
+                ru: "Stash запоминает всё, что вы копируете: тексты, изображения и файлы всегда будут под рукой."
             )
         ),
         OnboardingSlide(
