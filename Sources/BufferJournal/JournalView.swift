@@ -42,6 +42,7 @@ struct JournalView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var access: AccessGate
     @ObservedObject var onboarding: OnboardingController
+    @ObservedObject var updates: UpdateController
     /// Opening and closing: the panel grows into place and shrinks back.
     @ObservedObject var presentation: PanelPresentation
     /// The journal's keys, taken as hotkeys while it is open: the panel itself never takes the keyboard.
@@ -147,6 +148,13 @@ struct JournalView: View {
                     .zIndex(30)
             }
 
+            // The update screen covers the journal; the tutorial, if it is up, covers both.
+            if updates.isPresented {
+                UpdateView(controller: updates, l10n: l10n)
+                    .transition(.opacity)
+                    .zIndex(35)
+            }
+
             // The tutorial, and the access slide on its own, cover the whole panel.
             if onboarding.isPresented {
                 OnboardingView(
@@ -176,6 +184,7 @@ struct JournalView: View {
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .animation(.easeOut(duration: 0.2), value: onboarding.isPresented)
+        .animation(.easeOut(duration: 0.2), value: updates.isPresented)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, l10n)
         .environment(\.solidAccents, settings.themeMode.usesSolidAccents)

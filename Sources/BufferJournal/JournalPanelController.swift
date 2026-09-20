@@ -25,10 +25,15 @@ final class JournalPanelController {
     private let settings: AppSettings
     private let access: AccessGate
     private let onboarding: OnboardingController
+    private let updates: UpdateController
+    /// Called when the panel's content settles — access granted, tutorial closed — so the updater
+    /// can arm its first check.
+    private let onContentSettled: () -> Void
     private let presentation = PanelPresentation()
     private let keys: JournalKeys
     private var panel: NSPanel?
     private var onboardingObserver: AnyCancellable?
+    private var updatesObserver: AnyCancellable?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
     /// Whether the panel is meant to be on screen. The journal's hotkeys follow this, not
     /// `panel.isVisible`, which stays true through the close fade.
@@ -38,17 +43,38 @@ final class JournalPanelController {
     private var observers: [NSObjectProtocol] = []
     private var outsideClickMonitor: Any?
 
-    init(store: ClipboardHistoryStore, writer: ClipboardWriter, settings: AppSettings, hotKeys: HotKeyController, access: AccessGate, onboarding: OnboardingController) {
+    init(
+        store: ClipboardHistoryStore,
+        writer: ClipboardWriter,
+        settings: AppSettings,
+        hotKeys: HotKeyController,
+        access: AccessGate,
+        onboarding: OnboardingController,
+        updates: UpdateController,
+        onContentSettled: @escaping () -> Void = {}
+    ) {
         self.store = store
         self.writer = writer
         self.settings = settings
         self.access = access
         self.onboarding = onboarding
+        self.updates = updates
+        self.onContentSettled = onContentSettled
         keys = JournalKeys(hotKeys: hotKeys)
 
         // Which slide is on screen decides the keys, and the access slide takes none.
         // `objectWillChange` fires before the change, so the mode is read a turn of the run loop later.
         onboardingObserver = onboarding.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in
+                self?.updateKeys()
+                self?.updateOutsideClicks()
+                // The tutorial closing is one of the two moments the app settles down.
+                self?.onContentSettled()
+            }
+        }
+
+        // The update screen covers the journal, so it changes both the keys and the outside clicks.
+        updatesObserver = updates.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in
                 self?.updateKeys()
                 self?.updateOutsideClicks()
@@ -120,6 +146,12 @@ final class JournalPanelController {
         } else {
             show()
         }
+    }
+
+    /// The menu item: the update screen comes up on the panel, wherever the panel opens.
+    func showUpdate() {
+        updates.present()
+        show()
     }
 
     func show() {
@@ -215,6 +247,10 @@ final class JournalPanelController {
     /// What the panel shows right now. The access slide counts the same in both of its looks —
     /// last in the tutorial and on its own — because both send the user to System Settings.
     private var panelContent: JournalKeys.PanelContent {
+        // The tutorial is on top of the update screen, so it is asked about first.
+        if updates.isPresented, !onboarding.isPresented {
+            return .update
+        }
         guard onboarding.isPresented else {
             return access.isGranted ? .journal : .access
         }
@@ -234,6 +270,8 @@ final class JournalPanelController {
         access.setPolling(isPanelVisible)
         updateKeys()
         updateOutsideClicks()
+        // Access granted is the other moment the app settles down.
+        onContentSettled()
     }
 
     /// The journal closes when the user clicks elsewhere, like Win+V. A global monitor never sees
@@ -273,6 +311,7 @@ final class JournalPanelController {
             settings: settings,
             access: access,
             onboarding: onboarding,
+            updates: updates,
             presentation: presentation,
             keyEvents: keys.events,
             onPaste: { [weak self] entry in

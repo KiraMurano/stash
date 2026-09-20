@@ -45,6 +45,8 @@ final class JournalKeys {
         case journal
         case onboarding
         case access
+        /// The update screen: like the tutorial, it takes no keys at all.
+        case update
     }
 
     /// Which keys are registered.
@@ -64,7 +66,7 @@ final class JournalKeys {
 
         switch content {
         case .journal: return .journal
-        case .onboarding, .access: return .off
+        case .onboarding, .access, .update: return .off
         }
     }
 

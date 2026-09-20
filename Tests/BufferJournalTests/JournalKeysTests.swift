@@ -28,4 +28,15 @@ struct JournalKeysTests {
         #expect(JournalKeys.mode(intercepts: false, panelVisible: true, content: .journal, stashActive: false, menuOpen: false) == .off)
         #expect(JournalKeys.mode(intercepts: false, panelVisible: true, content: .onboarding, stashActive: false, menuOpen: false) == .off)
     }
+
+    @Test func theUpdateScreenLeavesEveryKeyToTheAppUnderneath() {
+        let mode = JournalKeys.mode(
+            intercepts: true,
+            panelVisible: true,
+            content: .update,
+            stashActive: false,
+            menuOpen: false
+        )
+        #expect(mode == .off)
+    }
 }
