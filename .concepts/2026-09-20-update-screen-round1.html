@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>2026-09-20 экран обновления — раунд 2</title>
+<title>2026-09-20 экран обновления — раунд 1</title>
 <!--
   Концепт экрана обновления Stash. Скилл visual-prototype.
   Токены скопированы дословно из рабочего дерева на 471aa63.
@@ -105,18 +105,8 @@
   .notes { height: 100%; overflow-y: auto; padding: 18px 20px; }
   .notes.bare { padding: 0 2px 0 0; }
   .notes p { margin: 0 0 8px; font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
-  .notes p.warn { color: var(--text-primary); font-weight: 600; margin-top: 12px; }
+  .notes p.warn { color: var(--text-primary); font-weight: 600; }
   .notes p:last-child { margin-bottom: 0; }
-
-  /* Пункт: маркер висит слева, текст переносится по одной линии. */
-  .item { display: flex; gap: 8px; margin: 0 0 8px; font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
-  /* Колонка маркера одной ширины во всех вариантах: текст начинается на одном месте,
-     и разница видна только в самом маркере. */
-  .item .mark { flex: none; width: 14px; text-align: left; position: relative; }
-  .item .mark.dot::before { content: ''; position: absolute; left: 0; top: 5px;
-    width: 4px; height: 4px; border-radius: 999px; background: var(--orange); }
-  .item .mark.glyph-dot { color: var(--text-tertiary); }
-  .item .mark.dash { color: var(--text-tertiary); }
 
   .lockup { display: flex; align-items: center; gap: 2px; }         /* AccessPrompt: icon 21, gap 2, 18 pt semibold */
   .lockup img { width: 21px; height: 21px; }
@@ -151,33 +141,31 @@
   .slot { position: relative; height: 22px; display: flex; align-items: center; padding: 0 6px; border-radius: 4px; }
   .glyph { width: 14px; height: 18px; background: var(--menubar-glyph);
     -webkit-mask: var(--status) center / contain no-repeat; mask: var(--status) center / contain no-repeat; }
-  .glyph-wrap { position: relative; width: 14px; height: 18px; }
   .dot { position: absolute; width: 5px; height: 5px; border-radius: 999px; background: var(--orange); }
+  .dot.tr { top: 2px; right: 3px; }
+  .dot.br { bottom: 2px; right: 3px; }
+  .dot.side { position: static; margin-left: 3px; }
   /* Увеличенная копия рядом: точка 5 px иначе не читается на странице. Замеры берутся с копии 1×. */
   .cx-zoom { zoom: 4; margin-top: 10px; }
 </style>
 
 <header class="cx-header">
-  <h1>Экран обновления Stash — раунд 2</h1>
-  <p>Что решаем: чем размечен каждый пункт заметок, чтобы они не сливались в сплошной текст, и насколько близко к значку сидит точка бейджа.</p>
-  <ol>
-    <li>Раунд 1 (1.1–1.3, 2.1–2.3) → выбраны <b>1.2 «Версия в шапке»</b> и <b>2.1 «Точка в правом верхнем углу»</b> · <code>2026-09-20-update-screen-round1.html</code></li>
-  </ol>
+  <h1>Экран обновления Stash — раунд 1</h1>
+  <p>Что решаем: как экран обновления занимает панель 640×440 и где в нём заголовок версии, заметки к релизу и кнопки; отдельно — как выглядит бейдж на иконке в строке меню.</p>
   <p>Токены: <code>Sources/BufferJournal/Components/ThemePalette.swift</code>, <code>Onboarding/OnboardingChrome.swift</code> · Метрики: <code>Onboarding/OnboardingView.swift</code> (Metrics), <code>Onboarding/AccessSlide.swift</code>, <code>JournalView.swift</code> (Layout) · Дерево: <code>main@471aa63</code>, без несохранённых правок · Шрифт: системный macOS, не встроен — приложение рисует им же</p>
-  <p>Маркеры рисуем сами: <code>AttributedString(markdown:)</code> умеет начертания и ссылки, но не маркированные списки, поэтому текст релиза разбирается построчно — строка, начатая с <code>- </code>, становится пунктом с маркером, остальные остаются абзацами. Так сделан и этот концепт.</p>
-  <p>Раскладка у всех вариантов одна — 1.2: версия с иконкой в строке шапки, заметки в карточке, внизу только действия. Строка шапки перетаскивает панель, как заголовок журнала, — это то же поведение, а не помеха.</p>
+  <p>Заметки к релизу показаны абзацами, а не списком: их рисует <code>AttributedString(markdown:)</code>, который умеет начертания и ссылки, но не маркированные списки.</p>
 </header>
 
 <div class="cx-controls" id="cx-controls"></div>
 
 <section class="cx-block" id="cx-block-1">
-  <h2>1.2. Маркеры пунктов в заметках</h2>
+  <h2>1. Раскладка экрана обновления</h2>
   <div class="cx-frames"></div>
   <div class="cx-verdict" id="cx-verdict-1"></div>
 </section>
 
 <section class="cx-block" id="cx-block-2">
-  <h2>2.1. Насколько близко точка сидит к значку</h2>
+  <h2>2. Бейдж на иконке в строке меню</h2>
   <div class="cx-frames"></div>
   <div class="cx-verdict" id="cx-verdict-2"></div>
 </section>
@@ -217,18 +205,10 @@ const VERSION_NEW = '1.27', VERSION_OLD = '1.26', SIZE_MB = '4,2 МБ';
 /* ── Кусочки мока ─────────────────────────────────────────────────── */
 const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
-const MARKS = {
-  dot:  () => `<i class="mark dot"></i>`,
-  bull: () => `<i class="mark glyph-dot">•</i>`,
-  dash: () => `<i class="mark dash">—</i>`,
-};
-
-function notesHTML(s, mark) {
+function notesHTML(s, bare) {
   const body = NOTES[s.notes].map(n =>
-    typeof n === 'string'
-      ? `<div class="item">${MARKS[mark]()}<div>${esc(n)}</div></div>`
-      : `<p class="warn">${esc(n.warn)}</p>`).join('');
-  return `<div class="notes"><div class="notes-inner">${body}</div></div>`;
+    typeof n === 'string' ? `<p>${esc(n)}</p>` : `<p class="warn">${esc(n.warn)}</p>`).join('');
+  return `<div class="notes${bare ? ' bare' : ''}"><div class="notes-inner">${body}</div></div>`;
 }
 
 function close_() { return `<div class="close">✕</div>`; }
@@ -262,11 +242,39 @@ function panel(s, inner) {
   return `<div class="panel" style="width:${w}px;height:${h}px"><div class="pad">${inner}</div></div>`;
 }
 
-/* Раскладка 1.2: версия в шапке, заметки в карточке, внизу только действия. */
-function layout(s, mark) {
+/* 1.1 — как экран доступа: заметки в карточке, версия и кнопка в футере. */
+function v11(s) {
+  return panel(s, `
+    <div class="head">${close_()}</div>
+    <div class="card">${notesHTML(s)}</div>
+    <div class="footer">
+      <div class="meta">${lockup()}${metaLine(s)}</div>
+      ${actions(s)}
+    </div>`);
+}
+
+/* 1.2 — версия поднята в шапку, внизу только действия. */
+function v12(s) {
   return panel(s, `
     <div class="head">${lockup()}${close_()}</div>
-    <div class="card">${notesHTML(s, mark)}</div>
+    <div class="card">${notesHTML(s)}</div>
+    <div class="footer">
+      <div class="meta">${metaLine(s)}</div>
+      ${actions(s)}
+    </div>`);
+}
+
+/* 1.3 — без карточки: крупный заголовок и заметки прямо на поле. */
+function v13(s) {
+  const [, h] = SIZES[s.size];
+  const size = Math.round(h * 0.085);          /* OnboardingLayout.titleHeightShare */
+  return panel(s, `
+    <div class="head">${close_()}</div>
+    <div class="hero" style="font-size:${size}px;letter-spacing:${(-0.02 * size).toFixed(2)}px;margin-top:10px">STASH ${VERSION_NEW}</div>
+    <div style="flex:1;min-height:0;margin-top:10px;display:flex;gap:10px">
+      <div class="rule"></div>
+      ${notesHTML(s, true)}
+    </div>
     <div class="footer">
       <div class="meta">${metaLine(s)}</div>
       ${actions(s)}
@@ -274,21 +282,21 @@ function layout(s, mark) {
 }
 
 const VARIANTS_1 = [
-  { id: '1.2.1', name: 'Оранжевая точка', fn: s => layout(s, 'dot'),
-    caption: 'Отвечает: маркер того же оранжевого, что кнопка и акценты журнала, — пункты читаются с одного взгляда. Цена: оранжевого на экране становится больше, и он спорит с кнопкой за внимание.' },
-  { id: '1.2.2', name: 'Серая точка «•»', fn: s => layout(s, 'bull'),
-    caption: 'Отвечает: обычный типографский маркер цветом третьестепенного текста, ничего не перетягивает. Цена: тише всех, на мелком тексте почти не считывается.' },
-  { id: '1.2.3', name: 'Тире «—»', fn: s => layout(s, 'dash'),
-    caption: 'Отвечает: тире разделяет пункты заметнее всех и повторяет то, как заметки набраны в тексте релиза на GitHub. Цена: тяжелее точки — тянет взгляд на себя, хотя работа маркера в том, чтобы его не замечали.' },
+  { id: '1.1', name: 'Как экран доступа', fn: v11,
+    caption: 'Отвечает: экран — родной брат слайда ДОСТУП. Заметки лежат в карточке на месте сцены, версия с иконкой и кнопка стоят в футере ровно там, где AccessPrompt и «Открыть настройки». Цена: футер несёт и заголовок, и кнопки, поэтому он 50 px против 36 у остальных — на панели 560×360 заметкам остаётся 232 px вместо 246.' },
+  { id: '1.2', name: 'Версия в шапке', fn: v12,
+    caption: 'Отвечает: заголовок уезжает в строку с крестом, футер остаётся только под действия. Цена: строка шапки перетаскивает окно (WindowDragHandle), и клик по заголовку начинает двигать панель вместо ничего.' },
+  { id: '1.3', name: 'Без карточки', fn: v13,
+    caption: 'Отвечает: текст идёт во всю ширину панели, поэтому строк выходит меньше и под прокруткой прячется меньше всего (76 px против 111 и 125 на панели 560×360). Цена: крупный заголовок съедает 37 px высоты, а без карточки экран перестаёт выглядеть частью Stash — ближе к системному окну «Что нового».' },
 ];
 
 const VARIANTS_2 = [
-  { id: '2.1.1', name: 'Четверть на значке', top: -3, right: -3,
-    caption: 'Отвечает: точка едва касается угла, значок читается целиком. Цена: ближе всех к прежнему зазору — на строке меню всё ещё выглядит отдельной крапиной.' },
-  { id: '2.1.2', name: 'Наполовину на значке', top: -2, right: -2,
-    caption: 'Отвечает: точка сидит на углу, как бейдж на иконке в Dock, — сразу читается как метка этого значка. Цена: закрывает угол рисунка.' },
-  { id: '2.1.3', name: 'Целиком на значке', top: 0, right: 0,
-    caption: 'Отвечает: точка внутри рамки значка, пункт в строке меню точно не меняет ширину. Цена: съедает угол рисунка целиком и на светлой строке меню сливается со значком.' },
+  { id: '2.1', name: 'Точка в правом верхнем углу', cls: 'tr',
+    caption: 'Отвечает: точка сидит в углу глифа, пункт в строке меню не становится шире. Цена: перекрывает верхний правый угол значка.' },
+  { id: '2.2', name: 'Точка в правом нижнем углу', cls: 'br',
+    caption: 'Отвечает: то же, но угол снизу, где у значка Stash меньше рисунка. Цена: ниже к краю строки меню, заметна хуже.' },
+  { id: '2.3', name: 'Точка сбоку от значка', cls: 'side',
+    caption: 'Отвечает: глиф не тронут совсем. Цена: пункт становится шире на 8 px, и соседние значки в строке меню сдвигаются, когда обновление появляется и исчезает.' },
 ];
 
 /* ── Замеры из DOM ─────────────────────────────────────────────────── */
@@ -313,9 +321,8 @@ function badgeFit(el) {
   const glyph = el.querySelector('.glyph').getBoundingClientRect();
   const ox = Math.max(0, Math.min(dot.right, glyph.right) - Math.max(dot.left, glyph.left));
   const oy = Math.max(0, Math.min(dot.bottom, glyph.bottom) - Math.max(dot.top, glyph.top));
-  const out = Math.round(dot.right - glyph.right);
   const slot = Math.round(el.querySelector('.slot').getBoundingClientRect().width);
-  return `Точка 5 px · пункт ${slot} px · перекрытие рамки значка ${Math.round(ox)}×${Math.round(oy)} px · за правым краем ${Math.max(0, out)} px · в раунде 1 было 0×5 и 8 px`;
+  return `Точка 5 px · пункт ${slot} px · перекрытие рамки значка ${Math.round(ox)}×${Math.round(oy)} px`;
 }
 
 /* ── Каркас ────────────────────────────────────────────────────────── */
@@ -407,11 +414,11 @@ function renderBlock2() {
           ${th.length > 1 ? `<span class="cx-theme-label">${t === 'light' ? 'светлая' : 'тёмная'}</span>` : ''}
           <div class="cx-screen cx-${t}" data-variant="${v.id}">
             <div class="menubar">
-              <div class="slot"><div class="glyph-wrap"><div class="glyph"></div><div class="dot" style="top:${v.top}px;right:${v.right}px"></div></div></div>
+              <div class="slot"><div class="glyph"></div><div class="dot ${v.cls}"></div></div>
             </div>
             <div class="cx-zoom">
               <div class="menubar" style="width:65px">
-                <div class="slot"><div class="glyph-wrap"><div class="glyph"></div><div class="dot" style="top:${v.top}px;right:${v.right}px"></div></div></div>
+                <div class="slot"><div class="glyph"></div><div class="dot ${v.cls}"></div></div>
               </div>
             </div>
           </div>
@@ -428,9 +435,9 @@ function renderBlock2() {
 function render() { renderBlock1(); renderBlock2(); }
 
 document.getElementById('cx-verdict-1').innerHTML =
-  '<strong>Рекомендую 1.2.1 — оранжевая точка отбивает пункты сильнее серых и держит экран в одной палитре с журналом, где оранжевым помечено всё главное.</strong>';
+  '<strong>Рекомендую 1.1 — футер уже несёт заголовок и кнопку на экране доступа, и обновление становится тем же экраном с другой начинкой, а не новым видом.</strong>';
 document.getElementById('cx-verdict-2').innerHTML =
-  '<strong>Рекомендую 2.1.2 — половина точки на углу читается как метка именно этого значка, а не как соседний значок рядом.</strong>';
+  '<strong>Рекомендую 2.1 — угол вверху справа первым попадает в глаз на строке меню, а пункт не меняет ширину и не двигает соседние значки.</strong>';
 
 renderControls();
 document.fonts.ready.then(render);
