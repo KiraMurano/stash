@@ -39,12 +39,10 @@ struct AccessSlideTests {
         return (OnboardingController(defaults: defaults(), access: gate), spy, gate)
     }
 
+    /// The access screen as the panel puts it up: on its own, never as part of the tour.
     private func onAccessSlide(granted: Bool = false) -> (OnboardingController, AccessSpy, AccessGate) {
         let (controller, spy, gate) = controller(granted: granted)
-        controller.present(replay: false)
-        while !controller.isLast {
-            controller.next()
-        }
+        controller.presentAccessOnly()
         return (controller, spy, gate)
     }
 
@@ -59,18 +57,12 @@ struct AccessSlideTests {
         #expect(AccessSlide.hint(en).hasPrefix("Stash is already in the list"))
         #expect(AccessSlide.buttonTitle(ru) == "Открыть настройки")
         #expect(AccessSlide.buttonTitle(en) == "Open Settings")
-        #expect(AccessSlide.grantedTitle(ru) == "Доступ включён")
-        #expect(AccessSlide.grantedTitle(en) == "Access granted")
     }
 
-    @Test func theCardHasAButtonOnlyInTheTutorial() {
-        #expect(AccessSlide.showsCardButton(isAccessOnly: false))
-        #expect(!AccessSlide.showsCardButton(isAccessOnly: true))
-    }
-
-    @Test func theSlideIsTheLastOneWithoutAccess() {
+    @Test func theScreenStandsAloneWithoutAccess() {
         let (controller, _, gate) = onAccessSlide()
         #expect(controller.slide.kind == .access)
+        #expect(controller.isAccessOnly)
         #expect(controller.isLast)
         #expect(!gate.isGranted)
     }

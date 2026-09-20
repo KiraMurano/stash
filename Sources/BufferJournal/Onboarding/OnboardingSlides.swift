@@ -2,7 +2,7 @@ import Foundation
 
 /// The scene a slide plays; also the slide's identity.
 enum OnboardingSceneKind: String, CaseIterable, Sendable {
-    case hero, hotKey, paste, pin, keys, settings, access
+    case hero, hotKey, paste, keys, pin, access
 }
 
 /// A string in both interface languages.
@@ -30,8 +30,8 @@ struct OnboardingSlide: Identifiable, Equatable, Sendable {
 }
 
 enum OnboardingSlides {
-    /// The access slide, kept apart because it also shows on its own: the tutorial was seen, but
-    /// Stash still has no Accessibility access.
+    /// The access screen. It is not part of the tour: it shows on its own whenever Stash lacks
+    /// Accessibility access, whether the tour has just ended or the panel was opened later.
     static let accessSlide = OnboardingSlide(
         kind: .access, duration: 3.0, loops: true,
         word: Localized(en: "ACCESS", ru: "ДОСТУП"),
@@ -64,40 +64,25 @@ enum OnboardingSlides {
             kind: .paste, duration: 4.0, loops: true,
             word: Localized(en: "PASTE", ru: "ВСТАВКА"),
             text: Localized(
-                en: "Hover a clip and click the orange arrow: it lands where your cursor was and the journal closes. A double click does the same.",
-                ru: "Наведите на клип и нажмите оранжевую стрелку: клип встанет туда, где стоял курсор, а журнал закроется. Двойной клик — тоже."
-            )
-        ),
-        OnboardingSlide(
-            kind: .pin, duration: 4.6, loops: true,
-            word: Localized(en: "PIN", ru: "ЗАКРЕП"),
-            text: Localized(
-                en: "Clips last a day, and new ones push out the old. Pin an address or bank details — they stay until you unpin them.",
-                ru: "Клипы хранятся сутки, а новые вытесняют старые. Закрепите адрес или реквизиты — они останутся, пока вы их не открепите."
+                en: "Double-click a clip to paste it.",
+                ru: "Кликните дважды по клипу, чтобы вставить его."
             )
         ),
         OnboardingSlide(
             kind: .keys, duration: 4.2, loops: true,
             word: Localized(en: "KEYS", ru: "КЛАВИШИ"),
             text: Localized(
-                en: "With Intercept Keys on, ↑ and ↓ pick the clip you need in the journal and Return pastes it.",
-                ru: "Если включено «Перехватывать клавиши», стрелками ↑ и ↓ можно выбрать нужный клип и вставить его клавишей Return."
+                en: "You can also pick the clip you need with the arrow keys and paste it with Return.",
+                ru: "Также нужный клип можно выбрать клавишами со стрелками и вставить нажатием Return."
             )
         ),
         OnboardingSlide(
-            kind: .settings, duration: 4.7, loops: true,
-            word: Localized(en: "SETTINGS", ru: "НАСТРОЙКИ"),
+            kind: .pin, duration: 4.6, loops: true,
+            word: Localized(en: "PIN", ru: "ЗАКРЕП"),
             text: Localized(
-                en: "The Stash icon in the menu bar opens settings: closing after a paste, the keys, opening at the cursor, theme and language, and Tutorial.",
-                ru: "Значок Stash в строке меню открывает настройки: закрытие после вставки, клавиши журнала, открытие у курсора, тему и язык. Там же «Обучение»."
+                en: "Stash keeps the last 20 clips for a day. Pin the ones that matter — they stay at the top of the list until you unpin them.",
+                ru: "Stash хранит 20 последних клипов в течение суток. Важные клипы можно закрепить — они останутся наверху списка, пока вы их не открепите."
             )
         ),
-        accessSlide,
     ]
-
-    /// The access slide is only for those who need it: without Accessibility access the journal
-    /// does not work at all. The set is taken once, when the tutorial opens.
-    static func slides(hasAccess: Bool) -> [OnboardingSlide] {
-        hasAccess ? all.filter { $0.kind != .access } : all
-    }
 }

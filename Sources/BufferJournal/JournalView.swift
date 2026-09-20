@@ -361,7 +361,6 @@ struct JournalView: View {
             isSelected: entry.id == selectedEntry?.id,
             isCurrent: store.currentClipboardFingerprint == entry.fingerprint,
             palette: palette,
-            onQuickPaste: { paste(entry) },
             onExpand: expandAction(for: entry),
             onTogglePin: { togglePin(entry) },
             onDelete: { entryPendingDeletion = entry }

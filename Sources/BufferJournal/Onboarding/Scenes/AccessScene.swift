@@ -2,12 +2,11 @@ import AppKit
 import SwiftUI
 
 /// ДОСТУП: System Settings open on Privacy & Security → Accessibility; the arrow switches Stash on.
-/// The bottom of the canvas stays free for the card's real "Open Settings" button; in the single
-/// view of the slide there is no button and the strip is just air.
+/// The window fills the canvas: the screen has no card around it and no button inside it.
 struct AccessScene: View {
     static let duration = 3.0
-    /// The System Settings window, and room under it for the card's button.
-    static let size = CGSize(width: 460, height: 236)
+    /// The System Settings window with a margin for its shadow.
+    static let size = CGSize(width: 460, height: 250)
 
     struct State: Equatable {
         var cursor: CursorState
@@ -16,15 +15,41 @@ struct AccessScene: View {
     }
 
     /// The window and the pane inside it: the sidebar on the left, the app list on the right.
-    static let window = CGRect(x: 10, y: 10, width: 440, height: 174)
+    static let window = CGRect(x: 10, y: 10, width: 440, height: 230)
     static let sidebarWidth: CGFloat = 150
-    /// The Stash switch: the list row sits under the title and the explanation, the switch at its
-    /// trailing edge.
-    static let toggle = CGPoint(x: 418, y: 96)
+
+    /// The pane's own layout, fixed so the arrow can be aimed at the switch by the same numbers
+    /// the view is drawn with.
+    private static let paneInset = CGSize(width: 16, height: 14)
+    private static let headingHeight: CGFloat = 20
+    private static let noteHeight: CGFloat = 30
+    private static let rowSpacing: CGFloat = 8
+    private static let appRowHeight: CGFloat = 38
+    /// The app row's own padding, and the switch at its trailing edge.
+    private static let appRowInset: CGFloat = 10
+    private static let switchSize = CGSize(width: 32, height: 19)
+
+    private static var appRow: CGRect {
+        CGRect(
+            x: window.minX + sidebarWidth,
+            y: window.minY + paneInset.height + headingHeight + rowSpacing + noteHeight + rowSpacing,
+            width: window.width - sidebarWidth,
+            height: appRowHeight
+        )
+    }
+
+    /// The Stash switch, dead centre — that is where the arrow clicks.
+    static var toggle: CGPoint {
+        CGPoint(
+            x: appRow.maxX - paneInset.width - appRowInset - switchSize.width / 2,
+            y: appRow.midY
+        )
+    }
+
     static let click = 1.2
 
     private static let cursor = CursorTrack(
-        tip: Track(CGPoint(x: 390, y: 232)).to(toggle, at: 0.3, until: 1.0),
+        tip: Track(CGPoint(x: 400, y: 246)).to(toggle, at: 0.3, until: 1.0),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
         clicks: [click]
     )
@@ -98,7 +123,7 @@ struct AccessScene: View {
     }
 
     private func content(_ state: State, palette: ThemePalette) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Self.rowSpacing) {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 11, weight: .semibold))
@@ -107,11 +132,12 @@ struct AccessScene: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(palette.textPrimary)
             }
-            .padding(.bottom, 4)
+            .frame(height: Self.headingHeight, alignment: .leading)
             Text(l10n("Allow the applications below to control your computer.", "Разрешить приложениям ниже управлять компьютером."))
                 .font(.system(size: 11))
                 .foregroundStyle(palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(height: Self.noteHeight, alignment: .top)
             HStack(spacing: 8) {
                 Image(nsImage: NSApplication.shared.applicationIconImage)
                     .resizable()
@@ -122,9 +148,10 @@ struct AccessScene: View {
                     .foregroundStyle(palette.textPrimary)
                 Spacer(minLength: 0)
                 SceneSwitch(isOn: state.isOn)
+                    .frame(width: Self.switchSize.width, height: Self.switchSize.height)
             }
-            .padding(.horizontal, 10)
-            .frame(height: 38)
+            .padding(.horizontal, Self.appRowInset)
+            .frame(height: Self.appRowHeight)
             .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             // The buttons the footnote under the card talks about.
             HStack(spacing: 10) {
@@ -135,8 +162,8 @@ struct AccessScene: View {
             .foregroundStyle(palette.textTertiary)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
+        .padding(.horizontal, Self.paneInset.width)
+        .padding(.top, Self.paneInset.height)
     }
 }
 

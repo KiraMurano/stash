@@ -11,7 +11,7 @@ final class OnboardingController: ObservableObject {
     static let seenVersionKey = "OnboardingSeenVersion"
 
     @Published private(set) var isPresented = false
-    @Published private(set) var slides: [OnboardingSlide] = OnboardingSlides.slides(hasAccess: true)
+    @Published private(set) var slides: [OnboardingSlide] = OnboardingSlides.all
     @Published private(set) var index = 0
     /// Grows each time a slide is entered or the panel shows again; scenes restart on a change.
     @Published private(set) var run = 0
@@ -40,8 +40,7 @@ final class OnboardingController: ObservableObject {
         index == slides.count - 1
     }
 
-    /// Opens the tutorial on its first slide. The slide set is taken here and stays fixed until it
-    /// closes, so a permission granted midway does not move the ground under the person.
+    /// Opens the tutorial on its first slide.
     func present(replay: Bool) {
         if isPresented, !isAccessOnly {
             // The menu item during the first showing restarts it; closing still marks it seen.
@@ -49,15 +48,15 @@ final class OnboardingController: ObservableObject {
         } else {
             isReplay = replay
             isAccessOnly = false
-            slides = OnboardingSlides.slides(hasAccess: access.isGranted)
+            slides = OnboardingSlides.all
             isPresented = true
         }
         index = 0
         run += 1
     }
 
-    /// The access slide on its own: the tutorial was seen, but Stash has no Accessibility access.
-    /// With access there is nothing to ask for.
+    /// The access screen: Stash has no Accessibility access, so there is no journal to show.
+    /// It is never part of the tour — with access there is nothing to ask for.
     func presentAccessOnly() {
         guard !access.isGranted else { return }
         isReplay = false
@@ -93,11 +92,17 @@ final class OnboardingController: ObservableObject {
 
     func close() {
         guard isPresented else { return }
-        isPresented = false
-        // A replay from the menu and the lone access screen record nothing.
+        // A replay from the menu and the access screen record nothing.
         if !isReplay, !isAccessOnly {
             defaults.set(Self.currentVersion, forKey: Self.seenVersionKey)
         }
+        // Without access there is no journal to fall back to: the tour hands over to the access
+        // screen, the same screen the panel puts up on its own later.
+        if !isAccessOnly, !access.isGranted {
+            presentAccessOnly()
+            return
+        }
+        isPresented = false
         isAccessOnly = false
     }
 

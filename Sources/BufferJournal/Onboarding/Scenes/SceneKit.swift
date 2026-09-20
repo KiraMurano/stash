@@ -55,7 +55,7 @@ struct SceneRipple: View {
 }
 
 /// A Mac key: light with a dark lower edge in the light theme, dark grey in the dark one.
-/// Pressed, it sinks by 2 pt and the edge disappears.
+/// Pressed, it sinks by 2 pt, the edge disappears and the key takes the app's orange.
 struct SceneKeycap: View {
     let label: String
     /// A second letter in the lower right corner, as on a Russian keyboard.
@@ -75,7 +75,7 @@ struct SceneKeycap: View {
                 .fill(isDark ? Color.black.opacity(0.6) : Color.black.opacity(0.2))
                 .offset(y: pressed ? 0 : 3)
             shape
-                .fill(isDark ? Color(white: 0.29) : Color.white)
+                .fill(pressed ? ThemePalette.orange : (isDark ? Color(white: 0.29) : Color.white))
                 .overlay(labels(isDark: isDark))
                 .offset(y: pressed ? 2 : 0)
         }
@@ -85,7 +85,7 @@ struct SceneKeycap: View {
     }
 
     private func labels(isDark: Bool) -> some View {
-        let ink = isDark ? Color.white.opacity(0.9) : Color.black.opacity(0.82)
+        let ink = pressed ? Color.white : (isDark ? Color.white.opacity(0.9) : Color.black.opacity(0.82))
         return ZStack {
             VStack(spacing: size * 0.02) {
                 Text(label)

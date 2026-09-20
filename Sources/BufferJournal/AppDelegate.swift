@@ -69,9 +69,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let l10n = settings.l10n
         let titles = StatusMenuTitles(l10n: l10n)
         let menu = NSMenu()
-        menu.addItem(menuItem(titles.openStash, action: #selector(openJournal)))
-        // Next to "Open Stash": both open the panel. Away from "Clear History", which asks nothing.
-        menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial)))
+        // ⌥V is a global hotkey, not a menu shortcut; a status item's menu registers its key
+        // equivalents only while it is open, so this line only tells the user what to press.
+        let openItem = menuItem(titles.openStash, action: #selector(openJournal), keyEquivalent: "v")
+        openItem.keyEquivalentModifierMask = .option
+        menu.addItem(openItem)
         menu.addItem(NSMenuItem.separator())
 
         closeAfterSelectionItem = menuItem(titles.closeAfterSelection, action: #selector(toggleCloseAfterSelection))
@@ -114,6 +116,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(languageItem)
 
         menu.addItem(NSMenuItem.separator())
+        // Above "Clear History", which asks nothing before it clears: a miss costs the history.
+        menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial)))
         menu.addItem(menuItem(titles.clearHistory, action: #selector(clearHistory)))
         menu.addItem(menuItem(titles.quit, action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu

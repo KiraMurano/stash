@@ -83,7 +83,6 @@ struct DemoRow: View {
             isSelected: isSelected,
             isCurrent: false,
             palette: palette,
-            onQuickPaste: {},
             onExpand: clip.entry.isText ? nil : {},
             onTogglePin: {},
             onDelete: {},

@@ -227,6 +227,10 @@ final class JournalPanelController {
             panel.level = .floating
             panel.orderFrontRegardless()
         }
+        // Nothing left to ask for: the access screen gives way to the journal it was standing in for.
+        if access.isGranted, onboarding.isAccessOnly {
+            onboarding.close()
+        }
         access.setPolling(isPanelVisible)
         updateKeys()
         updateOutsideClicks()

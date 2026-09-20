@@ -26,14 +26,6 @@ enum AccessSlide {
         l10n("Open Settings", "Открыть настройки")
     }
 
-    static func grantedTitle(_ l10n: L10n) -> String {
-        l10n("Access granted", "Доступ включён")
-    }
-
-    /// In the tutorial the card carries the button; alone, the main button at the bottom asks.
-    static func showsCardButton(isAccessOnly: Bool) -> Bool {
-        !isAccessOnly
-    }
 }
 
 /// Under the card in both views of the slide: the title with the app icon, the ⌘V line and the
@@ -90,51 +82,5 @@ struct AccessPrompt: View {
             .padding(.top, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// The one thing inside a card that can be pressed: it asks for access and opens System Settings.
-/// Once access is granted it dissolves into a note and the scene holds its stop frame.
-struct AccessRequestButton: View {
-    let hasAccess: Bool
-    let palette: ThemePalette
-    let l10n: L10n
-
-    /// The frame hands down the same action its own button runs (Task 9).
-    @Environment(\.onboardingOpenSettings) private var openSettings
-
-    var body: some View {
-        ZStack {
-            if hasAccess {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(ThemePalette.orange)
-                    Text(AccessSlide.grantedTitle(l10n))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(palette.textPrimary)
-                }
-                .frame(height: 32)
-                .transition(.opacity)
-            } else {
-                Button {
-                    openSettings()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "accessibility")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text(AccessSlide.buttonTitle(l10n))
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(height: 32)
-                }
-                .buttonStyle(TranslucentButtonStyle(tone: .accent, cornerRadius: 8))
-                .transition(.opacity)
-            }
-        }
-        // Inside a card everything keeps the Stash look, whatever theme is picked.
-        .environment(\.solidAccents, true)
-        .animation(.easeOut(duration: 0.2), value: hasAccess)
     }
 }

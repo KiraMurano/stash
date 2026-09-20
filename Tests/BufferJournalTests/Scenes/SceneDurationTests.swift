@@ -11,7 +11,6 @@ struct SceneDurationTests {
         .paste: PasteScene.duration,
         .pin: PinScene.duration,
         .keys: KeysScene.duration,
-        .settings: SettingsScene.duration,
         .access: AccessScene.duration,
     ]
 

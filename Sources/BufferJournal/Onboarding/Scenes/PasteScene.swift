@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// ВСТАВКА: two ways with the mouse to put a clip into the letter next to the list — the orange
-/// button of a text clip, and a double click on an image. Then the journal goes away, because
-/// Close After Selection is on by default. ⏎ belongs to the slide about the keys.
+/// ВСТАВКА: a double click puts a clip into the letter next to the list — first a text clip,
+/// then an image. Then the journal goes away, because Close After Selection is on by default.
+/// ⏎ belongs to the slide about the keys.
 struct PasteScene: View {
     static let duration = 4.0
     /// The list, and the letter to its right.
@@ -35,41 +35,33 @@ struct PasteScene: View {
         firstRowTop + (CGFloat(index) + 0.5) * rowHeight
     }
 
-    /// Tip of the arrow over the orange paste button of a row: the first of the three, counted
-    /// back from the row's trailing edge (list 10…260, buttons 26 wide, 4 apart, 8 from the edge).
-    static func pasteButton(of index: Int) -> CGPoint {
-        CGPoint(x: 260 - 8 - 3 * 26 - 2 * 4 + 13, y: rowCenter(index).y)
-    }
-
     /// The rows, in the order the scene works through them.
     static let textRow = 1
     static let imageRow = 0
 
     // MARK: Time
 
-    /// The orange button of the text clip.
-    static let buttonClick = 1.35
-    /// Two clicks in a row on the image.
-    static let doubleClick = [2.55, 2.72]
+    /// Two clicks in a row on the text clip, then two on the image.
+    static let textDoubleClick = [1.1, 1.27]
+    static let imageDoubleClick = [2.5, 2.67]
 
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 230, y: 240))
             .to(rowCenter(textRow), at: 0.3, until: 0.8)
-            .to(pasteButton(of: textRow), at: 0.9, until: 1.2)
-            .to(rowCenter(imageRow), at: 1.95, until: 2.35),
+            .to(rowCenter(imageRow), at: 1.9, until: 2.3),
         opacity: Track(0.0).to(1, at: 0.15, until: 0.35),
-        clicks: [buttonClick] + doubleClick
+        clicks: textDoubleClick + imageDoubleClick
     )
     private static let hovered = Track<Int?>(nil)
         .set(textRow, at: 0.62)
-        .set(imageRow, at: 2.1)
+        .set(imageRow, at: 2.05)
     private static let selected = Track<Int?>(nil)
-        .set(textRow, at: buttonClick + 0.04)
-        .set(imageRow, at: doubleClick[1] + 0.04)
+        .set(textRow, at: textDoubleClick[1] + 0.04)
+        .set(imageRow, at: imageDoubleClick[1] + 0.04)
     // The panel's own fade is 0.13 s — too quick to follow; the spec gives the scene 0.2 s.
-    private static let journal = Track(1.0).to(0, at: 3.5, until: 3.7, .easeOut)
-    private static let pastedText = Track(0.0).to(1, at: 1.5, until: 1.8, .easeOut)
-    private static let pastedImage = Track(0.0).to(1, at: 2.9, until: 3.2, .easeOut)
+    private static let journal = Track(1.0).to(0, at: 3.45, until: 3.65, .easeOut)
+    private static let pastedText = Track(0.0).to(1, at: 1.45, until: 1.75, .easeOut)
+    private static let pastedImage = Track(0.0).to(1, at: 2.85, until: 3.15, .easeOut)
 
     static func state(at time: SceneTime) -> State {
         State(

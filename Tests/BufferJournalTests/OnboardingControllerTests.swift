@@ -69,26 +69,27 @@ struct OnboardingControllerTests {
         #expect(!controller.shouldShowOnLaunch)
     }
 
-    @Test func theAccessSlideIsOnlyForThoseWithoutAccess() {
-        let (without, _) = make(granted: false)
-        without.present(replay: false)
-        #expect(without.slides.count == 7)
-        #expect(without.slides.last?.kind == .access)
-        #expect(!without.isAccessOnly)
-
-        let (with, _) = make(granted: true)
-        with.present(replay: false)
-        #expect(with.slides.count == 6)
-        #expect(with.slides.last?.kind == .settings)
+    @Test func theTourIsTheSameWithAccessOrWithout() {
+        // The access screen is not one of the tour's slides: it stands on its own.
+        for granted in [true, false] {
+            let (controller, _) = make(granted: granted)
+            controller.present(replay: false)
+            #expect(controller.slides.map(\.kind) == OnboardingSlides.all.map(\.kind))
+            #expect(!controller.isAccessOnly)
+            #expect(!controller.slides.contains { $0.kind == .access })
+        }
     }
 
-    @Test func theSlideSetStaysWhileOpen() {
-        let (controller, access) = make(granted: false)
+    @Test func theTourHandsOverToTheAccessScreenWhenThereIsNoAccess() {
+        let (controller, _) = make(granted: false)
         controller.present(replay: false)
-        access.granted = true
-        access.gate.refresh()
-        #expect(controller.slides.count == 7)
-        #expect(controller.slides.last?.kind == .access)
+        controller.close()
+        // Nothing to fall back to, so the screen that asks for access takes over.
+        #expect(controller.isPresented)
+        #expect(controller.isAccessOnly)
+        // Closing it for real leaves nothing on screen.
+        controller.close()
+        #expect(!controller.isPresented)
     }
 
     @Test func slidesStayInBoundsAndEveryEntryRestartsTheScene() {
@@ -125,6 +126,7 @@ struct OnboardingControllerTests {
         controller.close()
         #expect(controller.shouldShowOnLaunch)
         #expect(!controller.isAccessOnly)
+        #expect(!controller.isPresented)
     }
 
     @Test func theAccessScreenIsPointlessWithAccess() {
@@ -146,7 +148,7 @@ struct OnboardingControllerTests {
         controller.presentAccessOnly()
         controller.present(replay: true)
         #expect(!controller.isAccessOnly)
-        #expect(controller.slides.count == 7)
+        #expect(controller.slides.count == OnboardingSlides.all.count)
         #expect(controller.index == 0)
     }
 

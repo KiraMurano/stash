@@ -37,11 +37,13 @@ struct SnapshotTests {
         UserDefaults(suiteName: "SnapshotTests-\(UUID().uuidString)")!
     }
 
+    /// The tour opened on one of its own slides. With access granted, closing it never hands
+    /// over to the access screen, which is a screen of its own and has its own test.
     private func controller(on kind: OnboardingSceneKind) -> (OnboardingController, AccessGate) {
-        let access = gate(granted: false)
+        let access = gate(granted: true)
         let controller = OnboardingController(defaults: defaults(), access: access)
         controller.present(replay: true)
-        while controller.slide.kind != kind { controller.next() }
+        while controller.slide.kind != kind, !controller.isLast { controller.next() }
         return (controller, access)
     }
 
@@ -68,7 +70,7 @@ struct SnapshotTests {
     /// The whole tutorial on three slides, at three panel sizes.
     @Test func tutorialFrame() throws {
         for (scheme, name) in Self.schemes {
-            for kind in [OnboardingSceneKind.hero, .keys, .access] {
+            for kind in [OnboardingSceneKind.hero, .keys, .pin] {
                 for size in Self.sizes {
                     let (controller, access) = controller(on: kind)
                     try render(frame(controller, access, scheme: scheme, size: size), name: "frame-\(kind.rawValue)-\(Int(size.width))-\(name)")
@@ -77,7 +79,7 @@ struct SnapshotTests {
         }
     }
 
-    /// The access slide on its own: no bars, and "Открыть настройки" at the bottom.
+    /// The access screen: no bars, no card, and "Открыть настройки" at the bottom.
     @Test func accessOnlyFrame() throws {
         for (scheme, name) in Self.schemes {
             for size in Self.sizes {
@@ -93,7 +95,7 @@ extension SnapshotTests {
     @Test func sceneFrames() throws {
         for (scheme, schemeName) in Self.schemes {
             for (language, languageName) in [(ResolvedLanguage.russian, "ru"), (.english, "en")] {
-                for slide in OnboardingSlides.all {
+                for slide in OnboardingSlides.all + [OnboardingSlides.accessSlide] {
                     let area = OnboardingSceneView.size(of: slide.kind) ?? CGSize(width: 600, height: 309)
                     let palette = ThemePalette.scene(scheme)
                     for (time, timeName) in [(SceneTime.end(of: slide.duration), "end"), (SceneTime(t: slide.duration * 0.4, rewind: 0), "mid")] {

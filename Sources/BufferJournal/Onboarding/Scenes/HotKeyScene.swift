@@ -5,7 +5,7 @@ import SwiftUI
 struct HotKeyScene: View {
     static let duration = 2.6
     /// Another app's window with the journal over it, and the two keys under it.
-    static let size = CGSize(width: 400, height: 240)
+    static let size = CGSize(width: 300, height: 240)
 
     struct State: Equatable {
         var optionDown: Bool

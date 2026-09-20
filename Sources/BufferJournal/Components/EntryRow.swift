@@ -10,7 +10,6 @@ struct EntryRow: View {
     let isSelected: Bool
     let isCurrent: Bool
     let palette: ThemePalette
-    let onQuickPaste: () -> Void
     let onExpand: (() -> Void)?
     let onTogglePin: () -> Void
     let onDelete: () -> Void
@@ -30,8 +29,9 @@ struct EntryRow: View {
     /// Space the pin/clipboard column and its HStack spacing take right of the text column.
     private static let trailingColumnWidth: CGFloat = 20
 
-    /// Paste, pin and delete; opening the clip lives on the thumbnail.
-    private static let actionCount: CGFloat = 3
+    /// Pin and delete. Pasting is a double click or Return, and opening the clip is a click on
+    /// the thumbnail, so neither needs a button.
+    private static let actionCount: CGFloat = 2
 
     private var actionsWidth: CGFloat {
         Self.actionCount * Self.actionSize + (Self.actionCount - 1) * Self.actionSpacing
@@ -108,8 +108,6 @@ struct EntryRow: View {
             // Floats over the row so hovering never reflows the title.
             if isHovered {
                 HStack(spacing: Self.actionSpacing) {
-                    // Pasting comes first: it is what the row is for.
-                    rowAction("return", tone: accentTone, help: l10n("Paste", "Вставить"), action: onQuickPaste)
                     rowAction(
                         entry.isPinned ? "pin.fill" : "pin",
                         tone: entry.isPinned ? accentTone : .neutral,

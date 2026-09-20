@@ -15,9 +15,10 @@ struct PinScene: View {
         var arrived: Int
     }
 
-    /// The pin button of the address row (rows x 10…260, y 88…146).
-    static let pinButton = CGPoint(x: 179, y: 117)
-    private static let click = 1.4
+    /// The pin button of the address row: the first of the row's two, counted back from its
+    /// trailing edge (rows x 10…260, y 88…146; buttons 26 wide, 4 apart, 8 from the edge).
+    static let pinButton = CGPoint(x: 260 - 8 - 2 * 26 - 4 + 13, y: 117)
+    static let click = 1.4
 
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 296, y: 240))

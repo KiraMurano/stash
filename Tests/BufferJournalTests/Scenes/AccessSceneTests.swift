@@ -18,8 +18,12 @@ struct AccessSceneTests {
         #expect(AccessScene.toggle.x > AccessScene.window.minX + AccessScene.sidebarWidth)
     }
 
-    @Test func theCanvasKeepsRoomUnderTheWindowForTheCardButton() {
-        // The tutorial puts the real "Open Settings" button in that strip; alone it stays empty.
-        #expect(AccessScene.size.height - AccessScene.window.maxY >= 42)
+    @Test func theWindowFillsItsCanvas() {
+        // No card around the screen and no button inside it, so the window takes the whole canvas
+        // bar the margin its shadow needs.
+        let margin = AccessScene.size.height - AccessScene.window.maxY
+        #expect(margin == AccessScene.window.minY)
+        #expect(margin <= 12)
+        #expect(AccessScene.size.width - AccessScene.window.maxX == AccessScene.window.minX)
     }
 }

@@ -165,8 +165,11 @@ struct OnboardingView: View {
             let kind = controller.slide.kind
             let scene = OnboardingSceneView.size(of: kind)
             let card = scene.map { OnboardingLayout.cardSize(for: $0, in: geometry.size) } ?? geometry.size
+            // The access screen is not a slide of the tour: its window stands on the field with
+            // no card around it, and takes all the height it can.
+            let hasSurface = scene != nil && kind != .access
 
-            self.card(size: card, hasSurface: scene != nil)
+            self.card(size: card, hasSurface: hasSurface)
                 .frame(width: geometry.size.width, height: geometry.size.height)
         }
     }
@@ -190,13 +193,6 @@ struct OnboardingView: View {
                 .id(controller.run)
                 .transition(.opacity)
 
-            // In the tutorial the access slide carries a real button under its scene; shown alone,
-            // the slide has none and the main button at the bottom asks instead.
-            if controller.slide.kind == .access, AccessSlide.showsCardButton(isAccessOnly: controller.isAccessOnly) {
-                AccessRequestButton(hasAccess: access.isGranted, palette: palette, l10n: l10n)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 10)
-            }
         }
         .frame(width: size.width, height: size.height)
         .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: controller.index)
@@ -249,7 +245,8 @@ struct OnboardingView: View {
     /// Every slide's text lies in the same spot, the current one visible: the block is as tall
     /// as the longest text, hidden slides included, so the button never jumps.
     private var texts: some View {
-        ZStack(alignment: .topLeading) {
+        // Leading, but vertically centred: a one-line text is level with the button beside it.
+        ZStack(alignment: .leading) {
             ForEach(OnboardingSlides.all) { slide in
                 let isCurrent = slide.kind == controller.slide.kind
                 Text(slide.text(l10n))
