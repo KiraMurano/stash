@@ -2054,7 +2054,7 @@ git commit -m "Drive the update from check to relaunch"
 - Produces:
   - В `L10n`: `func megabytes(_ bytes: Int64) -> String`, `func updateCurrent(_ version: String, bytes: Int64) -> String`, `func updateDownloading(_ fraction: Double) -> String`, `var updateInstalling: String`, `var updateNow: String`, `var updateLater: String`, `var updateOpenReleases: String`, `func updateFailure(_ error: UpdateError) -> String`.
   - В `StatusMenuTitles`: `var checkForUpdates: String`, `var checkingForUpdates: String`, `func updateTo(_ version: String) -> String`, `var updateAutomatically: String`.
-  - `struct UpdateView: View` с `init(controller: UpdateController, l10n: L10n)`.
+  - `struct UpdateView: View` с `init(controller: UpdateController, l10n: L10n, scrolls: Bool = true)`.
 
 - [ ] **Step 1: Написать падающий тест текстов**
 
@@ -2183,6 +2183,9 @@ import SwiftUI
 struct UpdateView: View {
     @ObservedObject var controller: UpdateController
     let l10n: L10n
+    /// Off only for the snapshots: ImageRenderer draws a ScrollView as an empty box, and a
+    /// snapshot of an empty card says nothing about the screen.
+    var scrolls = true
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -2299,7 +2302,7 @@ struct UpdateView: View {
     }
 
     private var notes: some View {
-        ScrollView {
+        scrollIfNeeded {
             VStack(alignment: .leading, spacing: Metrics.notesSpacing) {
                 ForEach(ReleaseNotes.parse(controller.release?.notes ?? "")) { note in
                     switch note.kind {
@@ -2310,6 +2313,15 @@ struct UpdateView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Metrics.notesPadding)
+        }
+    }
+
+    @ViewBuilder
+    private func scrollIfNeeded<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if scrolls {
+            ScrollView { content() }
+        } else {
+            content().frame(maxHeight: .infinity, alignment: .top)
         }
     }
 
@@ -2404,11 +2416,20 @@ struct UpdateView: View {
         .buttonStyle(OnboardingPrimaryButtonStyle(colors: colors))
     }
 
+    /// The unfilled part of the bar: a tint of the same orange. The Stash themes paint their
+    /// accents solid, so `palette.segmentThumb` would give the fill's own colour and hide it.
+    private var progressTrack: Color {
+        ThemePalette.orange.opacity(colorScheme == .dark ? 0.28 : 0.18)
+    }
+
+    /// The label sits in the middle of the bar, so part of it lies on the orange fill and part on
+    /// the track. White would vanish on the track, so it is the ordinary text colour: it reads on
+    /// the pale track and on the orange alike, in both themes.
     private func bar(_ title: String, fill: Double) -> some View {
         let shape = Capsule()
 
         return shape
-            .fill(colors.barTrack)
+            .fill(progressTrack)
             .overlay(alignment: .leading) {
                 shape
                     .fill(ThemePalette.orange)
@@ -2418,7 +2439,7 @@ struct UpdateView: View {
             .overlay {
                 Text(title)
                     .font(.system(size: Metrics.textSize, weight: .semibold))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(palette.textPrimary)
             }
             .frame(width: Metrics.progressWidth, height: Metrics.buttonHeight)
             .accessibilityLabel(title)
@@ -2485,9 +2506,11 @@ struct UpdateView: View {
         for (state, name) in states {
             for (scheme, schemeName) in Self.schemes {
                 for size in Self.sizes {
-                    let view = UpdateView(controller: updateController(state), l10n: L10n(language: .russian))
+                    // Тему задаёт окружение, а не preferredColorScheme: под ImageRenderer
+                    // последний до вью не доходит, и снимок тёмной темы выходит светлым.
+                    let view = UpdateView(controller: updateController(state), l10n: L10n(language: .russian), scrolls: false)
                         .frame(width: size.width, height: size.height)
-                        .preferredColorScheme(scheme)
+                        .environment(\.colorScheme, scheme)
                     try render(view, name: "update-\(name)-\(schemeName)-\(Int(size.width))")
                 }
             }

@@ -67,6 +67,50 @@ struct L10n {
         }
         return "\(count) \(word)"
     }
+
+    /// The image's size with one decimal, in the app's language: "4,2 МБ" / "4.2 MB".
+    func megabytes(_ bytes: Int64) -> String {
+        let value = Double(bytes) / 1_048_576
+        let number = String(format: "%.1f", value)
+        return language == .russian
+            ? "\(number.replacingOccurrences(of: ".", with: ",")) МБ"
+            : "\(number) MB"
+    }
+
+    func updateCurrent(_ version: String, bytes: Int64) -> String {
+        self("Now \(version) · \(megabytes(bytes))", "Сейчас \(version) · \(megabytes(bytes))")
+    }
+
+    func updateDownloading(_ fraction: Double) -> String {
+        let percent = Int((min(max(fraction, 0), 1) * 100).rounded())
+        return self("Downloading… \(percent) %", "Загрузка… \(percent) %")
+    }
+
+    var updateInstalling: String { self("Installing…", "Установка…") }
+    var updateNow: String { self("Update and Relaunch", "Обновить и перезапустить") }
+    var updateLater: String { self("Later", "Позже") }
+    var updateOpenReleases: String { self("Open the Releases Page", "Открыть страницу релизов") }
+
+    /// One sentence per failure. The technical detail from codesign stays in the log: it says
+    /// nothing to the person and only makes the screen unreadable.
+    func updateFailure(_ error: UpdateError) -> String {
+        switch error {
+        case .network:
+            self("Could not check for updates.", "Не удалось проверить обновления.")
+        case .signature:
+            self(
+                "The downloaded image failed its signature check. Nothing was installed.",
+                "Не удалось проверить подпись загруженного образа. Ничего не установлено."
+            )
+        case .install:
+            self("The update could not be installed.", "Не удалось установить обновление.")
+        case .notWritable:
+            self(
+                "Stash sits in a folder it may not write to. Update it by hand.",
+                "Stash лежит в каталоге, недоступном на запись. Обновите его вручную."
+            )
+        }
+    }
 }
 
 /// Titles of the menu bar menu. The tutorial's settings scene draws the same menu.
@@ -75,6 +119,10 @@ struct StatusMenuTitles {
 
     var openStash: String { l10n("Open Stash", "Открыть Stash") }
     var tutorial: String { l10n("How to Use Stash?", "Как пользоваться Stash?") }
+    var checkForUpdates: String { l10n("Check for Updates…", "Проверить обновления…") }
+    var checkingForUpdates: String { l10n("Checking for Updates…", "Проверяем обновления…") }
+    func updateTo(_ version: String) -> String { l10n("Update to \(version)", "Обновить до \(version)") }
+    var updateAutomatically: String { l10n("Check for Updates Automatically", "Проверять обновления автоматически") }
     var closeAfterSelection: String { l10n("Close After Selection", "Закрывать после выбора") }
     var interceptKeys: String { l10n("Intercept Keys", "Перехватывать клавиши") }
     var openAtCaret: String { l10n("Open at the Cursor", "Открывать у курсора") }

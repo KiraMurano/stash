@@ -110,4 +110,67 @@ extension SnapshotTests {
             }
         }
     }
+
+    /// Контроллер обновления в нужном состоянии, без сети и без установки.
+    private func updateController(_ state: UpdateController.State) -> UpdateController {
+        struct Checker: UpdateChecking {
+            func latestRelease() async throws -> Release? { nil }
+        }
+        struct Downloader: UpdateDownloading {
+            func download(_ release: Release, onProgress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+                throw UpdateError.network
+            }
+        }
+
+        let release = Release(
+            version: AppVersion(major: 1, minor: 27),
+            notes: """
+            - Журнал открывается у текстового курсора, как Win+V: под ним, а если внизу нет места — над ним.
+            - Клавиши ↑, ↓, Return и Esc достаются журналу, пока он открыт.
+            - Короткое знакомство при первом запуске: пять слайдов внутри панели.
+            - Картинка из журнала открывается в «Просмотре» по клику на миниатюре.
+            - Stash обновляется сам: проверяет раз в сутки и ставит новую версию по кнопке.
+            Подпись приложения сменилась, поэтому Универсальный доступ нужно выдать один раз заново.
+            """,
+            dmgURL: URL(string: "https://example.invalid/Stash-1.27.dmg")!,
+            size: 4_404_019
+        )
+
+        return UpdateController(
+            environment: UpdateEnvironment(
+                currentVersion: AppVersion(major: 1, minor: 26),
+                requirement: "req",
+                bundleURL: URL(fileURLWithPath: "/Applications/Stash.app"),
+                isDestinationWritable: true
+            ),
+            checker: Checker(),
+            downloader: Downloader(),
+            defaults: defaults(),
+            isReady: { true },
+            install: { _ in },
+            quit: {},
+            release: release,
+            state: state
+        )
+    }
+
+    @Test func theUpdateScreenRenders() throws {
+        let states: [(UpdateController.State, String)] = [
+            (.available, "available"),
+            (.downloading(0.4), "downloading"),
+            (.installing, "installing"),
+            (.failed(.signature("x")), "failed"),
+        ]
+
+        for (state, name) in states {
+            for (scheme, schemeName) in Self.schemes {
+                for size in Self.sizes {
+                    let view = UpdateView(controller: updateController(state), l10n: L10n(language: .russian), scrolls: false)
+                        .frame(width: size.width, height: size.height)
+                        .environment(\.colorScheme, scheme)
+                    try render(view, name: "update-\(name)-\(schemeName)-\(Int(size.width))")
+                }
+            }
+        }
+    }
 }
