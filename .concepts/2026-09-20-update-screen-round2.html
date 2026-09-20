@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>2026-09-20 экран обновления — раунд 3</title>
+<title>2026-09-20 экран обновления — раунд 2</title>
 <!--
   Концепт экрана обновления Stash. Скилл visual-prototype.
   Токены скопированы дословно из рабочего дерева на 471aa63.
@@ -109,15 +109,14 @@
   .notes p:last-child { margin-bottom: 0; }
 
   /* Пункт: маркер висит слева, текст переносится по одной линии. */
-  /* Текст пункта чёрный, как основной текст журнала. */
-  .item { display: flex; gap: 8px; margin: 0 0 8px; font-size: 13px; line-height: 1.4; color: var(--text-primary); }
-  /* Колонка маркера одной ширины в обоих вариантах: текст начинается на одном месте,
-     и разница видна только в самом маркере. Маркер — настоящий элемент, не ::before:
-     псевдоэлемент в раунде 2 разъезжался в превью. */
-  .item .mark { flex: none; width: 14px; height: 18px; display: flex; align-items: center; }
-  .item .mark b { display: block; background: var(--orange); border-radius: 999px; }
-  .item .mark.round b { width: 5px; height: 5px; }
-  .item .mark.bar b { width: 12px; height: 3px; }
+  .item { display: flex; gap: 8px; margin: 0 0 8px; font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
+  /* Колонка маркера одной ширины во всех вариантах: текст начинается на одном месте,
+     и разница видна только в самом маркере. */
+  .item .mark { flex: none; width: 14px; text-align: left; position: relative; }
+  .item .mark.dot::before { content: ''; position: absolute; left: 0; top: 5px;
+    width: 4px; height: 4px; border-radius: 999px; background: var(--orange); }
+  .item .mark.glyph-dot { color: var(--text-tertiary); }
+  .item .mark.dash { color: var(--text-tertiary); }
 
   .lockup { display: flex; align-items: center; gap: 2px; }         /* AccessPrompt: icon 21, gap 2, 18 pt semibold */
   .lockup img { width: 21px; height: 21px; }
@@ -153,19 +152,17 @@
   .glyph { width: 14px; height: 18px; background: var(--menubar-glyph);
     -webkit-mask: var(--status) center / contain no-repeat; mask: var(--status) center / contain no-repeat; }
   .glyph-wrap { position: relative; width: 14px; height: 18px; }
-  .badge { position: absolute; width: 5px; height: 5px; border-radius: 999px; background: var(--orange); }
+  .dot { position: absolute; width: 5px; height: 5px; border-radius: 999px; background: var(--orange); }
   /* Увеличенная копия рядом: точка 5 px иначе не читается на странице. Замеры берутся с копии 1×. */
   .cx-zoom { zoom: 4; margin-top: 10px; }
 </style>
 
 <header class="cx-header">
-  <h1>Экран обновления Stash — раунд 3</h1>
-  <p>Что решаем: какой формы оранжевый маркер у пункта — точка или палка; и насколько близко к значку сидит точка бейджа.</p>
+  <h1>Экран обновления Stash — раунд 2</h1>
+  <p>Что решаем: чем размечен каждый пункт заметок, чтобы они не сливались в сплошной текст, и насколько близко к значку сидит точка бейджа.</p>
   <ol>
     <li>Раунд 1 (1.1–1.3, 2.1–2.3) → выбраны <b>1.2 «Версия в шапке»</b> и <b>2.1 «Точка в правом верхнем углу»</b> · <code>2026-09-20-update-screen-round1.html</code></li>
-    <li>Раунд 2 (1.2.1–1.2.3, 2.1.1–2.1.3) → выбран <b>1.2.1 «Оранжевый маркер»</b>; серую точку и тире отбросили · <code>2026-09-20-update-screen-round2.html</code></li>
   </ol>
-  <p>Правки этого раунда: текст пунктов чёрный (<code>textPrimary</code>), а не серый; маркер крупнее; маркер нарисован настоящим элементом, а не <code>::before</code> — в раунде 2 псевдоэлемент разъезжался в превью.</p>
   <p>Токены: <code>Sources/BufferJournal/Components/ThemePalette.swift</code>, <code>Onboarding/OnboardingChrome.swift</code> · Метрики: <code>Onboarding/OnboardingView.swift</code> (Metrics), <code>Onboarding/AccessSlide.swift</code>, <code>JournalView.swift</code> (Layout) · Дерево: <code>main@471aa63</code>, без несохранённых правок · Шрифт: системный macOS, не встроен — приложение рисует им же</p>
   <p>Маркеры рисуем сами: <code>AttributedString(markdown:)</code> умеет начертания и ссылки, но не маркированные списки, поэтому текст релиза разбирается построчно — строка, начатая с <code>- </code>, становится пунктом с маркером, остальные остаются абзацами. Так сделан и этот концепт.</p>
   <p>Раскладка у всех вариантов одна — 1.2: версия с иконкой в строке шапки, заметки в карточке, внизу только действия. Строка шапки перетаскивает панель, как заголовок журнала, — это то же поведение, а не помеха.</p>
@@ -174,7 +171,7 @@
 <div class="cx-controls" id="cx-controls"></div>
 
 <section class="cx-block" id="cx-block-1">
-  <h2>1.2.1. Форма оранжевого маркера</h2>
+  <h2>1.2. Маркеры пунктов в заметках</h2>
   <div class="cx-frames"></div>
   <div class="cx-verdict" id="cx-verdict-1"></div>
 </section>
@@ -221,8 +218,9 @@ const VERSION_NEW = '1.27', VERSION_OLD = '1.26', SIZE_MB = '4,2 МБ';
 const esc = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 const MARKS = {
-  round: () => `<i class="mark round"><b></b></i>`,
-  bar: () => `<i class="mark bar"><b></b></i>`,
+  dot:  () => `<i class="mark dot"></i>`,
+  bull: () => `<i class="mark glyph-dot">•</i>`,
+  dash: () => `<i class="mark dash">—</i>`,
 };
 
 function notesHTML(s, mark) {
@@ -276,10 +274,12 @@ function layout(s, mark) {
 }
 
 const VARIANTS_1 = [
-  { id: '1.2.1.1', name: 'Оранжевая точка 5 px', fn: s => layout(s, 'round'),
-    caption: 'Отвечает: круглый маркер того же оранжевого, что кнопка. Цена: на 13 px тексте точка мелкая, и в длинном списке колонка маркеров читается пунктиром.' },
-  { id: '1.2.1.2', name: 'Оранжевая палка 12×3 px', fn: s => layout(s, 'bar'),
-    caption: 'Отвечает: палка шире точки втрое, колонка маркеров становится отчётливой лесенкой, и пункт невозможно спутать с абзацем. Цена: оранжевого на экране заметно больше, и он спорит с кнопкой за внимание.' },
+  { id: '1.2.1', name: 'Оранжевая точка', fn: s => layout(s, 'dot'),
+    caption: 'Отвечает: маркер того же оранжевого, что кнопка и акценты журнала, — пункты читаются с одного взгляда. Цена: оранжевого на экране становится больше, и он спорит с кнопкой за внимание.' },
+  { id: '1.2.2', name: 'Серая точка «•»', fn: s => layout(s, 'bull'),
+    caption: 'Отвечает: обычный типографский маркер цветом третьестепенного текста, ничего не перетягивает. Цена: тише всех, на мелком тексте почти не считывается.' },
+  { id: '1.2.3', name: 'Тире «—»', fn: s => layout(s, 'dash'),
+    caption: 'Отвечает: тире разделяет пункты заметнее всех и повторяет то, как заметки набраны в тексте релиза на GitHub. Цена: тяжелее точки — тянет взгляд на себя, хотя работа маркера в том, чтобы его не замечали.' },
 ];
 
 const VARIANTS_2 = [
@@ -309,7 +309,7 @@ function fitNotes(el) {
 }
 
 function badgeFit(el) {
-  const dot = el.querySelector('.badge').getBoundingClientRect();
+  const dot = el.querySelector('.dot').getBoundingClientRect();
   const glyph = el.querySelector('.glyph').getBoundingClientRect();
   const ox = Math.max(0, Math.min(dot.right, glyph.right) - Math.max(dot.left, glyph.left));
   const oy = Math.max(0, Math.min(dot.bottom, glyph.bottom) - Math.max(dot.top, glyph.top));
@@ -407,11 +407,11 @@ function renderBlock2() {
           ${th.length > 1 ? `<span class="cx-theme-label">${t === 'light' ? 'светлая' : 'тёмная'}</span>` : ''}
           <div class="cx-screen cx-${t}" data-variant="${v.id}">
             <div class="menubar">
-              <div class="slot"><div class="glyph-wrap"><div class="glyph"></div><div class="badge" style="top:${v.top}px;right:${v.right}px"></div></div></div>
+              <div class="slot"><div class="glyph-wrap"><div class="glyph"></div><div class="dot" style="top:${v.top}px;right:${v.right}px"></div></div></div>
             </div>
             <div class="cx-zoom">
               <div class="menubar" style="width:65px">
-                <div class="slot"><div class="glyph-wrap"><div class="glyph"></div><div class="badge" style="top:${v.top}px;right:${v.right}px"></div></div></div>
+                <div class="slot"><div class="glyph-wrap"><div class="glyph"></div><div class="dot" style="top:${v.top}px;right:${v.right}px"></div></div></div>
               </div>
             </div>
           </div>
@@ -428,7 +428,7 @@ function renderBlock2() {
 function render() { renderBlock1(); renderBlock2(); }
 
 document.getElementById('cx-verdict-1').innerHTML =
-  '<strong>Рекомендую 1.2.1.2 — палка отбивает пункты на мелком тексте там, где точка 5 px теряется, а оранжевого всё равно меньше, чем в одной кнопке внизу.</strong>';
+  '<strong>Рекомендую 1.2.1 — оранжевая точка отбивает пункты сильнее серых и держит экран в одной палитре с журналом, где оранжевым помечено всё главное.</strong>';
 document.getElementById('cx-verdict-2').innerHTML =
   '<strong>Рекомендую 2.1.2 — половина точки на углу читается как метка именно этого значка, а не как соседний значок рядом.</strong>';
 
