@@ -5,7 +5,7 @@ import SwiftUI
 struct HotKeyScene: View {
     static let duration = 2.6
     /// Another app's window with the journal over it, and the two keys under it.
-    static let size = CGSize(width: 470, height: 240)
+    static let size = CGSize(width: 400, height: 240)
 
     struct State: Equatable {
         var optionDown: Bool
@@ -23,17 +23,17 @@ struct HotKeyScene: View {
     }
 
     /// The journal is shown at this share of its real size: as large as the window holding it.
-    static let miniatureScale: CGFloat = 0.3
+    static let miniatureScale: CGFloat = 0.26
 
     // MARK: Geometry, in canvas coordinates
 
     /// The other app's window with the document text, in the middle of the canvas.
-    static let window = CGRect(x: (size.width - 312) / 2, y: 6, width: 312, height: 150)
+    static let window = CGRect(x: (size.width - 264) / 2, y: 6, width: 264, height: 150)
     /// SceneWindow draws a 24 pt title bar above its content.
     private static let titleBar: CGFloat = 24
     private static let textInset = CGSize(width: 14, height: 12)
     /// Grey lines of the document; the caret stands at the end of the second one.
-    private static let lines: [CGFloat] = [190, 64, 168, 212, 140]
+    private static let lines: [CGFloat] = [168, 58, 146, 186, 124]
     private static let lineHeight: CGFloat = 6
     private static let lineSpacing: CGFloat = 9
     private static let caretLine = 1

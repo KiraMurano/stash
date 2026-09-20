@@ -56,16 +56,16 @@ enum OnboardingSlides {
             kind: .hotKey, duration: 2.6, loops: true,
             word: Localized(en: "OPEN", ru: "ВЫЗОВ"),
             text: Localized(
-                en: "Press ⌥V anywhere — the journal opens over the current window, so you never have to switch apps.",
-                ru: "Нажмите ⌥V где угодно — журнал откроется поверх текущего окна, и переключаться между приложениями не придётся."
+                en: "Press ⌥V to open Stash.",
+                ru: "Нажмите ⌥V, чтобы открыть Stash."
             )
         ),
         OnboardingSlide(
-            kind: .paste, duration: 5.6, loops: true,
+            kind: .paste, duration: 4.0, loops: true,
             word: Localized(en: "PASTE", ru: "ВСТАВКА"),
             text: Localized(
-                en: "Hover a clip and click the orange arrow: it lands where your cursor was and the journal closes. Double-click or Return does the same.",
-                ru: "Наведите на клип и нажмите оранжевую стрелку: клип встанет туда, где стоял курсор, а журнал закроется. Двойной клик и Return — тоже."
+                en: "Hover a clip and click the orange arrow: it lands where your cursor was and the journal closes. A double click does the same.",
+                ru: "Наведите на клип и нажмите оранжевую стрелку: клип встанет туда, где стоял курсор, а журнал закроется. Двойной клик — тоже."
             )
         ),
         OnboardingSlide(

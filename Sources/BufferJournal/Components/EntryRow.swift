@@ -19,6 +19,7 @@ struct EntryRow: View {
 
     @Environment(\.l10n) private var l10n
     @State private var isMouseOver = false
+    @State private var isThumbHovered = false
 
     private var isHovered: Bool {
         hoverOverride ?? isMouseOver
@@ -29,14 +30,16 @@ struct EntryRow: View {
     /// Space the pin/clipboard column and its HStack spacing take right of the text column.
     private static let trailingColumnWidth: CGFloat = 20
 
+    /// Paste, pin and delete; opening the clip lives on the thumbnail.
+    private static let actionCount: CGFloat = 3
+
     private var actionsWidth: CGFloat {
-        let count = CGFloat(onExpand == nil ? 3 : 4)
-        return count * Self.actionSize + (count - 1) * Self.actionSpacing
+        Self.actionCount * Self.actionSize + (Self.actionCount - 1) * Self.actionSpacing
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            EntryThumb(entry: entry, thumbnail: thumbnail, fileIcon: fileIcon, palette: palette)
+            thumb
 
             Group {
                 if entry.isText {
@@ -105,9 +108,8 @@ struct EntryRow: View {
             // Floats over the row so hovering never reflows the title.
             if isHovered {
                 HStack(spacing: Self.actionSpacing) {
-                    if let onExpand {
-                        rowAction("arrow.up.left.and.arrow.down.right", help: entry.isImage ? l10n("Open in Preview", "Открыть в Просмотре") : l10n("Open", "Открыть"), action: onExpand)
-                    }
+                    // Pasting comes first: it is what the row is for.
+                    rowAction("return", tone: accentTone, help: l10n("Paste", "Вставить"), action: onQuickPaste)
                     rowAction(
                         entry.isPinned ? "pin.fill" : "pin",
                         tone: entry.isPinned ? accentTone : .neutral,
@@ -115,7 +117,6 @@ struct EntryRow: View {
                         action: onTogglePin
                     )
                     rowAction("trash", tone: .destructive, help: l10n("Delete clip", "Удалить"), action: onDelete)
-                    rowAction("return", tone: accentTone, help: l10n("Paste", "Вставить"), action: onQuickPaste)
                 }
                 .padding(.trailing, 8)
                 .transition(.opacity)
@@ -123,6 +124,33 @@ struct EntryRow: View {
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isMouseOver = $0 }
+    }
+
+    /// The thumbnail opens the clip — an image in Preview, a file in its own app — so no button
+    /// is needed for it. Text has nothing to open, and its tile is just a tile.
+    @ViewBuilder
+    private var thumb: some View {
+        let tile = EntryThumb(entry: entry, thumbnail: thumbnail, fileIcon: fileIcon, palette: palette)
+        if let onExpand {
+            Button(action: onExpand) {
+                tile.overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.black.opacity(0.45))
+                        .overlay {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .opacity(isThumbHovered ? 1 : 0)
+                }
+            }
+            .buttonStyle(.plain)
+            .onHover { isThumbHovered = $0 }
+            .help(entry.isImage ? l10n("Open in Preview", "Открыть в Просмотре") : l10n("Open", "Открыть"))
+            .animation(.easeOut(duration: 0.12), value: isThumbHovered)
+        } else {
+            tile
+        }
     }
 
     private var accentTone: TranslucentButtonStyle.Tone {
