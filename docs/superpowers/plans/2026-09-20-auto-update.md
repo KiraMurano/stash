@@ -635,14 +635,14 @@ struct UpdateScheduleTests {
     }
 
     @Test func aCheckIsNotDueWithinTheDay() {
-        var schedule = UpdateSchedule(defaults: freshDefaults())
+        let schedule = UpdateSchedule(defaults: freshDefaults())
         let now = Date()
         schedule.lastCheck = now
         #expect(!schedule.isDue(now: now.addingTimeInterval(60 * 60)))
     }
 
     @Test func aCheckIsDueAfterTheDay() {
-        var schedule = UpdateSchedule(defaults: freshDefaults())
+        let schedule = UpdateSchedule(defaults: freshDefaults())
         let now = Date()
         schedule.lastCheck = now
         #expect(schedule.isDue(now: now.addingTimeInterval(UpdateSchedule.interval + 1)))
@@ -650,14 +650,14 @@ struct UpdateScheduleTests {
 
     @Test func aClockMovedBackwardsDoesNotLockChecksOut() {
         // Часы переставили назад: отметка из будущего не должна запереть проверки навсегда.
-        var schedule = UpdateSchedule(defaults: freshDefaults())
+        let schedule = UpdateSchedule(defaults: freshDefaults())
         let now = Date()
         schedule.lastCheck = now.addingTimeInterval(10 * UpdateSchedule.interval)
         #expect(schedule.isDue(now: now))
     }
 
     @Test func switchedOffItIsNeverDue() {
-        var schedule = UpdateSchedule(defaults: freshDefaults())
+        let schedule = UpdateSchedule(defaults: freshDefaults())
         schedule.isAutomatic = false
         #expect(!schedule.isDue(now: Date()))
     }
