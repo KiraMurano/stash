@@ -37,7 +37,7 @@ enum OnboardingSlides {
         word: Localized(en: "ACCESS", ru: "ДОСТУП"),
         text: Localized(
             en: "Stash pastes a clip by simulating a ⌘V key press. macOS won't allow that without Accessibility access.",
-            ru: "Stash вставляет клип, имитируя нажатия кнопок ⌘V. Без Универсального доступа macOS этого не разрешит."
+            ru: "Stash вставляет клип, имитируя нажатия клавиш ⌘V. Без Универсального доступа macOS этого не разрешит."
         )
     )
 

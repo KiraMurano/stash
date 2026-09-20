@@ -51,7 +51,7 @@ struct AccessSlideTests {
         let en = L10n(language: .english)
         #expect(AccessSlide.titleTail(ru) == " нужен Универсальный доступ")
         #expect(AccessSlide.titleTail(en) == " needs Accessibility access")
-        #expect(AccessSlide.line(ru) == "Stash вставляет клип, имитируя нажатия кнопок ⌘V. Без Универсального доступа macOS этого не разрешит.")
+        #expect(AccessSlide.line(ru) == "Stash вставляет клип, имитируя нажатия клавиш ⌘V. Без Универсального доступа macOS этого не разрешит.")
         #expect(AccessSlide.line(en) == "Stash pastes a clip by simulating a ⌘V key press. macOS won't allow that without Accessibility access.")
         #expect(AccessSlide.hint(ru).hasPrefix("Stash уже в списке и включён"))
         #expect(AccessSlide.hint(en).hasPrefix("Stash is already in the list"))
