@@ -1000,7 +1000,9 @@ struct CodesignTests {
 
         try Codesign.sign(app, identifier: "local.buffer-journal")
         let requirement = try Codesign.designatedRequirement(of: app)
-        #expect(requirement.contains("local.buffer-journal"))
+        // Ad hoc подписи нечем себя назвать, кроме хеша сборки; сертификат дал бы идентификатор
+        // и хеш листа, одинаковые от сборки к сборке.
+        #expect(requirement.contains("cdhash"))
         try Codesign.verify(app, requirement: requirement, deep: true)
     }
 
@@ -1091,16 +1093,22 @@ enum Codesign {
         }
     }
 
-    /// The requirement a signed item satisfies by itself. Used by the tests and by
-    /// `Scripts/build_app.sh` to see what it has produced.
+    /// The requirement a signed item satisfies by itself. codesign prints it as a comment —
+    /// `# designated => …` — among other lines, so the marker is looked for inside the line.
+    ///
+    /// An ad hoc signature has nothing stable to name and yields `cdhash H"…"`, which is new with
+    /// every build; a certificate yields `identifier "…" and certificate leaf H"…"`, which is not.
+    /// That difference is the whole reason releases are signed with a certificate.
     static func designatedRequirement(of url: URL) throws -> String {
         let result = try run(["-d", "-r-", "--", url.path])
         guard result.status == 0 else {
             throw UpdateError.signature(result.output)
         }
 
-        for line in result.output.split(whereSeparator: \.isNewline) where line.hasPrefix("designated =>") {
-            return line.replacingOccurrences(of: "designated =>", with: "").trimmingCharacters(in: .whitespaces)
+        let marker = "designated =>"
+        for line in result.output.split(whereSeparator: \.isNewline) {
+            guard let range = line.range(of: marker) else { continue }
+            return String(line[range.upperBound...]).trimmingCharacters(in: .whitespaces)
         }
 
         throw UpdateError.signature("codesign printed no designated requirement")
