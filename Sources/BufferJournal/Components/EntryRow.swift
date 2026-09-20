@@ -19,6 +19,8 @@ struct EntryRow: View {
     @Environment(\.l10n) private var l10n
     @State private var isMouseOver = false
     @State private var isThumbHovered = false
+    /// A double click on the thumbnail is still one request to open the clip.
+    @State private var lastOpen = Date.distantPast
 
     private var isHovered: Bool {
         hoverOverride ?? isMouseOver
@@ -130,7 +132,7 @@ struct EntryRow: View {
     private var thumb: some View {
         let tile = EntryThumb(entry: entry, thumbnail: thumbnail, fileIcon: fileIcon, palette: palette)
         if let onExpand {
-            Button(action: onExpand) {
+            Button(action: { openOnce(onExpand) }) {
                 tile.overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.black.opacity(0.45))
@@ -149,6 +151,15 @@ struct EntryRow: View {
         } else {
             tile
         }
+    }
+
+    /// The button fires on every click, so a double click would open the clip twice; the second
+    /// one within the system's double-click interval is dropped.
+    private func openOnce(_ open: () -> Void) {
+        let now = Date()
+        guard now.timeIntervalSince(lastOpen) > NSEvent.doubleClickInterval else { return }
+        lastOpen = now
+        open()
     }
 
     private var accentTone: TranslucentButtonStyle.Tone {
@@ -173,7 +184,16 @@ struct EntryRow: View {
     private var titleText: some View {
         Text(title)
             .font(.system(size: 13, weight: entry.isText ? .regular : .semibold))
-            .foregroundStyle(isSelected ? palette.onAccent : palette.textPrimary)
+            .foregroundStyle(titleColor)
+    }
+
+    /// On a selected row the title reads on the orange fill; otherwise the clip that is in the
+    /// clipboard right now is orange itself, like the clipboard mark beside it.
+    private var titleColor: Color {
+        if isSelected {
+            return palette.onAccent
+        }
+        return isCurrent ? palette.accentText : palette.textPrimary
     }
 
     private var subtitleText: some View {
