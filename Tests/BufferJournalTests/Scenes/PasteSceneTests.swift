@@ -13,6 +13,14 @@ struct PasteSceneTests {
         #expect(end.selectedRow == PasteScene.imageRow)
     }
 
+    /// The row turns orange the moment the first click lands, so both waves of a double click
+    /// play over orange and the scene draws them white.
+    @Test func aClickSelectsItsRowRightAway() {
+        for (clicks, row) in [(PasteScene.textDoubleClick, PasteScene.textRow), (PasteScene.imageDoubleClick, PasteScene.imageRow)] {
+            #expect(PasteScene.state(at: SceneTime(t: clicks[0] + 0.1, rewind: 0)).selectedRow == row)
+        }
+    }
+
     @Test func bothClipsGoInOnADoubleClick() {
         for clicks in [PasteScene.textDoubleClick, PasteScene.imageDoubleClick] {
             // Two clicks in a row, close enough to read as one double-click.
@@ -47,17 +55,6 @@ struct PasteSceneTests {
         let afterImage = PasteScene.state(at: SceneTime(t: 3.2, rewind: 0))
         #expect(afterImage.selectedRow == PasteScene.imageRow)
         #expect(afterImage.pastedImage == 1)
-    }
-
-    /// The first click of a double click already turns the row orange, so the second wave has to
-    /// be white to be seen at all.
-    @Test func theSecondWaveOfADoubleClickIsLight() {
-        for clicks in [PasteScene.textDoubleClick, PasteScene.imageDoubleClick] {
-            #expect(!PasteScene.state(at: SceneTime(t: clicks[0] + 0.01, rewind: 0)).isRippleLight)
-            #expect(PasteScene.state(at: SceneTime(t: clicks[1] + 0.01, rewind: 0)).isRippleLight)
-            // Once the wave is over, nothing is light any more.
-            #expect(!PasteScene.state(at: SceneTime(t: clicks[1] + 0.4, rewind: 0)).isRippleLight)
-        }
     }
 
     @Test func theJournalLeavesOnlyAfterTheSecondPaste() {

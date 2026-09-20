@@ -13,8 +13,6 @@ struct PasteScene: View {
         var ripple: ClickRipple?
         var hoveredRow: Int?
         var selectedRow: Int?
-        /// The wave of a click that lands on the row the first click has already selected.
-        var isRippleLight: Bool
         /// 1 while the journal is there, 0 once it has dissolved.
         var journal: Double
         /// 0…1 each: the text and the image appearing in the letter.
@@ -47,15 +45,6 @@ struct PasteScene: View {
     static let textDoubleClick = [1.1, 1.27]
     static let imageDoubleClick = [2.5, 2.67]
 
-    /// A double click selects the row on its first click, so the second wave would be orange on
-    /// orange. It goes white instead.
-    private static func isRippleLight(at time: SceneTime) -> Bool {
-        guard time.rewind == 0 else { return false }
-        return [textDoubleClick[1], imageDoubleClick[1]].contains {
-            time.t >= $0 && time.t < $0 + CursorTrack.rippleTime
-        }
-    }
-
     private static let cursor = CursorTrack(
         tip: Track(CGPoint(x: 230, y: 240))
             .to(rowCenter(textRow), at: 0.3, until: 0.8)
@@ -82,7 +71,6 @@ struct PasteScene: View {
             ripple: cursor.ripple(at: time),
             hoveredRow: hovered.value(at: time),
             selectedRow: selected.value(at: time),
-            isRippleLight: isRippleLight(at: time),
             journal: journal.value(at: time),
             pastedText: pastedText.value(at: time),
             pastedImage: pastedImage.value(at: time)
@@ -124,7 +112,8 @@ struct PasteScene: View {
             .frame(width: 186, height: 212)
             .offset(x: 274, y: 10)
 
-            SceneRipple(ripple: state.ripple, isLight: state.isRippleLight)
+            // Every click here lands on a row that turns orange under it, so the waves are white.
+            SceneRipple(ripple: state.ripple, isLight: true)
             SceneCursor(state: state.cursor)
         }
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
