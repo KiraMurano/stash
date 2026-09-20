@@ -425,7 +425,7 @@ git commit -m "Read the GitHub release feed and its notes"
 
 **Interfaces:**
 - Consumes: `AppVersion` (Task 1).
-- Produces: `struct UpdateEnvironment: Sendable` с полями `currentVersion: AppVersion?`, `requirement: String?`, `bundleURL: URL`, `isDestinationWritable: Bool`; вычисляемым `canSelfUpdate: Bool`; методом `isNewer(_ release: Release) -> Bool`; фабрикой `static func current(bundle: Bundle = .main) -> UpdateEnvironment` и прямым `init` для тестов.
+- Produces: `struct UpdateEnvironment: Sendable` с полями `currentVersion: AppVersion?`, `requirement: String?`, `bundleURL: URL`, `isDestinationWritable: Bool`; вычисляемым `canSelfUpdate: Bool`; методами `isNewer(_ release: Release) -> Bool` и `static func releasedVersion(_ raw: String?) -> AppVersion?`; фабрикой `static func current(bundle: Bundle = .main) -> UpdateEnvironment` и прямым `init` для тестов.
 
 - [ ] **Step 1: Написать падающий тест**
 
@@ -445,7 +445,7 @@ struct UpdateEnvironmentTests {
         writable: Bool = true
     ) -> UpdateEnvironment {
         UpdateEnvironment(
-            currentVersion: version.flatMap(AppVersion.init),
+            currentVersion: UpdateEnvironment.releasedVersion(version),
             requirement: requirement ?? self.requirement,
             bundleURL: URL(fileURLWithPath: "/Applications/Stash.app"),
             isDestinationWritable: writable
@@ -543,9 +543,16 @@ struct UpdateEnvironment: Sendable {
         return release.version > currentVersion
     }
 
+    /// The version a build reports, or nil when it is the placeholder a source build keeps.
+    /// The rule lives here, not inside `current`, so the tests can build an environment that
+    /// obeys it without going through Bundle.
+    static func releasedVersion(_ raw: String?) -> AppVersion? {
+        guard let raw, raw != placeholderVersion else { return nil }
+        return AppVersion(raw)
+    }
+
     static func current(bundle: Bundle = .main) -> UpdateEnvironment {
-        let raw = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-        let version = raw == placeholderVersion ? nil : raw.flatMap(AppVersion.init)
+        let version = releasedVersion(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
         let requirement = bundle.object(forInfoDictionaryKey: requirementKey) as? String
         let url = bundle.bundleURL
 
