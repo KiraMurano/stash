@@ -184,21 +184,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelController.showOnboarding(replay: true)
     }
 
-    /// One menu item for both jobs: with a release in hand it opens the screen, without one it
-    /// asks GitHub and opens the screen if the answer is a new version. Nothing pops up on its
-    /// own — the panel only ever comes up because the person asked for it.
+    /// The screen comes up at once, before the answer: a press has to do something visible, and
+    /// all three answers — a new version, nothing new, a check that failed — are its faces.
+    /// Nothing pops up on its own; the panel only ever comes up because the person asked for it.
     @objc private func openUpdates() {
-        guard updates.release == nil else {
-            panelController.showUpdate()
-            return
-        }
-
-        Task {
-            await updates.check(manual: true)
-            if updates.release != nil {
-                panelController.showUpdate()
-            }
-        }
+        panelController.showUpdate()
+        guard updates.release == nil else { return }
+        Task { await updates.check(manual: true) }
     }
 
     @objc private func toggleAutomaticUpdates() {

@@ -24,6 +24,16 @@ struct UpdateTextsTests {
         #expect(en.updateDownloading(1) == "Downloading… 100 %")
     }
 
+    @Test func withoutAReleaseTheLineNamesTheVersionAlone() {
+        #expect(ru.updateCurrent("1.27") == "Сейчас 1.27")
+        #expect(en.updateCurrent("1.27") == "Now 1.27")
+    }
+
+    @Test func everyAnswerToACheckHasItsOwnSentence() {
+        let answers = [ru.updateChecking, ru.updateUpToDate, ru.updateFailure(.network)]
+        #expect(Set(answers).count == 3)
+    }
+
     @Test func everyFailureHasItsOwnSentence() {
         #expect(ru.updateFailure(.network) != ru.updateFailure(.notWritable))
         #expect(ru.updateFailure(.signature("x")) != ru.updateFailure(.install("x")))

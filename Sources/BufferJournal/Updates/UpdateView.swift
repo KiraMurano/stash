@@ -24,6 +24,8 @@ struct UpdateView: View {
         static let buttonHeight: CGFloat = 36
         static let progressWidth: CGFloat = 220
         static let textSize: CGFloat = 13
+        /// The lone answer on the field carries the screen, so it is larger than body text.
+        static let answerSize: CGFloat = 17
         static let notesPadding: CGFloat = 18
         static let notesSpacing: CGFloat = 8
         /// The marker's column and the 12×3 bar inside it (concept round 3, variant 1.2.1.2).
@@ -52,8 +54,16 @@ struct UpdateView: View {
 
             VStack(spacing: 0) {
                 head
-                card
-                    .padding(.top, Metrics.gap)
+                // The card is there to hold the release notes. Without them — while the check
+                // runs, when there is nothing new, when the check failed — it would be a large
+                // empty box around one line, so the answer stands on the field instead.
+                if controller.release != nil {
+                    card
+                        .padding(.top, Metrics.gap)
+                } else {
+                    answer
+                        .padding(.top, Metrics.gap)
+                }
                 footer
                     .padding(.top, Metrics.gap)
             }
@@ -81,7 +91,9 @@ struct UpdateView: View {
 
     private var lockup: some View {
         let capHeight = NSFont.systemFont(ofSize: Metrics.titleSize, weight: .semibold).capHeight
-        let version = controller.release.map { " \($0.version)" } ?? ""
+        // Without a release the head names the version that is installed.
+        let shown = controller.release?.version ?? controller.currentVersion
+        let version = shown.map { " \($0)" } ?? ""
 
         return HStack(spacing: 2) {
             Image(nsImage: NSApplication.shared.applicationIconImage)
@@ -123,6 +135,25 @@ struct UpdateView: View {
             .shadow(color: colors.cardShadow, radius: 16, y: 6)
             .overlay(notes.clipShape(shape))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The answer to a check that brought no release: "checking", "nothing new" or what failed.
+    private var answer: some View {
+        Text(message)
+            .font(.system(size: Metrics.answerSize))
+            .foregroundStyle(palette.textPrimary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Metrics.side)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var message: String {
+        switch controller.state {
+        case .checking: l10n.updateChecking
+        case .failed(let error): l10n.updateFailure(error)
+        default: l10n.updateUpToDate
+        }
     }
 
     private var notes: some View {
@@ -188,26 +219,18 @@ struct UpdateView: View {
         }
     }
 
-    @ViewBuilder
     private var meta: some View {
-        switch controller.state {
-        case .failed(let error):
-            Text(l10n.updateFailure(error))
-                .font(.system(size: Metrics.textSize))
-                .foregroundStyle(ThemePalette.solidDestructive)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        default:
-            Text(current)
-                .font(.system(size: Metrics.textSize))
-                .foregroundStyle(palette.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        Text(current)
+            .font(.system(size: Metrics.textSize))
+            .foregroundStyle(palette.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Only a release has a size and a version to compare against; without one the head already
+    /// names the installed version, and repeating it in the footer says nothing.
     private var current: String {
-        guard let version = controller.currentVersion else { return "" }
-        return l10n.updateCurrent(version.description, bytes: controller.release?.size ?? 0)
+        guard let version = controller.currentVersion, let release = controller.release else { return "" }
+        return l10n.updateCurrent(version.description, bytes: release.size)
     }
 
     @ViewBuilder
@@ -219,7 +242,7 @@ struct UpdateView: View {
             bar(l10n.updateInstalling, fill: 1)
         case .failed:
             primary(l10n.updateOpenReleases) { controller.openReleasesPage() }
-        default:
+        case .available:
             Button(l10n.updateLater) { controller.close() }
                 .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
                 .font(.system(size: Metrics.textSize, weight: .semibold))
@@ -227,6 +250,9 @@ struct UpdateView: View {
                 .frame(height: Metrics.buttonHeight)
 
             primary(l10n.updateNow) { controller.install() }
+        default:
+            // Checking, and nothing new: there is nothing to do but close the screen.
+            primary(l10n.updateClose) { controller.close() }
         }
     }
 

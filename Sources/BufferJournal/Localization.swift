@@ -81,12 +81,20 @@ struct L10n {
         self("Now \(version) · \(megabytes(bytes))", "Сейчас \(version) · \(megabytes(bytes))")
     }
 
+    /// Without a release there is nothing to weigh, so the line names the version alone.
+    func updateCurrent(_ version: String) -> String {
+        self("Now \(version)", "Сейчас \(version)")
+    }
+
     func updateDownloading(_ fraction: Double) -> String {
         let percent = Int((min(max(fraction, 0), 1) * 100).rounded())
         return self("Downloading… \(percent) %", "Загрузка… \(percent) %")
     }
 
     var updateInstalling: String { self("Installing…", "Установка…") }
+    var updateChecking: String { self("Checking for updates…", "Проверяем обновления…") }
+    var updateUpToDate: String { self("You have the newest version.", "У вас последняя версия.") }
+    var updateClose: String { self("Close", "Закрыть") }
     var updateNow: String { self("Update and Relaunch", "Обновить и перезапустить") }
     var updateLater: String { self("Later", "Позже") }
     var updateOpenReleases: String { self("Open the Releases Page", "Открыть страницу релизов") }

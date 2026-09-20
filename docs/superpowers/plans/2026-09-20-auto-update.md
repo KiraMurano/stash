@@ -2052,7 +2052,8 @@ git commit -m "Drive the update from check to relaunch"
 **Interfaces:**
 - Consumes: `UpdateController` (Task 8), `ReleaseNotes` (Task 2), `OnboardingColors`, `OnboardingPrimaryButtonStyle`, `OnboardingCloseButtonStyle` (уже есть), `ThemePalette`, `WindowDragHandle`.
 - Produces:
-  - В `L10n`: `func megabytes(_ bytes: Int64) -> String`, `func updateCurrent(_ version: String, bytes: Int64) -> String`, `func updateDownloading(_ fraction: Double) -> String`, `var updateInstalling: String`, `var updateNow: String`, `var updateLater: String`, `var updateOpenReleases: String`, `func updateFailure(_ error: UpdateError) -> String`.
+  - В `L10n`: `func megabytes(_ bytes: Int64) -> String`, `func updateCurrent(_ version: String, bytes: Int64) -> String` и `func updateCurrent(_ version: String) -> String`, `func updateDownloading(_ fraction: Double) -> String`, `var updateInstalling: String`, `var updateChecking: String`, `var updateUpToDate: String`, `var updateClose: String`, `var updateNow: String`, `var updateLater: String`, `var updateOpenReleases: String`, `func updateFailure(_ error: UpdateError) -> String`.
+  - Экран живёт в трёх видах: с найденным релизом — карточка с заметками и кнопки «Позже» / «Обновить и перезапустить»; без релиза — ответ проверки посреди поля (17 pt) и одна кнопка «Закрыть» либо «Открыть страницу релизов». Карточки без заметок нет: вокруг одной строки она была бы пустой коробкой.
   - В `StatusMenuTitles`: `var checkForUpdates: String`, `var checkingForUpdates: String`, `func updateTo(_ version: String) -> String`, `var updateAutomatically: String`.
   - `struct UpdateView: View` с `init(controller: UpdateController, l10n: L10n, scrolls: Bool = true)`.
 

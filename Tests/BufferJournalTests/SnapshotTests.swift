@@ -112,7 +112,7 @@ extension SnapshotTests {
     }
 
     /// Контроллер обновления в нужном состоянии, без сети и без установки.
-    private func updateController(_ state: UpdateController.State) -> UpdateController {
+    private func updateController(_ state: UpdateController.State, withRelease: Bool = true) -> UpdateController {
         struct Checker: UpdateChecking {
             func latestRelease() async throws -> Release? { nil }
         }
@@ -149,23 +149,27 @@ extension SnapshotTests {
             isReady: { true },
             install: { _ in },
             quit: {},
-            release: release,
+            release: withRelease ? release : nil,
             state: state
         )
     }
 
     @Test func theUpdateScreenRenders() throws {
-        let states: [(UpdateController.State, String)] = [
-            (.available, "available"),
-            (.downloading(0.4), "downloading"),
-            (.installing, "installing"),
-            (.failed(.signature("x")), "failed"),
+        let states: [(UpdateController.State, String, Bool)] = [
+            (.available, "available", true),
+            (.downloading(0.4), "downloading", true),
+            (.installing, "installing", true),
+            (.failed(.signature("x")), "failed", true),
+            // Без релиза: ответы ручной проверки, ради которых экран и открывается сразу.
+            (.checking, "checking", false),
+            (.upToDate, "up-to-date", false),
+            (.failed(.network), "failed-network", false),
         ]
 
-        for (state, name) in states {
+        for (state, name, withRelease) in states {
             for (scheme, schemeName) in Self.schemes {
                 for size in Self.sizes {
-                    let view = UpdateView(controller: updateController(state), l10n: L10n(language: .russian), scrolls: false)
+                    let view = UpdateView(controller: updateController(state, withRelease: withRelease), l10n: L10n(language: .russian), scrolls: false)
                         .frame(width: size.width, height: size.height)
                         .environment(\.colorScheme, scheme)
                     try render(view, name: "update-\(name)-\(schemeName)-\(Int(size.width))")
