@@ -35,7 +35,9 @@ HASH="$(security find-certificate -c "$IDENTITY" -Z 2>/dev/null | awk '/SHA-1 ha
 
 if [[ -n "$HASH" ]]; then
     REQUIREMENT="identifier \"local.buffer-journal\" and certificate leaf H\"$HASH\""
-    /usr/libexec/PlistBuddy -c "Add :StashUpdateRequirement string $REQUIREMENT" "$CONTENTS_DIR/Info.plist"
+    # plutil, not PlistBuddy: PlistBuddy parses its own command line and eats the quotes around
+    # the identifier, leaving a requirement codesign cannot read.
+    plutil -replace StashUpdateRequirement -string "$REQUIREMENT" "$CONTENTS_DIR/Info.plist"
     codesign --force --deep --sign "$IDENTITY" "$APP_DIR"
 else
     echo "warning: no '$IDENTITY' certificate in the keychain; signing ad hoc." >&2
