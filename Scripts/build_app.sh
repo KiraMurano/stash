@@ -24,5 +24,22 @@ if [[ -n "$VERSION" ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION#*.}" "$CONTENTS_DIR/Info.plist"
 fi
 
-codesign --force --deep --sign - "$APP_DIR"
+# Stash is signed with a self-signed certificate, not a Developer ID. Gatekeeper still knows
+# nothing about it, but the requirement below stays the same from build to build — so updates can
+# be verified, and macOS keeps the Accessibility permission across them instead of treating every
+# build as a new app.
+IDENTITY="${STASH_SIGNING_IDENTITY:-Stash Updates}"
+# `|| true`: without the certificate `security` fails, and under `set -euo pipefail` that would
+# end the build instead of falling back to an ad hoc signature.
+HASH="$(security find-certificate -c "$IDENTITY" -Z 2>/dev/null | awk '/SHA-1 hash:/ { print $3 }' | head -1 || true)"
+
+if [[ -n "$HASH" ]]; then
+    REQUIREMENT="identifier \"local.buffer-journal\" and certificate leaf H\"$HASH\""
+    /usr/libexec/PlistBuddy -c "Add :StashUpdateRequirement string $REQUIREMENT" "$CONTENTS_DIR/Info.plist"
+    codesign --force --deep --sign "$IDENTITY" "$APP_DIR"
+else
+    echo "warning: no '$IDENTITY' certificate in the keychain; signing ad hoc." >&2
+    echo "warning: this build will not offer updates. See README, \"Signing\"." >&2
+    codesign --force --deep --sign - "$APP_DIR"
+fi
 echo "$APP_DIR"

@@ -18,4 +18,14 @@ fi
 
 rm -f "$DMG"
 "$VENV/bin/dmgbuild" -s "$ROOT_DIR/Scripts/dmg_settings.py" -D root="$ROOT_DIR" "Stash $VERSION" "$DMG" >/dev/null
+
+# The image carries the app's identifier on purpose, so one requirement checks both the image and
+# the bundle inside it.
+IDENTITY="${STASH_SIGNING_IDENTITY:-Stash Updates}"
+if security find-certificate -c "$IDENTITY" >/dev/null 2>&1; then
+    codesign --force --sign "$IDENTITY" --identifier local.buffer-journal "$DMG"
+else
+    codesign --force --sign - --identifier local.buffer-journal "$DMG"
+fi
+
 echo "$DMG"

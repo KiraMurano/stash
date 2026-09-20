@@ -3026,7 +3026,9 @@ Expected: строка вида `SHA-1 hash: 3A7F…`. Пусто — серти
 # be verified, and macOS keeps the Accessibility permission across them instead of treating every
 # build as a new app.
 IDENTITY="${STASH_SIGNING_IDENTITY:-Stash Updates}"
-HASH="$(security find-certificate -c "$IDENTITY" -Z 2>/dev/null | awk '/SHA-1 hash:/ { print $3 }' | head -1)"
+# `|| true`: without the certificate `security` fails, and under `set -euo pipefail` that would
+# end the build instead of falling back to an ad hoc signature.
+HASH="$(security find-certificate -c "$IDENTITY" -Z 2>/dev/null | awk '/SHA-1 hash:/ { print $3 }' | head -1 || true)"
 
 if [[ -n "$HASH" ]]; then
     REQUIREMENT="identifier \"local.buffer-journal\" and certificate leaf H\"$HASH\""
