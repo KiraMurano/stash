@@ -15,7 +15,13 @@ Stash is a minimal macOS clipboard history app inspired by Windows clipboard jou
 
 ## Install
 
-Download `Stash-<version>.dmg` from [Releases](https://github.com/KiraMurano/stash/releases), open it and drag `Stash.app` onto the Applications folder. The app is not notarized, so macOS blocks the first launch: click Done, then open System Settings → Privacy & Security, scroll down and click Open Anyway next to Stash. Or run `xattr -dr com.apple.quarantine /Applications/Stash.app`. Stash needs Accessibility access to paste (System Settings → Privacy & Security → Accessibility); until it has it, the panel shows the tour's access slide on its own, with a button that opens those settings. The app is signed ad hoc, so macOS treats every update as a new app: if that slide stays although Stash is switched on, remove Stash from the list with − and click Open Settings again.
+Download `Stash-<version>.dmg` from [Releases](https://github.com/KiraMurano/stash/releases), open it and drag `Stash.app` onto the Applications folder. The app is not notarized, so macOS blocks the first launch: click Done, then open System Settings → Privacy & Security, scroll down and click Open Anyway next to Stash. Or run `xattr -dr com.apple.quarantine /Applications/Stash.app`. Stash needs Accessibility access to paste (System Settings → Privacy & Security → Accessibility); until it has it, the panel shows the tour's access slide on its own, with a button that opens those settings. Stash is signed with a self-signed certificate, so its identity stays the same from release to release and the Accessibility permission survives an update. The one exception is the release that introduced updating: the signature changed with it, so that permission has to be granted once more — remove the old Stash entry from the list with − and click Open Settings again.
+
+## Updates
+
+Stash checks GitHub for a new release ten seconds after it has settled — on the very first launch that means after the tour and after Accessibility access is granted — and once a day after that. A new version lights an orange dot on the menu bar icon and turns `Check for Updates…` into `Update to 1.27`; nothing pops up over what you are typing. The menu item opens a screen inside the panel with the release notes and a button that downloads the image, checks its signature, replaces the app and relaunches it. `Check for Updates Automatically` in the same menu turns the daily check off; the menu item still works by hand.
+
+A build made from source carries no release signature, so it offers no updates and both menu items are hidden.
 
 ## Build
 
@@ -31,13 +37,23 @@ The app bundle is created at:
 
 The build is universal (Apple silicon and Intel).
 
+### Signing
+
+Releases are signed with a self-signed certificate named `Stash Updates`, not with an Apple Developer ID. It is free, and it is what keeps the app's identity — and with it the Accessibility permission — the same from build to build. Create it once in Keychain Access → Certificate Assistant → Create a Certificate: name `Stash Updates`, identity type Self Signed Root, certificate type Code Signing.
+
+`Scripts/build_app.sh` signs with it, writes the matching requirement into the bundle as `StashUpdateRequirement`, and the updater checks every download against that requirement. Without the certificate the script warns and signs ad hoc, as before; such a build runs but offers no updates. Another name can be given with `STASH_SIGNING_IDENTITY`.
+
+The app is still not notarized, so a DMG downloaded by hand is still blocked on first launch — the Install section says what to do about it.
+
 ## Versioning
 
-Versions are `MAJOR.MINOR`. `MAJOR` is set by hand in the `VERSION` file. `MINOR` is a running release counter: every release takes the next number and it is not reset when `MAJOR` changes (0.25 → 1.26). To publish a release:
+Versions are `MAJOR.MINOR`. `MAJOR` is set by hand in the `VERSION` file. `MINOR` is a running release counter: every release takes the next number and it is not reset when `MAJOR` changes (0.25 → 1.26). Write the release notes first — they are shown inside the app, so they are sentences for a person, not a list of commits — then publish:
 
 ```bash
-Scripts/release.sh
+Scripts/release.sh docs/releases/v1.27.md
 ```
+
+The notes file is required. `release.sh` copies it into `docs/releases/`, commits it, tags the release and uploads the DMG.
 
 ## Run
 
