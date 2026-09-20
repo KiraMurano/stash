@@ -36,8 +36,8 @@ enum OnboardingSlides {
         kind: .access, duration: 3.0, loops: true,
         word: Localized(en: "ACCESS", ru: "ДОСТУП"),
         text: Localized(
-            en: "Stash pastes by pressing ⌘V for you. macOS won't allow it without Accessibility access.",
-            ru: "Stash вставляет клип, нажимая ⌘V за вас. Без Универсального доступа macOS этого не разрешит."
+            en: "Stash pastes a clip by simulating a ⌘V key press. macOS won't allow that without Accessibility access.",
+            ru: "Stash вставляет клип, имитируя нажатия кнопок ⌘V. Без Универсального доступа macOS этого не разрешит."
         )
     )
 

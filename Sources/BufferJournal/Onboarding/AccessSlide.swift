@@ -10,8 +10,8 @@ enum AccessSlide {
 
     static func line(_ l10n: L10n) -> String {
         l10n(
-            "Stash pastes by pressing ⌘V for you. macOS won't allow it without Accessibility access.",
-            "Stash вставляет клип, нажимая ⌘V за вас. Без Универсального доступа macOS этого не разрешит."
+            "Stash pastes a clip by simulating a ⌘V key press. macOS won't allow that without Accessibility access.",
+            "Stash вставляет клип, имитируя нажатия кнопок ⌘V. Без Универсального доступа macOS этого не разрешит."
         )
     }
 
