@@ -936,9 +936,12 @@ private struct DeleteConfirmationOverlay: View {
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
+    /// The mark's plate. Fixed, not measured from the text: a plate that grew with a
+    /// two-line message made the same dialog look like two different ones.
+    private static let markSize: CGFloat = 40
+
     @State private var isConfirmHovered = false
     @State private var isCancelHovered = false
-    @State private var textBlockHeight: CGFloat = 40
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.solidAccents) private var solidAccents
     @Environment(\.l10n) private var l10n
@@ -949,11 +952,11 @@ private struct DeleteConfirmationOverlay: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                // Square plate as tall as the text block (title + message), measured from the text.
+            // Centred: the mark sits at the middle of the text's height, however many lines it runs to.
+            HStack(alignment: .center, spacing: 12) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color.red.opacity(palette.isDark ? 0.18 : 0.10))
-                    .frame(width: textBlockHeight, height: textBlockHeight)
+                    .frame(width: Self.markSize, height: Self.markSize)
                     .overlay {
                         Image(systemName: "trash")
                             .font(.system(size: 20, weight: .semibold))
@@ -971,13 +974,6 @@ private struct DeleteConfirmationOverlay: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear { textBlockHeight = geometry.size.height }
-                            .onChange(of: geometry.size.height) { textBlockHeight = $0 }
-                    }
-                )
             }
 
             HStack(spacing: 8) {
