@@ -64,11 +64,36 @@ struct AccessoryWindowTests {
         let beforeTheList = window.contentSize.height
 
         await controller.check(manual: true)
-        // Пересчёт высоты отложен через Task: дать циклу сойтись.
-        try await Task.sleep(nanoseconds: 300_000_000)
+        window.fitToContent()
 
         #expect(beforeTheList < cap)
         #expect(window.contentSize.height == cap)
+    }
+
+    /// Случай, который дольше всего был сломан: список длиннее окна, но короче экрана. Высоту
+    /// такого списка видно, только если мерить на заданной ширине — иначе каждый абзац считается
+    /// в одну строку, и окно выходит вдвое ниже нужного.
+    @Test func aListThatWrapsIsMeasuredWithItsWrapping() async throws {
+        let screen = try #require(NSScreen.main)
+        let cap = AccessoryWindow<EmptyView>.heightCap(visibleFrame: screen.visibleFrame)
+        let controller = updateController(notes: Self.wrappingNotes)
+        await controller.check(manual: true)
+
+        let window = AccessoryWindow(
+            placement: .center,
+            sizing: .fitsContent(width: 400),
+            cornerRadius: 20,
+            rootView: UpdateView(controller: controller, l10n: L10n(language: .russian), onClose: {})
+        )
+
+        // Сколько вышло бы, посчитай мы каждый блок в одну строку, — ровно та ошибка, из-за
+        // которой окно было вдвое ниже нужного. Шапка, футер, поля и два шага дают 112;
+        // строка 13 pt при межстрочном 1,4 — 18, отбивка между блоками — 8.
+        let blocks = CGFloat(ReleaseNotes.parse(Self.wrappingNotes).count)
+        let ifNothingWrapped = 112 + blocks * 18 + (blocks - 1) * 8
+
+        #expect(window.contentSize.height > ifNothingWrapped)
+        #expect(window.contentSize.height < cap)
     }
 
     /// Короткий список прокручиваться не должен вовсе: окно ровно под него и подстраивается.
@@ -104,6 +129,20 @@ struct AccessoryWindowTests {
     }
 
     // MARK: Заглушки
+
+    /// Настоящие заметки первого релиза Stash: семь блоков, почти каждый в две строки на 400 pt.
+    private static let wrappingNotes = """
+        First public release of Stash — a minimal clipboard history for macOS.
+
+        - `Option+V` opens the journal: clips on the left, the selected clip in full on the right
+        - Text and images, search, keyboard navigation, paste on selection
+        - Keeps up to 20 clips for 24 hours, stored locally
+        - English and Russian interface, light and dark themes
+        - Universal build (Apple silicon and Intel), macOS 13+
+
+        **Install:** open the DMG and drag Stash.app onto Applications. The app is not notarized, \
+        so macOS blocks the first launch: click Done, then open System Settings.
+        """
 
     private static let longNotes = (1...40)
         .map { "- Пункт номер \($0), достаточно длинный, чтобы занять строку целиком и перенестись." }

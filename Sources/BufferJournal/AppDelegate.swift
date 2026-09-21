@@ -311,6 +311,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The menu item says what the updater is doing, and the dot follows the controller.
     private func updateStateChanged() {
+        // The screen changes shape with the state — notes appear, the buttons give way to a line
+        // of words — so the window is asked to fit itself again.
+        updateWindow?.fitToContent()
         badge?.isVisible = updates.isBadgeVisible
         let titles = StatusMenuTitles(l10n: settings.l10n)
 

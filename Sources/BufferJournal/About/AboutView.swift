@@ -40,9 +40,17 @@ struct AboutView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            colors.field
+        // The field is a background, not a layer under the content: a Color in a ZStack takes
+        // whatever height it is offered, and the window asks its content how tall it wants to be.
+        content
+            .background(colors.field)
+            .environment(\.solidAccents, true)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(l10n("About Stash", "О приложении Stash"))
+            .accessibilityAddTraits(.isModal)
+    }
 
+    private var content: some View {
             // Insets belong to each piece, as on the update screen: the window itself holds none.
             VStack(spacing: Metrics.gap) {
                 head
@@ -56,11 +64,7 @@ struct AboutView: View {
                     .padding(.horizontal, Metrics.side)
                     .padding(.bottom, Metrics.bottom)
             }
-        }
-        .environment(\.solidAccents, true)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(l10n("About Stash", "О приложении Stash"))
-        .accessibilityAddTraits(.isModal)
+            .frame(maxWidth: .infinity)
     }
 
     // MARK: Head
@@ -108,7 +112,9 @@ struct AboutView: View {
 
             Wordmark(size: Metrics.wordmarkSize, color: palette.textPrimary)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Room around the wordmark, in place of the height it used to take by stretching.
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Footer

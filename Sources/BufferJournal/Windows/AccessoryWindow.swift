@@ -31,10 +31,10 @@ final class AccessoryWindow<Content: View> {
 
     private let placement: Placement
     private let sizing: Sizing
+    private let rootView: Content
     private let closesOnOutsideClick: () -> Bool
     private let panel: NSPanel
     private let hostingView: FirstMouseHostingView<Content>
-    private var heightCapConstraint: NSLayoutConstraint?
     private var outsideClickMonitor: Any?
 
     var isVisible: Bool { panel.isVisible }
@@ -51,13 +51,10 @@ final class AccessoryWindow<Content: View> {
     ) {
         self.placement = placement
         self.sizing = sizing
+        self.rootView = rootView
         self.closesOnOutsideClick = closesOnOutsideClick
 
         hostingView = FirstMouseHostingView(rootView: rootView)
-        hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = cornerRadius
-        hostingView.layer?.cornerCurve = .continuous
-        hostingView.layer?.masksToBounds = true
 
         let initialSize: NSSize
         switch sizing {
@@ -74,7 +71,20 @@ final class AccessoryWindow<Content: View> {
             backing: .buffered,
             defer: false
         )
-        panel.contentView = hostingView
+        // The hosting view goes inside a plain container rather than straight into the window.
+        // As the window's own content view it hands the window its constraints, and the window
+        // then snaps back to SwiftUI's ideal height — one line per paragraph — a moment after
+        // the real height is set. Held by an autoresizing mask, it has no say in the size.
+        let container = NSView(frame: NSRect(origin: .zero, size: initialSize))
+        container.wantsLayer = true
+        container.layer?.cornerRadius = cornerRadius
+        container.layer?.cornerCurve = .continuous
+        container.layer?.masksToBounds = true
+        hostingView.translatesAutoresizingMaskIntoConstraints = true
+        hostingView.frame = container.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        container.addSubview(hostingView)
+        panel.contentView = container
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
@@ -91,35 +101,36 @@ final class AccessoryWindow<Content: View> {
         panel.canHide = false
 
         if case .fitsContent(let width) = sizing {
-            // `sizingOptions` makes the view report the height SwiftUI wants; it does not pass
-            // that height to the window, so the window is resized by hand below.
-            hostingView.sizingOptions = [.intrinsicContentSize]
-            hostingView.widthAnchor.constraint(equalToConstant: width).isActive = true
-            // The cap belongs on the view as well as on the window: it is what makes the notes
-            // inside compress and their ScrollView start scrolling.
-            let cap = hostingView.heightAnchor.constraint(lessThanOrEqualToConstant: 10_000)
-            cap.isActive = true
-            heightCapConstraint = cap
-
-            // The list grows and shrinks as the screen changes state, and so does the window.
-            // Coalesced through the run loop: this fires from inside layout.
-            hostingView.onIntrinsicSizeChange = { [weak self] in
-                Task { @MainActor in self?.resizeToFitContent() }
-            }
-
-            resizeToFitContent()
+            // No `sizingOptions`: an intrinsic size would have Auto Layout resize the window to
+            // SwiftUI's ideal height a moment after the line below sets the real one, and the
+            // ideal height of a paragraph is one line. The window's size is set here and nowhere
+            // else; the view simply fills it.
+            fitToContent()
         }
+    }
+
+    /// Ask the content how tall it wants to be and give it that, up to the screen's height.
+    /// Call it whenever what the window shows has changed.
+    func fitToContent() {
+        resizeToFitContent()
     }
 
     /// The window takes the height its content asks for, up to the screen's. It grows downward:
     /// the top edge belongs to the menu bar, so the origin is reapplied after every change.
+    ///
+    /// The width is *proposed*, not constrained: a constraint leaves SwiftUI measuring its ideal
+    /// size, and a line of text is ideally one line however long it is. Measured that way a list
+    /// that wraps came out barely half its real height.
     private func resizeToFitContent() {
         guard case .fitsContent(let width) = sizing else { return }
-        heightCapConstraint?.constant = currentCap
-        panel.layoutIfNeeded()
+        let cap = currentCap
 
-        let height = min(hostingView.fittingSize.height, currentCap)
-        guard height > 0 else { return }
+        let measured = NSHostingController(rootView: rootView)
+            .sizeThatFits(in: NSSize(width: width, height: CGFloat.greatestFiniteMagnitude))
+            .height
+        guard measured > 0, measured.isFinite else { return }
+
+        let height = min(measured, cap)
         if abs(height - panel.frame.height) > 0.5 {
             panel.setContentSize(NSSize(width: width, height: height))
         }
@@ -132,9 +143,7 @@ final class AccessoryWindow<Content: View> {
     }
 
     func show() {
-        if case .fitsContent = sizing {
-            resizeToFitContent()
-        }
+        resizeToFitContent()
         applyPlacement()
         panel.alphaValue = 0
         // Never key: typing stays with the app under the window.
@@ -223,15 +232,7 @@ private final class NeverKeyPanel: NSPanel {
 }
 
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
-    /// Called whenever SwiftUI decides the content wants a different size.
-    var onIntrinsicSizeChange: (() -> Void)?
-
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
-    }
-
-    override func invalidateIntrinsicContentSize() {
-        super.invalidateIntrinsicContentSize()
-        onIntrinsicSizeChange?()
     }
 }

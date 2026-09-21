@@ -55,9 +55,17 @@ struct UpdateView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            colors.field
+        // The field is a background, not a layer under the content: a Color in a ZStack takes
+        // whatever height it is offered, and the window asks its content how tall it wants to be.
+        content
+            .background(colors.field)
+            .environment(\.solidAccents, true)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(l10n("Stash update", "Обновление Stash"))
+            .accessibilityAddTraits(.isModal)
+    }
 
+    private var content: some View {
             // Every piece carries its own insets. A window-wide inset would have to be undone
             // by whatever runs edge to edge — the list and the download line — and a negative
             // inset clips the shadows and the scroller of what it is undone for.
@@ -83,11 +91,7 @@ struct UpdateView: View {
                     .padding(.horizontal, Metrics.side)
                     .padding(.bottom, Metrics.bottom)
             }
-        }
-        .environment(\.solidAccents, true)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(l10n("Stash update", "Обновление Stash"))
-        .accessibilityAddTraits(.isModal)
+            .frame(maxWidth: .infinity)
     }
 
     // MARK: Head
@@ -137,7 +141,9 @@ struct UpdateView: View {
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, Metrics.side)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Room around the one line, in place of the height it used to take by stretching.
+            .padding(.vertical, 28)
+            .frame(maxWidth: .infinity)
     }
 
     private var message: String {
@@ -178,15 +184,23 @@ struct UpdateView: View {
         .animation(.easeOut(duration: 0.15), value: notesEdges)
     }
 
+    /// The list scrolls only when the window has run out of screen to grow into. Asked for its
+    /// own height, `ViewThatFits` answers with the first of the two — the plain list — so the
+    /// window is sized to the whole list; once the window is capped, the proposal no longer fits
+    /// it and the scrolling one takes over.
     @ViewBuilder
     private func scrollIfNeeded<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         if scrolls {
-            ScrollView {
-                content().background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
+            ViewThatFits(in: .vertical) {
+                content()
+
+                ScrollView {
+                    content().background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
+                }
+                .background(ScrollOffsetObserver { notesEdges = $0 })
             }
-            .background(ScrollOffsetObserver { notesEdges = $0 })
         } else {
-            content().frame(maxHeight: .infinity, alignment: .top)
+            content()
         }
     }
 
@@ -255,21 +269,24 @@ struct UpdateView: View {
 
     // MARK: Footer
 
+    /// While something is happening the footer is one line of words; otherwise it is the
+    /// actions, and they share the whole width of the window between them. "Now 1.26 · 4.2 MB"
+    /// used to stand on the left and broke into three lines at 400 pt; the head already names the
+    /// version, and the weight of the image said nothing anyone acts on
+    /// (concept round 2, variant 1.1.1).
+    @ViewBuilder
     private var footer: some View {
-        HStack(alignment: .center, spacing: 16) {
-            // The left of the footer is used only while something is happening. "Now 1.26 ·
-            // 4.2 MB" used to stand here and broke into three lines at 400 pt; the head already
-            // names the version, and the weight of the image said nothing anyone acts on
-            // (concept round 2, variant 1.1.1).
-            if let status = statusLine {
-                Text(status)
-                    .font(.system(size: Metrics.textSize))
-                    .foregroundStyle(palette.textSecondary)
+        if let status = statusLine {
+            Text(status)
+                .font(.system(size: Metrics.textSize))
+                .foregroundStyle(palette.textSecondary)
+                .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight, alignment: .leading)
+        } else {
+            HStack(spacing: 12) {
+                actions
             }
-            Spacer(minLength: 0)
-            actions
+            .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
         }
-        .frame(minHeight: Metrics.buttonHeight)
     }
 
     private var statusLine: String? {
@@ -289,14 +306,11 @@ struct UpdateView: View {
         case .failed:
             primary(l10n.updateOpenReleases) { controller.openReleasesPage() }
         case .available:
-            // The style paints its hover tint straight behind the label, so the padding and the
-            // height belong to the label. Outside the style they push the button around and leave
-            // the tint clinging to the word.
+            // The style paints its hover tint straight behind the label, so the height belongs to
+            // the label. Outside the style it pushes the button around and leaves the tint
+            // clinging to the word.
             Button(action: onClose) {
-                Text(l10n.updateLater)
-                    .font(.system(size: Metrics.textSize, weight: .semibold))
-                    .padding(.horizontal, 16)
-                    .frame(minWidth: 100, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
+                label(l10n.updateLater)
             }
             .buttonStyle(TranslucentButtonStyle(tone: .neutral, cornerRadius: OnboardingPrimaryButtonStyle.cornerRadius))
 
@@ -309,11 +323,18 @@ struct UpdateView: View {
 
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: Metrics.textSize, weight: .semibold))
-                .padding(.horizontal, 16)
-                .frame(minWidth: 150, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
+            label(title)
         }
         .buttonStyle(OnboardingPrimaryButtonStyle(colors: colors))
+    }
+
+    /// Every button in the footer takes an equal share of the window's width.
+    private func label(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: Metrics.textSize, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
     }
 }
