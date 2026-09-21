@@ -100,7 +100,7 @@ final class AccessoryWindow<Content: View> {
         panel.allowsToolTipsWhenApplicationIsInactive = true
         panel.canHide = false
 
-        if case .fitsContent(let width) = sizing {
+        if case .fitsContent = sizing {
             // No `sizingOptions`: an intrinsic size would have Auto Layout resize the window to
             // SwiftUI's ideal height a moment after the line below sets the real one, and the
             // ideal height of a paragraph is one line. The window's size is set here and nowhere
