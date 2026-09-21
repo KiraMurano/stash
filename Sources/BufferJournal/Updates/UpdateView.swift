@@ -243,11 +243,18 @@ struct UpdateView: View {
         case .failed:
             primary(l10n.updateOpenReleases) { controller.openReleasesPage() }
         case .available:
-            Button(l10n.updateLater) { controller.close() }
-                .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
-                .font(.system(size: Metrics.textSize, weight: .semibold))
-                .padding(.horizontal, 12)
-                .frame(height: Metrics.buttonHeight)
+            // The style paints its hover tint straight behind the label, so the padding and the
+            // height belong to the label. Outside the style they push the button around and leave
+            // the tint clinging to the word.
+            Button {
+                controller.close()
+            } label: {
+                Text(l10n.updateLater)
+                    .font(.system(size: Metrics.textSize, weight: .semibold))
+                    .padding(.horizontal, 12)
+                    .frame(height: Metrics.buttonHeight)
+            }
+            .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
 
             primary(l10n.updateNow) { controller.install() }
         default:
