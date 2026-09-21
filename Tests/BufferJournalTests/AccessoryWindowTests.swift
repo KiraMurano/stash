@@ -18,4 +18,45 @@ struct AccessoryWindowTests {
         let tiny = NSRect(x: 0, y: 0, width: 800, height: 40)
         #expect(AccessoryWindow<EmptyView>.heightCap(visibleFrame: tiny) == 120)
     }
+
+    /// Ради чего всё: окно обновления подгоняется под длину списка. Ширина задана,
+    /// высоту называет содержимое, и окно обязано её взять.
+    @Test func aWindowThatGrowsWithItsContentTakesItsHeight() {
+        let window = AccessoryWindow(
+            placement: .center,
+            sizing: .fitsContent(width: 400),
+            cornerRadius: 20,
+            rootView: Color.clear.frame(width: 400, height: 321)
+        )
+
+        #expect(window.contentSize == NSSize(width: 400, height: 321))
+    }
+
+    /// Длинный список не выталкивает окно за край экрана: высота упирается в потолок,
+    /// а прокручивается то, что внутри.
+    @Test func aWindowThatGrowsStopsAtTheCap() throws {
+        let screen = try #require(NSScreen.main)
+        let cap = AccessoryWindow<EmptyView>.heightCap(visibleFrame: screen.visibleFrame)
+
+        let window = AccessoryWindow(
+            placement: .center,
+            sizing: .fitsContent(width: 400),
+            cornerRadius: 20,
+            rootView: Color.clear.frame(width: 400, height: cap + 2000)
+        )
+
+        #expect(window.contentSize.height == cap)
+    }
+
+    /// Окно с заданным размером берёт его как есть.
+    @Test func aFixedWindowKeepsTheSizeItWasGiven() {
+        let window = AccessoryWindow(
+            placement: .center,
+            sizing: .fixed(NSSize(width: 640, height: 440)),
+            cornerRadius: 24,
+            rootView: Color.clear
+        )
+
+        #expect(window.contentSize == NSSize(width: 640, height: 440))
+    }
 }

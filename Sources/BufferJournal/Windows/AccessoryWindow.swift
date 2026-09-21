@@ -33,14 +33,14 @@ final class AccessoryWindow<Content: View> {
     private let sizing: Sizing
     private let closesOnOutsideClick: () -> Bool
     private let panel: NSPanel
-    private let hostingView: NSHostingView<Content>
+    private let hostingView: FirstMouseHostingView<Content>
     private var heightCapConstraint: NSLayoutConstraint?
     private var outsideClickMonitor: Any?
-    /// Never taken off: these windows are made once at launch and live as long as the app,
-    /// like the journal panel's own observers.
-    private var resizeObserver: NSObjectProtocol?
 
     var isVisible: Bool { panel.isVisible }
+
+    /// What the window measures right now. Borderless, so this is its content size too.
+    var contentSize: NSSize { panel.frame.size }
 
     init(
         placement: Placement,
@@ -91,27 +91,50 @@ final class AccessoryWindow<Content: View> {
         panel.canHide = false
 
         if case .fitsContent(let width) = sizing {
+            // `sizingOptions` makes the view report the height SwiftUI wants; it does not pass
+            // that height to the window, so the window is resized by hand below.
             hostingView.sizingOptions = [.intrinsicContentSize]
             hostingView.widthAnchor.constraint(equalToConstant: width).isActive = true
+            // The cap belongs on the view as well as on the window: it is what makes the notes
+            // inside compress and their ScrollView start scrolling.
             let cap = hostingView.heightAnchor.constraint(lessThanOrEqualToConstant: 10_000)
             cap.isActive = true
             heightCapConstraint = cap
 
-            // The content decides the height, so the window resizes on its own — from its bottom
-            // left corner. Placing it again after every resize keeps its top edge under the menu bar.
-            resizeObserver = NotificationCenter.default.addObserver(
-                forName: NSWindow.didResizeNotification, object: panel, queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.applyPlacement() }
+            // The list grows and shrinks as the screen changes state, and so does the window.
+            // Coalesced through the run loop: this fires from inside layout.
+            hostingView.onIntrinsicSizeChange = { [weak self] in
+                Task { @MainActor in self?.resizeToFitContent() }
             }
+
+            resizeToFitContent()
         }
     }
 
-    func show() {
-        if case .fitsContent = sizing, let screen = currentScreen {
-            heightCapConstraint?.constant = Self.heightCap(visibleFrame: screen.visibleFrame)
-        }
+    /// The window takes the height its content asks for, up to the screen's. It grows downward:
+    /// the top edge belongs to the menu bar, so the origin is reapplied after every change.
+    private func resizeToFitContent() {
+        guard case .fitsContent(let width) = sizing else { return }
+        heightCapConstraint?.constant = currentCap
         panel.layoutIfNeeded()
+
+        let height = min(hostingView.fittingSize.height, currentCap)
+        guard height > 0 else { return }
+        if abs(height - panel.frame.height) > 0.5 {
+            panel.setContentSize(NSSize(width: width, height: height))
+        }
+        applyPlacement()
+    }
+
+    private var currentCap: CGFloat {
+        guard let screen = currentScreen else { return 10_000 }
+        return Self.heightCap(visibleFrame: screen.visibleFrame)
+    }
+
+    func show() {
+        if case .fitsContent = sizing {
+            resizeToFitContent()
+        }
         applyPlacement()
         panel.alphaValue = 0
         // Never key: typing stays with the app under the window.
@@ -200,7 +223,15 @@ private final class NeverKeyPanel: NSPanel {
 }
 
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    /// Called whenever SwiftUI decides the content wants a different size.
+    var onIntrinsicSizeChange: (() -> Void)?
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        onIntrinsicSizeChange?()
     }
 }
