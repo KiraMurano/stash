@@ -147,8 +147,9 @@ struct JournalView: View {
                     .zIndex(30)
             }
 
-            // The tutorial, and the access slide on its own, cover the whole panel.
-            if onboarding.isPresented {
+            // The access screen, and only it: the tour has a window of its own now, and this
+            // screen is what stands in for the journal while Stash may not paste.
+            if onboarding.isPresented, onboarding.isAccessOnly {
                 OnboardingView(
                     controller: onboarding,
                     access: access,

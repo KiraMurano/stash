@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var badge: StatusItemBadge!
     private var updateWindow: AccessoryWindow<UpdateView>!
     private var aboutWindow: AccessoryWindow<AboutView>!
+    private var tourWindow: AccessoryWindow<OnboardingView>!
+    private var tourObserver: AnyCancellable?
     private var updatesObserver: AnyCancellable?
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
@@ -95,6 +97,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 onClose: { [weak self] in self?.aboutWindow.close() }
             )
         )
+        tourWindow = AccessoryWindow(
+            placement: .center,
+            sizing: .fixed(NSSize(width: 640, height: 440)),
+            cornerRadius: JournalView.Layout.cornerRadius,
+            // A click past the tour is usually the trip to System Settings.
+            closesOnOutsideClick: { false },
+            rootView: OnboardingView(
+                controller: onboarding,
+                access: access,
+                l10n: settings.l10n,
+                onOpenSettings: { [weak self] in self?.onboarding.requestAccess() },
+                onClosePanel: { [weak self] in self?.tourWindow.close() }
+            )
+        )
+
+        // The tour's cross, its last slide and the menu item all go through the controller, so
+        // the window follows the controller rather than the other way round.
+        tourObserver = onboarding.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.tourStateChanged() }
+        }
+
         monitor.start()
 
         updatesObserver = updates.objectWillChange.sink { [weak self] _ in
@@ -114,10 +137,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // access. Later on, pasting still needs that access, and without it the panel opens right
         // away on the access slide alone.
         if onboarding.shouldShowOnLaunch {
-            panelController.showOnboarding(replay: false)
+            onboarding.present(replay: false)
         } else if !access.isGranted {
             panelController.show()
         }
+    }
+
+    /// The tour is on screen while the controller says so and it is not the access screen — that
+    /// one belongs to the journal panel, which stands in for the journal without access.
+    private func tourStateChanged() {
+        let wanted = onboarding.isPresented && !onboarding.isAccessOnly
+        if wanted, !tourWindow.isVisible {
+            tourWindow.show()
+        } else if !wanted, tourWindow.isVisible {
+            tourWindow.close()
+            tourClosed()
+        }
+    }
+
+    /// The journal is not opened after the tour: it was never what was asked for. Without
+    /// Accessibility access there is nothing to open it for anyway, and the panel puts up the
+    /// access screen instead — a first launch has to end on that screen, or nobody grants access.
+    private func tourClosed() {
+        if !access.isGranted {
+            panelController.show()
+        }
+        updates.armIfReady()
     }
 
     private func configureStatusItem() {
@@ -222,7 +267,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openTutorial() {
-        panelController.showOnboarding(replay: true)
+        updateWindow.close()
+        aboutWindow.close()
+        onboarding.present(replay: true)
     }
 
     @objc private func openAbout() {

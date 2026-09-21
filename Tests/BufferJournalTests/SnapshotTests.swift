@@ -11,12 +11,8 @@ import Testing
 struct SnapshotTests {
     private static let directory = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"].map { URL(fileURLWithPath: $0) }
     private static let schemes: [(ColorScheme, String)] = [(.light, "light"), (.dark, "dark")]
-    /// The panel at its smallest, its default and a large size.
-    private static let sizes = [
-        CGSize(width: 560, height: 360),
-        CGSize(width: 640, height: 440),
-        CGSize(width: 900, height: 600),
-    ]
+    /// The tour's window is fixed at this size, and the access screen takes the panel's default.
+    private static let sizes = [CGSize(width: 640, height: 440)]
 
     private func render<V: View>(_ view: V, name: String) throws {
         let renderer = ImageRenderer(content: view)

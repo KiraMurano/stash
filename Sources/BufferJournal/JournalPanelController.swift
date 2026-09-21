@@ -122,20 +122,6 @@ final class JournalPanelController {
         }
     }
 
-    /// Opens the tutorial on its first slide, showing the panel if it is hidden.
-    func showOnboarding(replay: Bool) {
-        onboarding.present(replay: replay)
-        // Already on screen: move it to the middle for the stories and take the tutorial's keys.
-        if isPanelVisible, let panel, panel.level == .floating {
-            positionIfNeeded(panel)
-            updateKeys()
-            // The journal was watching for clicks past the panel; the tutorial is not.
-            updateOutsideClicks()
-        } else {
-            show()
-        }
-    }
-
     func show() {
         let panel = makePanelIfNeeded()
         access.refresh()
@@ -440,13 +426,6 @@ final class JournalPanelController {
     }
 
     private func positionIfNeeded(_ panel: NSPanel) {
-        // The stories open in the middle of the screen: nobody is typing while they play, so
-        // "Open at the Cursor" does not apply to them.
-        if onboarding.isPresented {
-            center(panel)
-            return
-        }
-
         // Next to the text cursor, like Win+V. The panel is read before it is ordered in, while
         // the app the user types in still holds the focus.
         if settings.openAtCaret, let anchor = CaretLocator.anchor()?.rect {
