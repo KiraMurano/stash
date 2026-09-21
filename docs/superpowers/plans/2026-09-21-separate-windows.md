@@ -10,6 +10,8 @@
 
 **Spec:** [`docs/superpowers/specs/2026-09-21-separate-windows-design.md`](../specs/2026-09-21-separate-windows-design.md)
 
+> Ссылки на `.concepts/*.html` в задачах — на файлы вне репозитория: папка в `.gitignore`, концепты лежат только на машине автора.
+
 ## Global Constraints
 
 - Ширина окон обновления и «О приложении» — **400 pt**. Высота — по содержимому.
