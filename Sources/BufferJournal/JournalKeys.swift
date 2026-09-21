@@ -47,6 +47,8 @@ final class JournalKeys {
         case access
         /// The update screen: like the tutorial, it takes no keys at all.
         case update
+        /// The About screen: like the tutorial, it takes no keys at all.
+        case about
     }
 
     /// Which keys are registered.
@@ -66,8 +68,30 @@ final class JournalKeys {
 
         switch content {
         case .journal: return .journal
-        case .onboarding, .access, .update: return .off
+        case .onboarding, .access, .update, .about: return .off
         }
+    }
+
+    /// What the panel shows right now. The tutorial covers everything, the About screen covers
+    /// the update screen, and without access the journal gives way to the access slide — which
+    /// counts the same in both of its looks, last in the tutorial and on its own.
+    nonisolated static func content(
+        onboardingPresented: Bool,
+        onboardingIsAccess: Bool,
+        aboutPresented: Bool,
+        updatePresented: Bool,
+        accessGranted: Bool
+    ) -> PanelContent {
+        if onboardingPresented {
+            return onboardingIsAccess ? .access : .onboarding
+        }
+        if aboutPresented {
+            return .about
+        }
+        if updatePresented {
+            return .update
+        }
+        return accessGranted ? .journal : .access
     }
 
     let events = PassthroughSubject<JournalKey, Never>()

@@ -26,6 +26,7 @@ final class JournalPanelController {
     private let access: AccessGate
     private let onboarding: OnboardingController
     private let updates: UpdateController
+    private let about: AboutController
     /// Called when the panel's content settles — access granted, tutorial closed — so the updater
     /// can arm its first check.
     private let onContentSettled: () -> Void
@@ -34,6 +35,7 @@ final class JournalPanelController {
     private var panel: NSPanel?
     private var onboardingObserver: AnyCancellable?
     private var updatesObserver: AnyCancellable?
+    private var aboutObserver: AnyCancellable?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
     /// Whether the panel is meant to be on screen. The journal's hotkeys follow this, not
     /// `panel.isVisible`, which stays true through the close fade.
@@ -51,6 +53,7 @@ final class JournalPanelController {
         access: AccessGate,
         onboarding: OnboardingController,
         updates: UpdateController,
+        about: AboutController,
         onContentSettled: @escaping () -> Void = {}
     ) {
         self.store = store
@@ -59,6 +62,7 @@ final class JournalPanelController {
         self.access = access
         self.onboarding = onboarding
         self.updates = updates
+        self.about = about
         self.onContentSettled = onContentSettled
         keys = JournalKeys(hotKeys: hotKeys)
 
@@ -75,6 +79,14 @@ final class JournalPanelController {
 
         // The update screen covers the journal, so it changes both the keys and the outside clicks.
         updatesObserver = updates.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in
+                self?.updateKeys()
+                self?.updateOutsideClicks()
+            }
+        }
+
+        // The About screen covers the journal in the same way.
+        aboutObserver = about.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in
                 self?.updateKeys()
                 self?.updateOutsideClicks()
@@ -148,9 +160,18 @@ final class JournalPanelController {
         }
     }
 
-    /// The menu item: the update screen comes up on the panel, wherever the panel opens.
+    /// The menu item: the update screen comes up on the panel, wherever the panel opens. It and
+    /// the About screen never share the panel — whichever was asked for last takes it.
     func showUpdate() {
+        about.close()
         updates.present()
+        show()
+    }
+
+    /// The menu item: the About screen comes up on the panel, wherever the panel opens.
+    func showAbout() {
+        updates.close()
+        about.present()
         show()
     }
 
@@ -247,14 +268,13 @@ final class JournalPanelController {
     /// What the panel shows right now. The access slide counts the same in both of its looks —
     /// last in the tutorial and on its own — because both send the user to System Settings.
     private var panelContent: JournalKeys.PanelContent {
-        // The tutorial is on top of the update screen, so it is asked about first.
-        if updates.isPresented, !onboarding.isPresented {
-            return .update
-        }
-        guard onboarding.isPresented else {
-            return access.isGranted ? .journal : .access
-        }
-        return onboarding.slide.kind == .access ? .access : .onboarding
+        JournalKeys.content(
+            onboardingPresented: onboarding.isPresented,
+            onboardingIsAccess: onboarding.slide.kind == .access,
+            aboutPresented: about.isPresented,
+            updatePresented: updates.isPresented,
+            accessGranted: access.isGranted
+        )
     }
 
     private func accessChanged() {
@@ -312,6 +332,7 @@ final class JournalPanelController {
             access: access,
             onboarding: onboarding,
             updates: updates,
+            about: about,
             presentation: presentation,
             keyEvents: keys.events,
             onPaste: { [weak self] entry in

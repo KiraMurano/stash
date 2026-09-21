@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var access: AccessGate!
     private var onboarding: OnboardingController!
     private var updates: UpdateController!
+    private var about: AboutController!
     private var badge: StatusItemBadge!
     private var updatesObserver: AnyCancellable?
     private var panelController: JournalPanelController!
@@ -47,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return !self.onboarding.shouldShowOnLaunch && self.access.isGranted && !self.onboarding.isPresented
             }
         )
+        about = AboutController()
         panelController = JournalPanelController(
             store: store,
             writer: writer,
@@ -55,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             access: access,
             onboarding: onboarding,
             updates: updates,
+            about: about,
             onContentSettled: { [weak self] in self?.updates.armIfReady() }
         )
         hotKeyController.register(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(optionKey)) { [weak self] in
@@ -164,6 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Above "Clear History", which asks nothing before it clears: a miss costs the history.
         menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial)))
+        // Always there, in a source build too: such a build has an author no less.
+        menu.addItem(menuItem(titles.about, action: #selector(openAbout)))
         menu.addItem(menuItem(titles.clearHistory, action: #selector(clearHistory)))
         menu.addItem(menuItem(titles.quit, action: #selector(quit), keyEquivalent: "q"))
         statusItem.menu = menu
@@ -182,6 +187,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openTutorial() {
         panelController.showOnboarding(replay: true)
+    }
+
+    @objc private func openAbout() {
+        panelController.showAbout()
     }
 
     /// The screen comes up at once, before the answer: a press has to do something visible, and
