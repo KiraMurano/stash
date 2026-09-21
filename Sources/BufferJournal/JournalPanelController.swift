@@ -25,7 +25,6 @@ final class JournalPanelController {
     private let settings: AppSettings
     private let access: AccessGate
     private let onboarding: OnboardingController
-    private let about: AboutController
     /// Called when the panel's content settles — access granted, tutorial closed — so the updater
     /// can arm its first check.
     private let onContentSettled: () -> Void
@@ -33,7 +32,6 @@ final class JournalPanelController {
     private let keys: JournalKeys
     private var panel: NSPanel?
     private var onboardingObserver: AnyCancellable?
-    private var aboutObserver: AnyCancellable?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
     /// Whether the panel is meant to be on screen. The journal's hotkeys follow this, not
     /// `panel.isVisible`, which stays true through the close fade.
@@ -50,7 +48,6 @@ final class JournalPanelController {
         hotKeys: HotKeyController,
         access: AccessGate,
         onboarding: OnboardingController,
-        about: AboutController,
         onContentSettled: @escaping () -> Void = {}
     ) {
         self.store = store
@@ -58,7 +55,6 @@ final class JournalPanelController {
         self.settings = settings
         self.access = access
         self.onboarding = onboarding
-        self.about = about
         self.onContentSettled = onContentSettled
         keys = JournalKeys(hotKeys: hotKeys)
 
@@ -70,14 +66,6 @@ final class JournalPanelController {
                 self?.updateOutsideClicks()
                 // The tutorial closing is one of the two moments the app settles down.
                 self?.onContentSettled()
-            }
-        }
-
-        // The About screen covers the journal in the same way.
-        aboutObserver = about.objectWillChange.sink { [weak self] _ in
-            Task { @MainActor in
-                self?.updateKeys()
-                self?.updateOutsideClicks()
             }
         }
 
@@ -146,12 +134,6 @@ final class JournalPanelController {
         } else {
             show()
         }
-    }
-
-    /// The menu item: the About screen comes up on the panel, wherever the panel opens.
-    func showAbout() {
-        about.present()
-        show()
     }
 
     func show() {
@@ -250,7 +232,7 @@ final class JournalPanelController {
         JournalKeys.content(
             onboardingPresented: onboarding.isPresented,
             onboardingIsAccess: onboarding.slide.kind == .access,
-            aboutPresented: about.isPresented,
+            aboutPresented: false,
             updatePresented: false,
             accessGranted: access.isGranted
         )
@@ -310,7 +292,6 @@ final class JournalPanelController {
             settings: settings,
             access: access,
             onboarding: onboarding,
-            about: about,
             presentation: presentation,
             keyEvents: keys.events,
             onPaste: { [weak self] entry in

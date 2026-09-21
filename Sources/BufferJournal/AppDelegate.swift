@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var about: AboutController!
     private var badge: StatusItemBadge!
     private var updateWindow: AccessoryWindow<UpdateView>!
+    private var aboutWindow: AccessoryWindow<AboutView>!
     private var updatesObserver: AnyCancellable?
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
@@ -57,7 +58,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotKeys: hotKeyController,
             access: access,
             onboarding: onboarding,
-            about: about,
             onContentSettled: { [weak self] in self?.updates.armIfReady() }
         )
         hotKeyController.register(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(optionKey)) { [weak self] in
@@ -82,6 +82,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 controller: updates,
                 l10n: settings.l10n,
                 onClose: { [weak self] in self?.updateWindow.close() }
+            )
+        )
+        aboutWindow = AccessoryWindow(
+            placement: .statusItem { [weak self] in self?.statusItemFrame() },
+            sizing: .fitsContent(width: 400),
+            cornerRadius: 20,
+            closesOnOutsideClick: { true },
+            rootView: AboutView(
+                controller: about,
+                l10n: settings.l10n,
+                onClose: { [weak self] in self?.aboutWindow.close() }
             )
         )
         monitor.start()
@@ -215,13 +226,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openAbout() {
-        panelController.showAbout()
+        updateWindow.close()
+        aboutWindow.show()
     }
 
     /// The screen comes up at once, before the answer: a press has to do something visible, and
     /// all three answers — a new version, nothing new, a check that failed — are its faces.
     /// Nothing pops up on its own; the panel only ever comes up because the person asked for it.
     @objc private func openUpdates() {
+        aboutWindow.close()
         updates.markSeen()
         updateWindow.show()
         guard updates.release == nil else { return }

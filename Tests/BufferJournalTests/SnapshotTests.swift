@@ -210,14 +210,13 @@ extension SnapshotTests {
             )
         )
 
+        // Окно 400 pt шириной и высотой по содержимому.
         for (language, languageName) in [(ResolvedLanguage.russian, "ru"), (.english, "en")] {
             for (scheme, schemeName) in Self.schemes {
-                for size in Self.sizes {
-                    let view = AboutView(controller: controller, l10n: L10n(language: language))
-                        .frame(width: size.width, height: size.height)
-                        .environment(\.colorScheme, scheme)
-                    try render(view, name: "about-\(languageName)-\(schemeName)-\(Int(size.width))")
-                }
+                let view = AboutView(controller: controller, l10n: L10n(language: language), onClose: {})
+                    .frame(width: 400)
+                    .environment(\.colorScheme, scheme)
+                try render(view, name: "about-\(languageName)-\(schemeName)")
             }
         }
     }
