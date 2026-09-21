@@ -58,25 +58,33 @@ struct UpdateView: View {
         ZStack(alignment: .topLeading) {
             colors.field
 
-            VStack(spacing: 0) {
+            // Every piece carries its own insets. A window-wide inset would have to be undone
+            // by whatever runs edge to edge — the list and the download line — and a negative
+            // inset clips the shadows and the scroller of what it is undone for.
+            VStack(spacing: Metrics.gap) {
                 head
+                    .padding(.top, Metrics.top)
+                    .padding(.horizontal, Metrics.side)
+
                 // The notes stand on the field: the window's own edge does what the card did.
                 // Without a release — while the check runs, when there is nothing new, when the
                 // check failed — one line stands there instead.
                 if controller.release != nil {
-                    notes.padding(.top, Metrics.gap)
+                    notes
                 } else {
-                    answer.padding(.top, Metrics.gap)
+                    answer
                 }
+
                 if let fill = progressFill {
-                    progressBar(fill).padding(.top, Metrics.gap)
+                    progressBar(fill)
                 }
-                footer.padding(.top, Metrics.gap)
+
+                footer
+                    .padding(.horizontal, Metrics.side)
+                    .padding(.bottom, Metrics.bottom)
             }
-            .padding(.top, Metrics.top)
-            .padding(.horizontal, Metrics.side)
-            .padding(.bottom, Metrics.bottom)
         }
+        .environment(\.solidAccents, true)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(l10n("Stash update", "Обновление Stash"))
         .accessibilityAddTraits(.isModal)
@@ -114,15 +122,9 @@ struct UpdateView: View {
         }
     }
 
+    /// The journal's own close button, so every window of Stash closes with the same one.
     private var closeButton: some View {
-        Button(action: onClose) {
-            Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28)
-        }
-        .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
-        .help(l10n("Close", "Закрыть"))
-        .accessibilityLabel(l10n("Close", "Закрыть"))
+        GlassIconButton(systemName: "xmark", help: l10n("Close", "Закрыть"), action: onClose)
     }
 
     // MARK: Middle
@@ -164,7 +166,6 @@ struct UpdateView: View {
             .padding(.leading, Metrics.side)
             .padding(.trailing, Metrics.side + Metrics.scrollerLane)
         }
-        .padding(.horizontal, -Metrics.side)
         // An edge with more behind it gets a shadow, as in the journal.
         .overlay(alignment: .top) {
             EdgeShadow(palette: palette, edge: .top)
@@ -243,7 +244,6 @@ struct UpdateView: View {
                 }
         }
         .frame(height: Metrics.bar)
-        .padding(.horizontal, -Metrics.side)
         .accessibilityHidden(true)
     }
 
@@ -295,10 +295,10 @@ struct UpdateView: View {
             Button(action: onClose) {
                 Text(l10n.updateLater)
                     .font(.system(size: Metrics.textSize, weight: .semibold))
-                    .padding(.horizontal, 12)
-                    .frame(height: Metrics.buttonHeight)
+                    .padding(.horizontal, 16)
+                    .frame(minWidth: 100, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
             }
-            .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
+            .buttonStyle(TranslucentButtonStyle(tone: .neutral, cornerRadius: Metrics.buttonHeight / 2))
 
             primary(l10n.updateNow) { controller.install() }
         default:

@@ -43,16 +43,21 @@ struct AboutView: View {
         ZStack(alignment: .topLeading) {
             colors.field
 
-            VStack(spacing: 0) {
+            // Insets belong to each piece, as on the update screen: the window itself holds none.
+            VStack(spacing: Metrics.gap) {
                 head
+                    .padding(.top, Metrics.top)
+                    .padding(.horizontal, Metrics.side)
+
                 studio
+                    .padding(.horizontal, Metrics.side)
+
                 footer
-                    .padding(.top, Metrics.gap)
+                    .padding(.horizontal, Metrics.side)
+                    .padding(.bottom, Metrics.bottom)
             }
-            .padding(.top, Metrics.top)
-            .padding(.horizontal, Metrics.side)
-            .padding(.bottom, Metrics.bottom)
         }
+        .environment(\.solidAccents, true)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(l10n("About Stash", "О приложении Stash"))
         .accessibilityAddTraits(.isModal)
@@ -88,15 +93,9 @@ struct AboutView: View {
         }
     }
 
+    /// The journal's own close button, so every window of Stash closes with the same one.
     private var closeButton: some View {
-        Button(action: onClose) {
-            Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28)
-        }
-        .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
-        .help(l10n("Close", "Закрыть"))
-        .accessibilityLabel(l10n("Close", "Закрыть"))
+        GlassIconButton(systemName: "xmark", help: l10n("Close", "Закрыть"), action: onClose)
     }
 
     // MARK: Middle

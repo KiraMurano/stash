@@ -73,6 +73,7 @@ struct OnboardingView: View {
             }
         }
         .environment(\.onboardingOpenSettings, onOpenSettings)
+        .environment(\.solidAccents, true)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(controller.isAccessOnly
             ? l10n("Stash needs Accessibility access", "Stash нужен Универсальный доступ")
@@ -117,22 +118,16 @@ struct OnboardingView: View {
     }
 
     /// Closes the tutorial and leaves the journal under it; on the single access screen there is
-    /// no journal to show, so it closes the panel.
+    /// no journal to show, so it closes the panel. It is the journal's own close button, so
+    /// every window of Stash closes with the same one.
     private var closeButton: some View {
-        Button {
+        GlassIconButton(systemName: "xmark", help: l10n("Close", "Закрыть")) {
             if controller.isAccessOnly {
                 onClosePanel()
             } else {
                 controller.close()
             }
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28)
         }
-        .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
-        .help(l10n("Close", "Закрыть"))
-        .accessibilityLabel(l10n("Close", "Закрыть"))
     }
 
     /// "HELLO, THIS IS" on the first slide: big, orange, in the top left corner, as the slides'

@@ -47,33 +47,6 @@ struct OnboardingPrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// The close cross: a plate of its own colour at 10 % on hover and 16 % when pressed.
-struct OnboardingCloseButtonStyle: ButtonStyle {
-    let color: Color
-
-    func makeBody(configuration: Configuration) -> some View {
-        CloseBody(configuration: configuration, color: color)
-    }
-
-    private struct CloseBody: View {
-        let configuration: ButtonStyleConfiguration
-        let color: Color
-        @State private var isHovered = false
-
-        var body: some View {
-            configuration.label
-                .foregroundStyle(color)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(color.opacity(configuration.isPressed ? 0.16 : (isHovered ? 0.10 : 0)))
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .onHover { isHovered = $0 }
-                .animation(.easeOut(duration: 0.12), value: isHovered)
-        }
-    }
-}
-
 /// One progress bar per slide: done ones full, later ones empty, the current one fills in
 /// 0.3 s when entered and stays full. It is not a timer.
 struct OnboardingProgressBar: View {
