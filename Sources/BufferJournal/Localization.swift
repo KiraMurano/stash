@@ -99,6 +99,11 @@ struct L10n {
     var updateLater: String { self("Later", "Позже") }
     var updateOpenReleases: String { self("Open the Releases Page", "Открыть страницу релизов") }
 
+    // MARK: About
+
+    var aboutMadeIn: String { self("Made in", "Сделано в") }
+    var aboutFeedback: String { self("Send Feedback", "Обратная связь") }
+
     /// One sentence per failure. The technical detail from codesign stays in the log: it says
     /// nothing to the person and only makes the screen unreadable.
     func updateFailure(_ error: UpdateError) -> String {
@@ -127,6 +132,7 @@ struct StatusMenuTitles {
 
     var openStash: String { l10n("Open Stash", "Открыть Stash") }
     var tutorial: String { l10n("How to Use Stash?", "Как пользоваться Stash?") }
+    var about: String { l10n("About Stash", "О приложении") }
     var checkForUpdates: String { l10n("Check for Updates…", "Проверить обновления…") }
     var checkingForUpdates: String { l10n("Checking for Updates…", "Проверяем обновления…") }
     func updateTo(_ version: String) -> String { l10n("Update to \(version)", "Обновить до \(version)") }
