@@ -206,21 +206,9 @@ final class JournalPanelController {
         keys.mode = JournalKeys.mode(
             intercepts: settings.interceptKeys,
             panelVisible: isPanelVisible,
-            content: panelContent,
+            accessGranted: access.isGranted,
             stashActive: NSApp.isActive,
             menuOpen: !trackingMenus.isEmpty
-        )
-    }
-
-    /// What the panel shows right now. The access slide counts the same in both of its looks —
-    /// last in the tutorial and on its own — because both send the user to System Settings.
-    private var panelContent: JournalKeys.PanelContent {
-        JournalKeys.content(
-            onboardingPresented: onboarding.isPresented,
-            onboardingIsAccess: onboarding.slide.kind == .access,
-            aboutPresented: false,
-            updatePresented: false,
-            accessGranted: access.isGranted
         )
     }
 
@@ -245,9 +233,9 @@ final class JournalPanelController {
     /// clicks on Stash itself, so whatever it reports happened in another app. The access screen
     /// keeps watching nothing: a click there is usually the trip to System Settings.
     private func updateOutsideClicks() {
-        // Only the journal closes on an outside click: the tutorial and the access slide stay put,
-        // a click past them is usually the trip to System Settings.
-        let shouldWatch = isPanelVisible && panelContent == .journal
+        // Only the journal closes on an outside click: the access screen stays put, a click past
+        // it is usually the trip to System Settings.
+        let shouldWatch = isPanelVisible && access.isGranted
 
         if shouldWatch, outsideClickMonitor == nil {
             outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
