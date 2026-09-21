@@ -42,8 +42,6 @@ struct JournalView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var access: AccessGate
     @ObservedObject var onboarding: OnboardingController
-    @ObservedObject var updates: UpdateController
-    @ObservedObject var about: AboutController
     /// Opening and closing: the panel grows into place and shrinks back.
     @ObservedObject var presentation: PanelPresentation
     /// The journal's keys, taken as hotkeys while it is open: the panel itself never takes the keyboard.
@@ -149,22 +147,9 @@ struct JournalView: View {
                     .zIndex(30)
             }
 
-            // The update screen covers the journal; the tutorial, if it is up, covers both.
-            if updates.isPresented {
-                UpdateView(controller: updates, l10n: l10n)
-                    .transition(.opacity)
-                    .zIndex(35)
-            }
-
-            // The About screen covers the update screen; the tutorial, if it is up, covers both.
-            if about.isPresented {
-                AboutView(controller: about, l10n: l10n)
-                    .transition(.opacity)
-                    .zIndex(36)
-            }
-
-            // The tutorial, and the access slide on its own, cover the whole panel.
-            if onboarding.isPresented {
+            // The access screen, and only it: the tour has a window of its own now, and this
+            // screen is what stands in for the journal while Stash may not paste.
+            if onboarding.isPresented, onboarding.isAccessOnly {
                 OnboardingView(
                     controller: onboarding,
                     access: access,
@@ -192,8 +177,6 @@ struct JournalView: View {
         .animation(.easeOut(duration: 0.16), value: isClearConfirmationShown)
         .animation(.easeOut(duration: 0.16), value: entryPendingDeletion)
         .animation(.easeOut(duration: 0.2), value: onboarding.isPresented)
-        .animation(.easeOut(duration: 0.2), value: updates.isPresented)
-        .animation(.easeOut(duration: 0.2), value: about.isPresented)
         .preferredColorScheme(settings.themeMode.colorScheme)
         .environment(\.l10n, l10n)
         .environment(\.solidAccents, settings.themeMode.usesSolidAccents)
@@ -943,150 +926,6 @@ private struct WindowResizeArea: NSViewRepresentable {
     }
 }
 
-/// Reports whether the enclosing scroll view has scrolled away from the top. SwiftUI geometry
-/// preferences inside a macOS ScrollView do not update while scrolling, so watch the clip view.
-/// Soft shadow cast by a header (`.top`, falls downward) or footer (`.bottom`, rises upward)
-/// over content scrolling beneath it.
-private struct EdgeShadow: View {
-    static let height: CGFloat = 20
-
-    let palette: ThemePalette
-    let edge: VerticalEdge
-
-    var body: some View {
-        LinearGradient(
-            stops: [
-                .init(color: palette.shadow(0.08), location: 0),
-                .init(color: palette.shadow(0.03), location: 0.45),
-                .init(color: palette.shadow(0), location: 1)
-            ],
-            startPoint: edge == .top ? .top : .bottom,
-            endPoint: edge == .top ? .bottom : .top
-        )
-        .frame(height: Self.height)
-        .allowsHitTesting(false)
-    }
-}
-
-struct ScrollEdges: Equatable {
-    /// Content is scrolled away from the top.
-    var isScrolled = false
-    /// More content lies below the visible area.
-    var hasMoreBelow = false
-}
-
-private struct ScrollOffsetObserver: NSViewRepresentable {
-    let onChange: (ScrollEdges) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onChange: onChange)
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            context.coordinator.attach(from: view)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.onChange = onChange
-    }
-
-    @MainActor
-    final class Coordinator {
-        var onChange: (ScrollEdges) -> Void
-        private weak var scrollView: NSScrollView?
-        private var observers: [NSObjectProtocol] = []
-        private var lastValue = ScrollEdges()
-
-        init(onChange: @escaping (ScrollEdges) -> Void) {
-            self.onChange = onChange
-        }
-
-        func attach(from view: NSView, attempt: Int = 0) {
-            guard scrollView == nil else { return }
-            guard let scrollView = Self.findScrollView(near: view) else {
-                // Frames are still zero right after creation; try again once SwiftUI has laid out.
-                if attempt < 20 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak view] in
-                        guard let view else { return }
-                        self?.attach(from: view, attempt: attempt + 1)
-                    }
-                }
-                return
-            }
-            self.scrollView = scrollView
-            let clipView = scrollView.contentView
-            clipView.postsBoundsChangedNotifications = true
-            clipView.postsFrameChangedNotifications = true
-            scrollView.documentView?.postsFrameChangedNotifications = true
-            // Scrolling moves the clip view's bounds; resizing the panel or the content changes frames.
-            for (name, object) in [
-                (NSView.boundsDidChangeNotification, clipView as NSView),
-                (NSView.frameDidChangeNotification, clipView as NSView),
-                (NSView.frameDidChangeNotification, scrollView.documentView),
-            ] {
-                guard let object else { continue }
-                observers.append(NotificationCenter.default.addObserver(forName: name, object: object, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated {
-                        self?.report()
-                    }
-                })
-            }
-            report()
-        }
-
-        private func report() {
-            guard let scrollView else { return }
-            let clip = scrollView.contentView.bounds
-            let offset = clip.origin.y + scrollView.contentInsets.top
-            let contentHeight = scrollView.documentView?.frame.height ?? 0
-            let edges = ScrollEdges(
-                isScrolled: offset > 1,
-                hasMoreBelow: clip.maxY < contentHeight - 1
-            )
-            guard edges != lastValue else { return }
-            lastValue = edges
-            onChange(edges)
-        }
-
-        /// The observer is the list's background, so the list's scroll view is the one that
-        /// covers the same area of the window. Walk up and search each ancestor's subtree for it.
-        private static func findScrollView(near view: NSView) -> NSScrollView? {
-            guard view.window != nil, view.bounds.width > 0, view.bounds.height > 0 else { return nil }
-            let target = view.convert(view.bounds, to: nil)
-
-            var ancestor = view.superview
-            while let current = ancestor {
-                if let match = scrollView(in: current, matching: target) {
-                    return match
-                }
-                ancestor = current.superview
-            }
-            return nil
-        }
-
-        private static func scrollView(in root: NSView, matching target: NSRect) -> NSScrollView? {
-            for subview in root.subviews {
-                if let scrollView = subview as? NSScrollView {
-                    let frame = scrollView.convert(scrollView.bounds, to: nil)
-                    let overlap = frame.intersection(target)
-                    if !overlap.isNull, overlap.width * overlap.height >= 0.8 * target.width * target.height {
-                        return scrollView
-                    }
-                    continue
-                }
-                if let match = scrollView(in: subview, matching: target) {
-                    return match
-                }
-            }
-            return nil
-        }
-    }
-}
-
 // MARK: - Overlays
 
 /// Confirmation in the split style: frosted card, 8 pt buttons, destructive action in red.
@@ -1097,9 +936,12 @@ private struct DeleteConfirmationOverlay: View {
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
+    /// The mark's plate. Fixed, not measured from the text: a plate that grew with a
+    /// two-line message made the same dialog look like two different ones.
+    private static let markSize: CGFloat = 40
+
     @State private var isConfirmHovered = false
     @State private var isCancelHovered = false
-    @State private var textBlockHeight: CGFloat = 40
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.solidAccents) private var solidAccents
     @Environment(\.l10n) private var l10n
@@ -1110,11 +952,11 @@ private struct DeleteConfirmationOverlay: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                // Square plate as tall as the text block (title + message), measured from the text.
+            // Centred: the mark sits at the middle of the text's height, however many lines it runs to.
+            HStack(alignment: .center, spacing: 12) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color.red.opacity(palette.isDark ? 0.18 : 0.10))
-                    .frame(width: textBlockHeight, height: textBlockHeight)
+                    .frame(width: Self.markSize, height: Self.markSize)
                     .overlay {
                         Image(systemName: "trash")
                             .font(.system(size: 20, weight: .semibold))
@@ -1132,13 +974,6 @@ private struct DeleteConfirmationOverlay: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear { textBlockHeight = geometry.size.height }
-                            .onChange(of: geometry.size.height) { textBlockHeight = $0 }
-                    }
-                )
             }
 
             HStack(spacing: 8) {
@@ -1193,76 +1028,5 @@ private struct DeleteConfirmationOverlay: View {
                 .strokeBorder(palette.border, lineWidth: 1)
         )
         .shadow(color: palette.shadow(0.22), radius: 24, y: 10)
-    }
-}
-
-private struct ScrollBarAppearanceSetter: NSViewRepresentable {
-    let colorScheme: ColorScheme
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        view.postsFrameChangedNotifications = false
-        DispatchQueue.main.async {
-            applyAppearance(from: view)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            applyAppearance(from: nsView)
-        }
-    }
-
-    private func applyAppearance(from view: NSView) {
-        guard let scrollView = scrollView(containing: view) else {
-            return
-        }
-
-        let scrollerAppearanceName: NSAppearance.Name = colorScheme == .dark ? .darkAqua : .aqua
-        let scrollerAppearance = NSAppearance(named: scrollerAppearanceName)
-        let knobStyle: NSScroller.KnobStyle = colorScheme == .dark ? .light : .dark
-        // Thin overlay scrollers that only show while scrolling, even when the system setting
-        // (or an attached mouse) asks for always-visible legacy scrollers.
-        scrollView.scrollerStyle = .overlay
-        scrollView.autohidesScrollers = true
-        scrollView.verticalScroller?.appearance = scrollerAppearance
-        scrollView.horizontalScroller?.appearance = scrollerAppearance
-        scrollView.verticalScroller?.knobStyle = knobStyle
-        scrollView.horizontalScroller?.knobStyle = knobStyle
-    }
-
-    private func scrollView(containing view: NSView) -> NSScrollView? {
-        if let scrollView = view.enclosingScrollView {
-            return scrollView
-        }
-
-        var ancestor = view.superview
-        while let current = ancestor {
-            if let scrollView = firstScrollView(in: current) {
-                return scrollView
-            }
-            ancestor = current.superview
-        }
-
-        if let contentView = view.window?.contentView {
-            return firstScrollView(in: contentView)
-        }
-
-        return nil
-    }
-
-    private func firstScrollView(in view: NSView) -> NSScrollView? {
-        if let scrollView = view as? NSScrollView {
-            return scrollView
-        }
-
-        for subview in view.subviews {
-            if let scrollView = firstScrollView(in: subview) {
-                return scrollView
-            }
-        }
-
-        return nil
     }
 }

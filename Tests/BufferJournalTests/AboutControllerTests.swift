@@ -4,20 +4,10 @@ import Testing
 
 @MainActor
 struct AboutControllerTests {
-    @Test func theScreenIsShownOnlyWhenAsked() {
-        let controller = AboutController(environment: UpdateEnvironment.current())
-        #expect(!controller.isPresented)
-
-        controller.present()
-        #expect(controller.isPresented)
-
-        controller.close()
-        #expect(!controller.isPresented)
-    }
-
-    @Test func theButtonAndTheLinkLeadToDifferentPages() {
+    /// Кнопки обратной связи на экране больше нет: у него нет главного действия,
+    /// и остался только адрес репозитория.
+    @Test func theLinkLeadsToTheRepository() {
         #expect(AboutController.repository.absoluteString == "https://github.com/KiraMurano/stash")
-        #expect(AboutController.feedback.absoluteString == "https://github.com/KiraMurano/stash/issues/new")
     }
 
     /// A source build has no released version, and the lockup then names the app alone.

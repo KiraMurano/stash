@@ -80,16 +80,15 @@ struct OnboardingControllerTests {
         }
     }
 
-    @Test func theTourHandsOverToTheAccessScreenWhenThereIsNoAccess() {
+    /// Тур закрывается в никуда: журнал после него не открывается, и экран доступа
+    /// тур больше не зовёт — его поднимает панель, когда её просят показаться.
+    @Test func theTourClosesIntoNothingWithoutAccess() {
         let (controller, _) = make(granted: false)
         controller.present(replay: false)
         controller.close()
-        // Nothing to fall back to, so the screen that asks for access takes over.
-        #expect(controller.isPresented)
-        #expect(controller.isAccessOnly)
-        // Closing it for real leaves nothing on screen.
-        controller.close()
+
         #expect(!controller.isPresented)
+        #expect(!controller.isAccessOnly)
     }
 
     @Test func slidesStayInBoundsAndEveryEntryRestartsTheScene() {

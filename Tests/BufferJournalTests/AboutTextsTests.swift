@@ -15,11 +15,6 @@ struct AboutTextsTests {
         #expect(en.aboutMadeIn == "Made in")
     }
 
-    @Test func theButtonAsksForFeedback() {
-        #expect(ru.aboutFeedback == "Обратная связь")
-        #expect(en.aboutFeedback == "Send Feedback")
-    }
-
     @Test func everyItemInTheMenuHasATitleOfItsOwn() {
         let titles = StatusMenuTitles(l10n: ru)
         let all = [titles.openStash, titles.tutorial, titles.about, titles.clearHistory, titles.quit]

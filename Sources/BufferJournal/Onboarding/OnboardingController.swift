@@ -96,12 +96,9 @@ final class OnboardingController: ObservableObject {
         if !isReplay, !isAccessOnly {
             defaults.set(Self.currentVersion, forKey: Self.seenVersionKey)
         }
-        // Without access there is no journal to fall back to: the tour hands over to the access
-        // screen, the same screen the panel puts up on its own later.
-        if !isAccessOnly, !access.isGranted {
-            presentAccessOnly()
-            return
-        }
+        // The tour closes into nothing: the journal was never what was asked for. Without access
+        // the panel puts up the access screen itself, the next time it is asked to show — and on
+        // the first launch it is asked right away, or nobody would ever grant that access.
         isPresented = false
         isAccessOnly = false
     }

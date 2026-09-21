@@ -102,7 +102,6 @@ struct L10n {
     // MARK: About
 
     var aboutMadeIn: String { self("Made in", "Сделано в") }
-    var aboutFeedback: String { self("Send Feedback", "Обратная связь") }
 
     /// One sentence per failure. The technical detail from codesign stays in the log: it says
     /// nothing to the person and only makes the screen unreadable.

@@ -25,8 +25,6 @@ final class JournalPanelController {
     private let settings: AppSettings
     private let access: AccessGate
     private let onboarding: OnboardingController
-    private let updates: UpdateController
-    private let about: AboutController
     /// Called when the panel's content settles — access granted, tutorial closed — so the updater
     /// can arm its first check.
     private let onContentSettled: () -> Void
@@ -34,8 +32,6 @@ final class JournalPanelController {
     private let keys: JournalKeys
     private var panel: NSPanel?
     private var onboardingObserver: AnyCancellable?
-    private var updatesObserver: AnyCancellable?
-    private var aboutObserver: AnyCancellable?
     private var textEditSessions: [ClipboardEntry.ID: TextEditWindowSession] = [:]
     /// Whether the panel is meant to be on screen. The journal's hotkeys follow this, not
     /// `panel.isVisible`, which stays true through the close fade.
@@ -52,8 +48,6 @@ final class JournalPanelController {
         hotKeys: HotKeyController,
         access: AccessGate,
         onboarding: OnboardingController,
-        updates: UpdateController,
-        about: AboutController,
         onContentSettled: @escaping () -> Void = {}
     ) {
         self.store = store
@@ -61,8 +55,6 @@ final class JournalPanelController {
         self.settings = settings
         self.access = access
         self.onboarding = onboarding
-        self.updates = updates
-        self.about = about
         self.onContentSettled = onContentSettled
         keys = JournalKeys(hotKeys: hotKeys)
 
@@ -74,22 +66,6 @@ final class JournalPanelController {
                 self?.updateOutsideClicks()
                 // The tutorial closing is one of the two moments the app settles down.
                 self?.onContentSettled()
-            }
-        }
-
-        // The update screen covers the journal, so it changes both the keys and the outside clicks.
-        updatesObserver = updates.objectWillChange.sink { [weak self] _ in
-            Task { @MainActor in
-                self?.updateKeys()
-                self?.updateOutsideClicks()
-            }
-        }
-
-        // The About screen covers the journal in the same way.
-        aboutObserver = about.objectWillChange.sink { [weak self] _ in
-            Task { @MainActor in
-                self?.updateKeys()
-                self?.updateOutsideClicks()
             }
         }
 
@@ -144,35 +120,6 @@ final class JournalPanelController {
         } else {
             show()
         }
-    }
-
-    /// Opens the tutorial on its first slide, showing the panel if it is hidden.
-    func showOnboarding(replay: Bool) {
-        onboarding.present(replay: replay)
-        // Already on screen: move it to the middle for the stories and take the tutorial's keys.
-        if isPanelVisible, let panel, panel.level == .floating {
-            positionIfNeeded(panel)
-            updateKeys()
-            // The journal was watching for clicks past the panel; the tutorial is not.
-            updateOutsideClicks()
-        } else {
-            show()
-        }
-    }
-
-    /// The menu item: the update screen comes up on the panel, wherever the panel opens. It and
-    /// the About screen never share the panel — whichever was asked for last takes it.
-    func showUpdate() {
-        about.close()
-        updates.present()
-        show()
-    }
-
-    /// The menu item: the About screen comes up on the panel, wherever the panel opens.
-    func showAbout() {
-        updates.close()
-        about.present()
-        show()
     }
 
     func show() {
@@ -259,21 +206,9 @@ final class JournalPanelController {
         keys.mode = JournalKeys.mode(
             intercepts: settings.interceptKeys,
             panelVisible: isPanelVisible,
-            content: panelContent,
+            accessGranted: access.isGranted,
             stashActive: NSApp.isActive,
             menuOpen: !trackingMenus.isEmpty
-        )
-    }
-
-    /// What the panel shows right now. The access slide counts the same in both of its looks —
-    /// last in the tutorial and on its own — because both send the user to System Settings.
-    private var panelContent: JournalKeys.PanelContent {
-        JournalKeys.content(
-            onboardingPresented: onboarding.isPresented,
-            onboardingIsAccess: onboarding.slide.kind == .access,
-            aboutPresented: about.isPresented,
-            updatePresented: updates.isPresented,
-            accessGranted: access.isGranted
         )
     }
 
@@ -298,9 +233,9 @@ final class JournalPanelController {
     /// clicks on Stash itself, so whatever it reports happened in another app. The access screen
     /// keeps watching nothing: a click there is usually the trip to System Settings.
     private func updateOutsideClicks() {
-        // Only the journal closes on an outside click: the tutorial and the access slide stay put,
-        // a click past them is usually the trip to System Settings.
-        let shouldWatch = isPanelVisible && panelContent == .journal
+        // Only the journal closes on an outside click: the access screen stays put, a click past
+        // it is usually the trip to System Settings.
+        let shouldWatch = isPanelVisible && access.isGranted
 
         if shouldWatch, outsideClickMonitor == nil {
             outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
@@ -331,8 +266,6 @@ final class JournalPanelController {
             settings: settings,
             access: access,
             onboarding: onboarding,
-            updates: updates,
-            about: about,
             presentation: presentation,
             keyEvents: keys.events,
             onPaste: { [weak self] entry in
@@ -481,13 +414,6 @@ final class JournalPanelController {
     }
 
     private func positionIfNeeded(_ panel: NSPanel) {
-        // The stories open in the middle of the screen: nobody is typing while they play, so
-        // "Open at the Cursor" does not apply to them.
-        if onboarding.isPresented {
-            center(panel)
-            return
-        }
-
         // Next to the text cursor, like Win+V. The panel is read before it is ordered in, while
         // the app the user types in still holds the focus.
         if settings.openAtCaret, let anchor = CaretLocator.anchor()?.rect {

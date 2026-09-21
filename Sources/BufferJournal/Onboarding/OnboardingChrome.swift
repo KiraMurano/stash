@@ -22,9 +22,13 @@ struct OnboardingColors {
     }
 }
 
-/// "Next" / "Start" / "Open Settings": an orange capsule that darkens on hover and press, like
-/// the journal's buttons.
+/// "Next" / "Start" / "Open Settings": solid orange, darkening on hover and press. Its corner is
+/// the 8 pt every other control in Stash is cut to — the journal's icon buttons, the delete
+/// dialog's pair — so the main action is the same shape as the rest of the app.
 struct OnboardingPrimaryButtonStyle: ButtonStyle {
+    /// The radius shared by every control in Stash.
+    static let cornerRadius: CGFloat = 8
+
     let colors: OnboardingColors
 
     func makeBody(configuration: Configuration) -> some View {
@@ -37,37 +41,12 @@ struct OnboardingPrimaryButtonStyle: ButtonStyle {
         @State private var isHovered = false
 
         var body: some View {
-            configuration.label
+            let shape = RoundedRectangle(cornerRadius: OnboardingPrimaryButtonStyle.cornerRadius, style: .continuous)
+
+            return configuration.label
                 .foregroundStyle(Color.white)
-                .background(Capsule().fill(colors.button(configuration.isPressed ? 2 : (isHovered ? 1 : 0))))
-                .contentShape(Capsule())
-                .onHover { isHovered = $0 }
-                .animation(.easeOut(duration: 0.12), value: isHovered)
-        }
-    }
-}
-
-/// The close cross: a plate of its own colour at 10 % on hover and 16 % when pressed.
-struct OnboardingCloseButtonStyle: ButtonStyle {
-    let color: Color
-
-    func makeBody(configuration: Configuration) -> some View {
-        CloseBody(configuration: configuration, color: color)
-    }
-
-    private struct CloseBody: View {
-        let configuration: ButtonStyleConfiguration
-        let color: Color
-        @State private var isHovered = false
-
-        var body: some View {
-            configuration.label
-                .foregroundStyle(color)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(color.opacity(configuration.isPressed ? 0.16 : (isHovered ? 0.10 : 0)))
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(shape.fill(colors.button(configuration.isPressed ? 2 : (isHovered ? 1 : 0))))
+                .contentShape(shape)
                 .onHover { isHovered = $0 }
                 .animation(.easeOut(duration: 0.12), value: isHovered)
         }

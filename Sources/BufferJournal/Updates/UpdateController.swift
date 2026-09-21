@@ -26,7 +26,6 @@ final class UpdateController: ObservableObject {
 
     @Published private(set) var state: State
     @Published private(set) var release: Release?
-    @Published private(set) var isPresented = false
     private(set) var isArmed = false
 
     private let environment: UpdateEnvironment
@@ -154,16 +153,11 @@ final class UpdateController: ObservableObject {
     // MARK: The screen
 
     /// Opening the screen counts as having seen this version, so the dot goes out even if the
-    /// answer is "Later".
-    func present() {
-        if let release {
-            defaults.set(release.version.description, forKey: Self.seenVersionKey)
-        }
-        isPresented = true
-    }
-
-    func close() {
-        isPresented = false
+    /// answer is "Later". Whether the screen is on screen is the window's business: the
+    /// controller holds no state about it.
+    func markSeen() {
+        guard let release else { return }
+        defaults.set(release.version.description, forKey: Self.seenVersionKey)
     }
 
     func openReleasesPage() {

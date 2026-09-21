@@ -14,6 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updates: UpdateController!
     private var about: AboutController!
     private var badge: StatusItemBadge!
+    private var updateWindow: AccessoryWindow<UpdateView>!
+    private var aboutWindow: AccessoryWindow<AboutView>!
+    private var tourWindow: AccessoryWindow<OnboardingView>!
+    private var tourObserver: AnyCancellable?
     private var updatesObserver: AnyCancellable?
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
@@ -56,8 +60,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotKeys: hotKeyController,
             access: access,
             onboarding: onboarding,
-            updates: updates,
-            about: about,
             onContentSettled: { [weak self] in self?.updates.armIfReady() }
         )
         hotKeyController.register(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(optionKey)) { [weak self] in
@@ -65,6 +67,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         configureStatusItem()
+        updateWindow = AccessoryWindow(
+            placement: .statusItem { [weak self] in self?.statusItemFrame() },
+            sizing: .fitsContent(width: 400),
+            cornerRadius: 20,
+            // While the image is coming down or going in, a click elsewhere must not take the
+            // progress off the screen.
+            closesOnOutsideClick: { [weak self] in
+                guard let self else { return false }
+                switch self.updates.state {
+                case .downloading, .installing: return false
+                default: return true
+                }
+            },
+            rootView: UpdateView(
+                controller: updates,
+                l10n: settings.l10n,
+                onClose: { [weak self] in self?.updateWindow.close() }
+            )
+        )
+        aboutWindow = AccessoryWindow(
+            placement: .statusItem { [weak self] in self?.statusItemFrame() },
+            sizing: .fitsContent(width: 400),
+            cornerRadius: 20,
+            closesOnOutsideClick: { true },
+            rootView: AboutView(
+                controller: about,
+                l10n: settings.l10n,
+                onClose: { [weak self] in self?.aboutWindow.close() }
+            )
+        )
+        tourWindow = AccessoryWindow(
+            placement: .center,
+            sizing: .fixed(NSSize(width: 640, height: 440)),
+            cornerRadius: JournalView.Layout.cornerRadius,
+            // A click past the tour is usually the trip to System Settings.
+            closesOnOutsideClick: { false },
+            rootView: OnboardingView(
+                controller: onboarding,
+                access: access,
+                l10n: settings.l10n,
+                onOpenSettings: { [weak self] in self?.onboarding.requestAccess() },
+                onClosePanel: { [weak self] in self?.tourWindow.close() }
+            )
+        )
+
+        // The tour's cross, its last slide and the menu item all go through the controller, so
+        // the window follows the controller rather than the other way round.
+        tourObserver = onboarding.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.tourStateChanged() }
+        }
+
         monitor.start()
 
         updatesObserver = updates.objectWillChange.sink { [weak self] _ in
@@ -84,10 +137,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // access. Later on, pasting still needs that access, and without it the panel opens right
         // away on the access slide alone.
         if onboarding.shouldShowOnLaunch {
-            panelController.showOnboarding(replay: false)
+            onboarding.present(replay: false)
         } else if !access.isGranted {
             panelController.show()
         }
+    }
+
+    /// The tour is on screen while the controller says so and it is not the access screen — that
+    /// one belongs to the journal panel, which stands in for the journal without access.
+    private func tourStateChanged() {
+        let wanted = onboarding.isPresented && !onboarding.isAccessOnly
+        if wanted, !tourWindow.isVisible {
+            tourWindow.show()
+        } else if !wanted, tourWindow.isVisible {
+            tourWindow.close()
+            tourClosed()
+        }
+    }
+
+    /// The journal is not opened after the tour: it was never what was asked for. Without
+    /// Accessibility access there is nothing to open it for anyway, and the panel puts up the
+    /// access screen instead — a first launch has to end on that screen, or nobody grants access.
+    private func tourClosed() {
+        if !access.isGranted {
+            panelController.show()
+        }
+        updates.armIfReady()
     }
 
     private func configureStatusItem() {
@@ -103,13 +178,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu()
     }
 
+    /// The status item button in screen coordinates: where the windows that belong to it hang from.
+    private func statusItemFrame() -> NSRect? {
+        guard let button = statusItem.button, let window = button.window else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
     private func rebuildMenu() {
         let l10n = settings.l10n
         let titles = StatusMenuTitles(l10n: l10n)
         let menu = NSMenu()
         // ⌥V is a global hotkey, not a menu shortcut; a status item's menu registers its key
         // equivalents only while it is open, so this line only tells the user what to press.
-        let openItem = menuItem(titles.openStash, action: #selector(openJournal), keyEquivalent: "v")
+        let openItem = menuItem(titles.openStash, action: #selector(openJournal), keyEquivalent: "v", icon: "doc.on.clipboard")
         openItem.keyEquivalentModifierMask = .option
         menu.addItem(openItem)
         menu.addItem(NSMenuItem.separator())
@@ -130,6 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let themeItem = NSMenuItem(title: titles.theme, action: nil, keyEquivalent: "")
+        themeItem.image = icon("circle.lefthalf.fill")
         let themeMenu = NSMenu()
         themeItems = [:]
         for themeMode in ThemeMode.allCases {
@@ -145,6 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(themeItem)
 
         let languageItem = NSMenuItem(title: titles.language, action: nil, keyEquivalent: "")
+        languageItem.image = icon("globe")
         let languageMenu = NSMenu()
         languageItems = [:]
         for language in AppLanguage.allCases {
@@ -161,24 +244,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
         if updates.canSelfUpdate {
-            updateItem = menuItem(titles.checkForUpdates, action: #selector(openUpdates))
+            updateItem = menuItem(titles.checkForUpdates, action: #selector(openUpdates), icon: "arrow.down.circle")
             menu.addItem(updateItem)
         }
 
         // Above "Clear History", which asks nothing before it clears: a miss costs the history.
-        menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial)))
+        menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial), icon: "questionmark.circle"))
         // Always there, in a source build too: such a build has an author no less.
-        menu.addItem(menuItem(titles.about, action: #selector(openAbout)))
-        menu.addItem(menuItem(titles.clearHistory, action: #selector(clearHistory)))
-        menu.addItem(menuItem(titles.quit, action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(menuItem(titles.about, action: #selector(openAbout), icon: "info.circle"))
+        menu.addItem(menuItem(titles.clearHistory, action: #selector(clearHistory), icon: "trash"))
+        menu.addItem(menuItem(titles.quit, action: #selector(quit), keyEquivalent: "q", icon: "power"))
         statusItem.menu = menu
         updateSettingsMenuState()
     }
 
-    private func menuItem(_ title: String, action: Selector, keyEquivalent: String = "") -> NSMenuItem {
+    private func menuItem(_ title: String, action: Selector, keyEquivalent: String = "", icon name: String? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
         item.target = self
+        item.image = name.flatMap(icon)
         return item
+    }
+
+    /// A menu item's symbol, at the size the menu's own text is set in. It is a template, so it
+    /// takes the menu's colour — including the white of a highlighted row.
+    ///
+    /// The switches carry no symbol: their mark is the tick, and a symbol beside it would say
+    /// the same thing twice.
+    private func icon(_ name: String) -> NSImage? {
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
+        image?.isTemplate = true
+        return image
     }
 
     @objc private func openJournal() {
@@ -186,18 +282,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openTutorial() {
-        panelController.showOnboarding(replay: true)
+        updateWindow.close()
+        aboutWindow.close()
+        onboarding.present(replay: true)
     }
 
     @objc private func openAbout() {
-        panelController.showAbout()
+        updateWindow.close()
+        aboutWindow.show()
     }
 
     /// The screen comes up at once, before the answer: a press has to do something visible, and
     /// all three answers — a new version, nothing new, a check that failed — are its faces.
     /// Nothing pops up on its own; the panel only ever comes up because the person asked for it.
     @objc private func openUpdates() {
-        panelController.showUpdate()
+        aboutWindow.close()
+        updates.markSeen()
+        updateWindow.show()
         guard updates.release == nil else { return }
         Task { await updates.check(manual: true) }
     }
@@ -210,6 +311,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The menu item says what the updater is doing, and the dot follows the controller.
     private func updateStateChanged() {
+        // The screen changes shape with the state — notes appear, the buttons give way to a line
+        // of words — so the window is asked to fit itself again.
+        updateWindow?.fitToContent()
         badge?.isVisible = updates.isBadgeVisible
         let titles = StatusMenuTitles(l10n: settings.l10n)
 

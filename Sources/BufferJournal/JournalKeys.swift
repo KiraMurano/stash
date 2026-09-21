@@ -40,17 +40,6 @@ enum JournalKeyAction: Equatable {
 /// key-repeat rate.
 @MainActor
 final class JournalKeys {
-    /// What the panel shows right now.
-    enum PanelContent: Equatable {
-        case journal
-        case onboarding
-        case access
-        /// The update screen: like the tutorial, it takes no keys at all.
-        case update
-        /// The About screen: like the tutorial, it takes no keys at all.
-        case about
-    }
-
     /// Which keys are registered.
     enum Mode: Equatable {
         /// None: every key stays with the app the user is typing in.
@@ -61,37 +50,18 @@ final class JournalKeys {
 
     /// Take keys only while Intercept Keys is on, the panel is on screen, Stash is not the active
     /// app (its clip editor needs these keys) and no menu of Stash is open (menus are walked with
-    /// the arrows). Only the journal takes keys: the tutorial and the access screen leave every
-    /// key to the app the user is typing in.
-    nonisolated static func mode(intercepts: Bool, panelVisible: Bool, content: PanelContent, stashActive: Bool, menuOpen: Bool) -> Mode {
-        guard intercepts, panelVisible, !stashActive, !menuOpen else { return .off }
-
-        switch content {
-        case .journal: return .journal
-        case .onboarding, .access, .update, .about: return .off
-        }
-    }
-
-    /// What the panel shows right now. The tutorial covers everything, the About screen covers
-    /// the update screen, and without access the journal gives way to the access slide — which
-    /// counts the same in both of its looks, last in the tutorial and on its own.
-    nonisolated static func content(
-        onboardingPresented: Bool,
-        onboardingIsAccess: Bool,
-        aboutPresented: Bool,
-        updatePresented: Bool,
-        accessGranted: Bool
-    ) -> PanelContent {
-        if onboardingPresented {
-            return onboardingIsAccess ? .access : .onboarding
-        }
-        if aboutPresented {
-            return .about
-        }
-        if updatePresented {
-            return .update
-        }
-        return accessGranted ? .journal : .access
+    /// the arrows). Without Accessibility access the panel shows the access screen in place of the
+    /// journal, and that screen leaves every key to the app the user is typing in — as do the
+    /// update screen, About and the tour, which have windows of their own and never take keys.
+    nonisolated static func mode(
+        intercepts: Bool,
+        panelVisible: Bool,
+        accessGranted: Bool,
+        stashActive: Bool,
+        menuOpen: Bool
+    ) -> Mode {
+        guard intercepts, panelVisible, accessGranted, !stashActive, !menuOpen else { return .off }
+        return .journal
     }
 
     let events = PassthroughSubject<JournalKey, Never>()

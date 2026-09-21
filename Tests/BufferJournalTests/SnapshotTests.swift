@@ -11,12 +11,8 @@ import Testing
 struct SnapshotTests {
     private static let directory = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"].map { URL(fileURLWithPath: $0) }
     private static let schemes: [(ColorScheme, String)] = [(.light, "light"), (.dark, "dark")]
-    /// The panel at its smallest, its default and a large size.
-    private static let sizes = [
-        CGSize(width: 560, height: 360),
-        CGSize(width: 640, height: 440),
-        CGSize(width: 900, height: 600),
-    ]
+    /// The tour's window is fixed at this size, and the access screen takes the panel's default.
+    private static let sizes = [CGSize(width: 640, height: 440)]
 
     private func render<V: View>(_ view: V, name: String) throws {
         let renderer = ImageRenderer(content: view)
@@ -167,14 +163,18 @@ extension SnapshotTests {
             (.failed(.network), "failed-network", false),
         ]
 
+        // Окно 400 pt шириной и высотой по содержимому: перебирать размеры панели больше нечего.
         for (state, name, withRelease) in states {
             for (scheme, schemeName) in Self.schemes {
-                for size in Self.sizes {
-                    let view = UpdateView(controller: updateController(state, withRelease: withRelease), l10n: L10n(language: .russian), scrolls: false)
-                        .frame(width: size.width, height: size.height)
-                        .environment(\.colorScheme, scheme)
-                    try render(view, name: "update-\(name)-\(schemeName)-\(Int(size.width))")
-                }
+                let view = UpdateView(
+                    controller: updateController(state, withRelease: withRelease),
+                    l10n: L10n(language: .russian),
+                    onClose: {},
+                    scrolls: false
+                )
+                .frame(width: 400)
+                .environment(\.colorScheme, scheme)
+                try render(view, name: "update-\(name)-\(schemeName)")
             }
         }
     }
@@ -206,14 +206,13 @@ extension SnapshotTests {
             )
         )
 
+        // Окно 400 pt шириной и высотой по содержимому.
         for (language, languageName) in [(ResolvedLanguage.russian, "ru"), (.english, "en")] {
             for (scheme, schemeName) in Self.schemes {
-                for size in Self.sizes {
-                    let view = AboutView(controller: controller, l10n: L10n(language: language))
-                        .frame(width: size.width, height: size.height)
-                        .environment(\.colorScheme, scheme)
-                    try render(view, name: "about-\(languageName)-\(schemeName)-\(Int(size.width))")
-                }
+                let view = AboutView(controller: controller, l10n: L10n(language: language), onClose: {})
+                    .frame(width: 400)
+                    .environment(\.colorScheme, scheme)
+                try render(view, name: "about-\(languageName)-\(schemeName)")
             }
         }
     }

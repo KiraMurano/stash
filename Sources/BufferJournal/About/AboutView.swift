@@ -1,12 +1,15 @@
 import AppKit
 import SwiftUI
 
-/// The About screen over the journal panel. Its head and footer are the update screen's, to the
-/// pixel; the middle is bare field, as on an update check that found nothing — one thing, the
-/// one the screen was opened for, standing on the window's own background (concept 1.2).
+/// The About screen, in a window of its own that hangs from the status item. Its head is the
+/// update screen's, to the pixel; the middle is bare field with the studio's wordmark on it. The
+/// footer is one link and no button: the screen has no main action and no longer pretends to
+/// (`.concepts/2026-09-21-separate-windows-round1.html`, variant 4.2 without the button).
 struct AboutView: View {
     @ObservedObject var controller: AboutController
     let l10n: L10n
+    /// Closes the window. The screen holds no state about being on screen; the window does.
+    let onClose: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -20,9 +23,9 @@ struct AboutView: View {
         static let textSize: CGFloat = 13
         static let titleSize: CGFloat = 18
         static let iconFrame: CGFloat = 21
-        /// The wordmark: 56 pt takes 384 pt of the 600 pt column at its widest setting, so it
-        /// still fits the smallest panel (concept round 1).
-        static let wordmarkSize: CGFloat = 56
+        /// The window is 400 pt wide, so the column under the wordmark is 360: the widest
+        /// setting at 56 pt needs 384 and would not fit.
+        static let wordmarkSize: CGFloat = 38
         /// Between "Made in" and the wordmark under it.
         static let madeInGap: CGFloat = 12
     }
@@ -37,22 +40,31 @@ struct AboutView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            colors.field
+        // The field is a background, not a layer under the content: a Color in a ZStack takes
+        // whatever height it is offered, and the window asks its content how tall it wants to be.
+        content
+            .background(colors.field)
+            .environment(\.solidAccents, true)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(l10n("About Stash", "О приложении Stash"))
+            .accessibilityAddTraits(.isModal)
+    }
 
-            VStack(spacing: 0) {
+    private var content: some View {
+            // Insets belong to each piece, as on the update screen: the window itself holds none.
+            VStack(spacing: Metrics.gap) {
                 head
+                    .padding(.top, Metrics.top)
+                    .padding(.horizontal, Metrics.side)
+
                 studio
+                    .padding(.horizontal, Metrics.side)
+
                 footer
-                    .padding(.top, Metrics.gap)
+                    .padding(.horizontal, Metrics.side)
+                    .padding(.bottom, Metrics.bottom)
             }
-            .padding(.top, Metrics.top)
-            .padding(.horizontal, Metrics.side)
-            .padding(.bottom, Metrics.bottom)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(l10n("About Stash", "О приложении Stash"))
-        .accessibilityAddTraits(.isModal)
+            .frame(maxWidth: .infinity)
     }
 
     // MARK: Head
@@ -64,8 +76,6 @@ struct AboutView: View {
             closeButton
         }
         .frame(height: Metrics.headHeight)
-        // The head row moves the panel, like the journal's header and the update screen's.
-        .background(WindowDragHandle())
     }
 
     private var lockup: some View {
@@ -87,17 +97,9 @@ struct AboutView: View {
         }
     }
 
+    /// The journal's own close button, so every window of Stash closes with the same one.
     private var closeButton: some View {
-        Button {
-            controller.close()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28)
-        }
-        .buttonStyle(OnboardingCloseButtonStyle(color: colors.close))
-        .help(l10n("Close", "Закрыть"))
-        .accessibilityLabel(l10n("Close", "Закрыть"))
+        GlassIconButton(systemName: "xmark", help: l10n("Close", "Закрыть"), action: onClose)
     }
 
     // MARK: Middle
@@ -110,34 +112,24 @@ struct AboutView: View {
 
             Wordmark(size: Metrics.wordmarkSize, color: palette.textPrimary)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Room around the wordmark, in place of the height it used to take by stretching.
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Footer
 
     private var footer: some View {
-        HStack(alignment: .center, spacing: 16) {
-            Button {
-                controller.openRepository()
-            } label: {
-                Text(Self.repositoryLabel)
-                    .font(.system(size: Metrics.textSize))
-                    .foregroundStyle(palette.textSecondary)
-                    .underline(true, color: palette.textTertiary)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Button {
-                controller.openFeedback()
-            } label: {
-                Text(l10n.aboutFeedback)
-                    .font(.system(size: Metrics.textSize, weight: .semibold))
-                    .padding(.horizontal, 16)
-                    .frame(minWidth: 150, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
-            }
-            .buttonStyle(OnboardingPrimaryButtonStyle(colors: colors))
+        Button {
+            controller.openRepository()
+        } label: {
+            Text(Self.repositoryLabel)
+                .font(.system(size: Metrics.textSize))
+                .foregroundStyle(palette.textSecondary)
+                .underline(true, color: palette.textTertiary)
         }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
     }
 
     /// The address without its scheme: "github.com/KiraMurano/stash" reads as a place, while
