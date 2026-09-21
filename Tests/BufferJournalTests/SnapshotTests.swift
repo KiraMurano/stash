@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import SwiftUI
 import Testing
 @testable import BufferJournal
@@ -173,6 +174,45 @@ extension SnapshotTests {
                         .frame(width: size.width, height: size.height)
                         .environment(\.colorScheme, scheme)
                     try render(view, name: "update-\(name)-\(schemeName)-\(Int(size.width))")
+                }
+            }
+        }
+    }
+}
+
+extension SnapshotTests {
+    /// Booker Display is registered by the bundle the app is built into, and a test process has
+    /// no bundle. Without registering the file by hand the wordmark would be drawn in the
+    /// fallback face, and a picture of that says nothing about the screen.
+    private static let wordmarkFont: Bool = {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = root.appendingPathComponent("Resources/Fonts/BookerDisplay-Regular.ttf")
+        return CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+    }()
+
+    @Test func theAboutScreenRenders() throws {
+        #expect(Self.wordmarkFont)
+        #expect(WordmarkFont.isAvailable)
+
+        let controller = AboutController(
+            environment: UpdateEnvironment(
+                currentVersion: AppVersion(major: 1, minor: 27),
+                requirement: "req",
+                bundleURL: URL(fileURLWithPath: "/Applications/Stash.app"),
+                isDestinationWritable: true
+            )
+        )
+
+        for (language, languageName) in [(ResolvedLanguage.russian, "ru"), (.english, "en")] {
+            for (scheme, schemeName) in Self.schemes {
+                for size in Self.sizes {
+                    let view = AboutView(controller: controller, l10n: L10n(language: language))
+                        .frame(width: size.width, height: size.height)
+                        .environment(\.colorScheme, scheme)
+                    try render(view, name: "about-\(languageName)-\(schemeName)-\(Int(size.width))")
                 }
             }
         }
