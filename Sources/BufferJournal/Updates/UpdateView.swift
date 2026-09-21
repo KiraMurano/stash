@@ -158,20 +158,31 @@ struct UpdateView: View {
     /// longer than the screen. The list runs edge to edge and keeps its insets inside, so the
     /// scroller gets a lane of its own on the right instead of lying on the words — the journal's
     /// preview pane is built the same way.
+    /// The list scrolls only when the window has run out of screen to grow into. Asked for its
+    /// own height, `ViewThatFits` answers with the first of the two — the plain list — so the
+    /// window is sized to the whole list; once the window is capped, the proposal no longer fits
+    /// it and the scrolling one takes over.
+    @ViewBuilder
     private var notes: some View {
-        scrollIfNeeded {
-            VStack(alignment: .leading, spacing: Metrics.notesSpacing) {
-                ForEach(ReleaseNotes.parse(controller.release?.notes ?? "")) { note in
-                    switch note.kind {
-                    case .item: item(note.text)
-                    case .paragraph: paragraph(note.text)
-                    }
-                }
+        if scrolls {
+            ViewThatFits(in: .vertical) {
+                // Nothing scrolls here, so no lane is kept for a scroller and no edge carries a
+                // shadow: there is never anything behind an edge.
+                list(trailing: Metrics.side)
+
+                scrollingList
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, Metrics.side)
-            .padding(.trailing, Metrics.side + Metrics.scrollerLane)
+        } else {
+            list(trailing: Metrics.side)
         }
+    }
+
+    private var scrollingList: some View {
+        ScrollView {
+            list(trailing: Metrics.side + Metrics.scrollerLane)
+                .background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
+        }
+        .background(ScrollOffsetObserver { notesEdges = $0 })
         // An edge with more behind it gets a shadow, as in the journal.
         .overlay(alignment: .top) {
             EdgeShadow(palette: palette, edge: .top)
@@ -184,24 +195,18 @@ struct UpdateView: View {
         .animation(.easeOut(duration: 0.15), value: notesEdges)
     }
 
-    /// The list scrolls only when the window has run out of screen to grow into. Asked for its
-    /// own height, `ViewThatFits` answers with the first of the two — the plain list — so the
-    /// window is sized to the whole list; once the window is capped, the proposal no longer fits
-    /// it and the scrolling one takes over.
-    @ViewBuilder
-    private func scrollIfNeeded<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        if scrolls {
-            ViewThatFits(in: .vertical) {
-                content()
-
-                ScrollView {
-                    content().background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
+    private func list(trailing: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: Metrics.notesSpacing) {
+            ForEach(ReleaseNotes.parse(controller.release?.notes ?? "")) { note in
+                switch note.kind {
+                case .item: item(note.text)
+                case .paragraph: paragraph(note.text)
                 }
-                .background(ScrollOffsetObserver { notesEdges = $0 })
             }
-        } else {
-            content()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, Metrics.side)
+        .padding(.trailing, trailing)
     }
 
     private func item(_ text: String) -> some View {
@@ -310,7 +315,7 @@ struct UpdateView: View {
             // the label. Outside the style it pushes the button around and leaves the tint
             // clinging to the word.
             Button(action: onClose) {
-                label(l10n.updateLater)
+                label(l10n.updateLater, fills: false)
             }
             .buttonStyle(TranslucentButtonStyle(tone: .neutral, cornerRadius: OnboardingPrimaryButtonStyle.cornerRadius))
 
@@ -323,18 +328,23 @@ struct UpdateView: View {
 
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            label(title)
+            label(title, fills: true)
         }
         .buttonStyle(OnboardingPrimaryButtonStyle(colors: colors))
     }
 
-    /// Every button in the footer takes an equal share of the window's width.
-    private func label(_ title: String) -> some View {
+    /// The footer's buttons fill its width between them, but not in equal halves: the one that
+    /// declines takes what its word needs and the main one takes the rest. Nothing is ever set
+    /// smaller to fit — lettering of two sizes side by side reads as a mistake.
+    private func label(_ title: String, fills: Bool) -> some View {
         Text(title)
             .font(.system(size: Metrics.textSize, weight: .semibold))
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
             .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
+            .frame(
+                maxWidth: fills ? .infinity : nil,
+                minHeight: Metrics.buttonHeight,
+                maxHeight: Metrics.buttonHeight
+            )
     }
 }
