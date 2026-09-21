@@ -16,6 +16,8 @@ struct UpdateView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
+    @State private var notesEdges = ScrollEdges()
+
     /// The tutorial's metrics, so the two screens line up to the pixel.
     private enum Metrics {
         static let top: CGFloat = 12
@@ -39,6 +41,8 @@ struct UpdateView: View {
         static let iconFrame: CGFloat = 21
         /// The download line above the footer.
         static let bar: CGFloat = 3
+        /// The lane the scroller gets on the right, so it never lies on the text.
+        static let scrollerLane: CGFloat = 6
     }
 
     private var colors: OnboardingColors {
@@ -142,6 +146,10 @@ struct UpdateView: View {
         }
     }
 
+    /// The window takes the height the list asks for, so this scrolls only when the list is
+    /// longer than the screen. The list runs edge to edge and keeps its insets inside, so the
+    /// scroller gets a lane of its own on the right instead of lying on the words — the journal's
+    /// preview pane is built the same way.
     private var notes: some View {
         scrollIfNeeded {
             VStack(alignment: .leading, spacing: Metrics.notesSpacing) {
@@ -153,13 +161,29 @@ struct UpdateView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, Metrics.side)
+            .padding(.trailing, Metrics.side + Metrics.scrollerLane)
         }
+        .padding(.horizontal, -Metrics.side)
+        // An edge with more behind it gets a shadow, as in the journal.
+        .overlay(alignment: .top) {
+            EdgeShadow(palette: palette, edge: .top)
+                .opacity(notesEdges.isScrolled ? 1 : 0)
+        }
+        .overlay(alignment: .bottom) {
+            EdgeShadow(palette: palette, edge: .bottom)
+                .opacity(notesEdges.hasMoreBelow ? 1 : 0)
+        }
+        .animation(.easeOut(duration: 0.15), value: notesEdges)
     }
 
     @ViewBuilder
     private func scrollIfNeeded<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         if scrolls {
-            ScrollView { content() }
+            ScrollView {
+                content().background(ScrollBarAppearanceSetter(colorScheme: colorScheme))
+            }
+            .background(ScrollOffsetObserver { notesEdges = $0 })
         } else {
             content().frame(maxHeight: .infinity, alignment: .top)
         }
