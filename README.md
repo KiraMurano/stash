@@ -37,6 +37,8 @@ The app bundle is created at:
 
 The build is universal (Apple silicon and Intel).
 
+The wordmark on the About screen is set in Booker Display, a typeface of ozero.digital. Its file lives in `Resources/Fonts` next to its licence, which allows the font inside an app as long as the two travel together; `Scripts/build_app.sh` copies both into the bundle, and `ATSApplicationFontsPath` in `Info.plist` has macOS register the font at launch.
+
 ### Signing
 
 Releases are signed with a self-signed certificate named `Stash Updates`, not with an Apple Developer ID. It is free, and it is what keeps the app's identity — and with it the Accessibility permission — the same from build to build. Create it once in Keychain Access → Certificate Assistant → Create a Certificate: name `Stash Updates`, identity type Self Signed Root, certificate type Code Signing.

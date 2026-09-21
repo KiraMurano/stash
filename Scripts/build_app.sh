@@ -18,6 +18,9 @@ mkdir -p "$MACOS_DIR" "$CONTENTS_DIR/Resources"
 cp "$BIN_DIR/BufferJournal" "$MACOS_DIR/BufferJournal"
 cp "Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "Resources/AppIcon.icns" "Resources/StatusIcon.png" "Resources/StatusIcon@2x.png" "$CONTENTS_DIR/Resources/"
+# The About screen sets the wordmark in Booker Display. Its licence allows the file inside an
+# app, but only travelling together with the licence itself, so both go into the bundle.
+cp -R "Resources/Fonts" "$CONTENTS_DIR/Resources/Fonts"
 
 if [[ -n "$VERSION" ]]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$CONTENTS_DIR/Info.plist"
