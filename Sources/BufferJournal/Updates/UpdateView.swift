@@ -298,7 +298,7 @@ struct UpdateView: View {
                     .padding(.horizontal, 16)
                     .frame(minWidth: 100, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
             }
-            .buttonStyle(TranslucentButtonStyle(tone: .neutral, cornerRadius: Metrics.buttonHeight / 2))
+            .buttonStyle(TranslucentButtonStyle(tone: .neutral, cornerRadius: OnboardingPrimaryButtonStyle.cornerRadius))
 
             primary(l10n.updateNow) { controller.install() }
         default:
