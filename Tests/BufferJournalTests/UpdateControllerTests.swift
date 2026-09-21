@@ -135,17 +135,9 @@ struct UpdateControllerTests {
     @Test func openingTheScreenPutsTheBadgeOut() async {
         let (controller, _) = controller(checker: .success(release("1.27")))
         await controller.check(manual: true)
-        controller.present()
-        #expect(controller.isPresented)
-        #expect(!controller.isBadgeVisible)
-    }
+        #expect(controller.isBadgeVisible)
 
-    @Test func laterKeepsTheBadgeOut() async {
-        let (controller, _) = controller(checker: .success(release("1.27")))
-        await controller.check(manual: true)
-        controller.present()
-        controller.close()
-        #expect(!controller.isPresented)
+        controller.markSeen()
         #expect(!controller.isBadgeVisible)
     }
 
@@ -153,7 +145,7 @@ struct UpdateControllerTests {
         let defaults = freshDefaults()
         let (seen, _) = controller(checker: .success(release("1.27")), defaults: defaults)
         await seen.check(manual: true)
-        seen.present()
+        seen.markSeen()
 
         let (next, _) = controller(checker: .success(release("1.28")), defaults: defaults)
         await next.check(manual: true)

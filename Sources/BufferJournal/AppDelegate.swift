@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updates: UpdateController!
     private var about: AboutController!
     private var badge: StatusItemBadge!
+    private var updateWindow: AccessoryWindow<UpdateView>!
     private var updatesObserver: AnyCancellable?
     private var panelController: JournalPanelController!
     private var hotKeyController: HotKeyController!
@@ -56,7 +57,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotKeys: hotKeyController,
             access: access,
             onboarding: onboarding,
-            updates: updates,
             about: about,
             onContentSettled: { [weak self] in self?.updates.armIfReady() }
         )
@@ -65,6 +65,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         configureStatusItem()
+        updateWindow = AccessoryWindow(
+            placement: .statusItem { [weak self] in self?.statusItemFrame() },
+            sizing: .fitsContent(width: 400),
+            cornerRadius: 20,
+            // While the image is coming down or going in, a click elsewhere must not take the
+            // progress off the screen.
+            closesOnOutsideClick: { [weak self] in
+                guard let self else { return false }
+                switch self.updates.state {
+                case .downloading, .installing: return false
+                default: return true
+                }
+            },
+            rootView: UpdateView(
+                controller: updates,
+                l10n: settings.l10n,
+                onClose: { [weak self] in self?.updateWindow.close() }
+            )
+        )
         monitor.start()
 
         updatesObserver = updates.objectWillChange.sink { [weak self] _ in
@@ -101,6 +120,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             badge = StatusItemBadge(button: button)
         }
         rebuildMenu()
+    }
+
+    /// The status item button in screen coordinates: where the windows that belong to it hang from.
+    private func statusItemFrame() -> NSRect? {
+        guard let button = statusItem.button, let window = button.window else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
     }
 
     private func rebuildMenu() {
@@ -197,7 +222,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// all three answers — a new version, nothing new, a check that failed — are its faces.
     /// Nothing pops up on its own; the panel only ever comes up because the person asked for it.
     @objc private func openUpdates() {
-        panelController.showUpdate()
+        updates.markSeen()
+        updateWindow.show()
         guard updates.release == nil else { return }
         Task { await updates.check(manual: true) }
     }

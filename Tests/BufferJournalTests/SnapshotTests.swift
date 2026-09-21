@@ -167,14 +167,18 @@ extension SnapshotTests {
             (.failed(.network), "failed-network", false),
         ]
 
+        // Окно 400 pt шириной и высотой по содержимому: перебирать размеры панели больше нечего.
         for (state, name, withRelease) in states {
             for (scheme, schemeName) in Self.schemes {
-                for size in Self.sizes {
-                    let view = UpdateView(controller: updateController(state, withRelease: withRelease), l10n: L10n(language: .russian), scrolls: false)
-                        .frame(width: size.width, height: size.height)
-                        .environment(\.colorScheme, scheme)
-                    try render(view, name: "update-\(name)-\(schemeName)-\(Int(size.width))")
-                }
+                let view = UpdateView(
+                    controller: updateController(state, withRelease: withRelease),
+                    l10n: L10n(language: .russian),
+                    onClose: {},
+                    scrolls: false
+                )
+                .frame(width: 400)
+                .environment(\.colorScheme, scheme)
+                try render(view, name: "update-\(name)-\(schemeName)")
             }
         }
     }

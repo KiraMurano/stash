@@ -1,14 +1,17 @@
 import AppKit
 import SwiftUI
 
-/// The update screen over the journal panel. It is built like the tutorial — same field, same
-/// card, same orange button — with the version in the head row, the release notes in the card
-/// and only the actions at the bottom (concept round 1, variant 1.2).
+/// The update screen, in a window of its own that hangs from the status item. The release notes
+/// stand on the bare field — the window is the card now — the download runs as a 3 pt line above
+/// the footer, and the footer carries nothing but the actions
+/// (`.concepts/2026-09-21-separate-windows.html`, variants 1.1, 2.1, 1.1.1).
 struct UpdateView: View {
     @ObservedObject var controller: UpdateController
     let l10n: L10n
+    /// Closes the window. The screen holds no state about being on screen; the window does.
+    let onClose: () -> Void
     /// Off only for the snapshots: ImageRenderer draws a ScrollView as an empty box, and a
-    /// snapshot of an empty card says nothing about the screen.
+    /// snapshot of an empty list says nothing about the screen.
     var scrolls = true
 
     @Environment(\.colorScheme) private var colorScheme
@@ -20,13 +23,10 @@ struct UpdateView: View {
         static let bottom: CGFloat = 16
         static let gap: CGFloat = 10
         static let headHeight: CGFloat = 28
-        static let cardRadius: CGFloat = 20
         static let buttonHeight: CGFloat = 36
-        static let progressWidth: CGFloat = 220
         static let textSize: CGFloat = 13
         /// The lone answer on the field carries the screen, so it is larger than body text.
         static let answerSize: CGFloat = 17
-        static let notesPadding: CGFloat = 18
         static let notesSpacing: CGFloat = 8
         /// The marker's column and the 12×3 bar inside it (concept round 3, variant 1.2.1.2).
         static let markColumn: CGFloat = 14
@@ -37,6 +37,8 @@ struct UpdateView: View {
         /// The title lockup, as on the access slide: a 21 pt icon before 18 pt semibold.
         static let titleSize: CGFloat = 18
         static let iconFrame: CGFloat = 21
+        /// The download line above the footer.
+        static let bar: CGFloat = 3
     }
 
     private var colors: OnboardingColors {
@@ -54,18 +56,18 @@ struct UpdateView: View {
 
             VStack(spacing: 0) {
                 head
-                // The card is there to hold the release notes. Without them — while the check
-                // runs, when there is nothing new, when the check failed — it would be a large
-                // empty box around one line, so the answer stands on the field instead.
+                // The notes stand on the field: the window's own edge does what the card did.
+                // Without a release — while the check runs, when there is nothing new, when the
+                // check failed — one line stands there instead.
                 if controller.release != nil {
-                    card
-                        .padding(.top, Metrics.gap)
+                    notes.padding(.top, Metrics.gap)
                 } else {
-                    answer
-                        .padding(.top, Metrics.gap)
+                    answer.padding(.top, Metrics.gap)
                 }
-                footer
-                    .padding(.top, Metrics.gap)
+                if let fill = progressFill {
+                    progressBar(fill).padding(.top, Metrics.gap)
+                }
+                footer.padding(.top, Metrics.gap)
             }
             .padding(.top, Metrics.top)
             .padding(.horizontal, Metrics.side)
@@ -85,8 +87,6 @@ struct UpdateView: View {
             closeButton
         }
         .frame(height: Metrics.headHeight)
-        // The head row moves the panel, like the journal's header and the tutorial's bars.
-        .background(WindowDragHandle())
     }
 
     private var lockup: some View {
@@ -111,9 +111,7 @@ struct UpdateView: View {
     }
 
     private var closeButton: some View {
-        Button {
-            controller.close()
-        } label: {
+        Button(action: onClose) {
             Image(systemName: "xmark")
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 28, height: 28)
@@ -123,19 +121,7 @@ struct UpdateView: View {
         .accessibilityLabel(l10n("Close", "Закрыть"))
     }
 
-    // MARK: Card
-
-    private var card: some View {
-        let shape = RoundedRectangle(cornerRadius: Metrics.cardRadius, style: .continuous)
-
-        return shape
-            .fill(palette.windowBackground)
-            .overlay(shape.fill(palette.sidebarTint))
-            .overlay(shape.strokeBorder(palette.border, lineWidth: 1))
-            .shadow(color: colors.cardShadow, radius: 16, y: 6)
-            .overlay(notes.clipShape(shape))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+    // MARK: Middle
 
     /// The answer to a check that brought no release: "checking", "nothing new" or what failed.
     private var answer: some View {
@@ -167,7 +153,6 @@ struct UpdateView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Metrics.notesPadding)
         }
     }
 
@@ -210,45 +195,80 @@ struct UpdateView: View {
         (try? AttributedString(markdown: text)) ?? AttributedString(text)
     }
 
+    // MARK: Progress
+
+    /// How far the bar is filled, or nil when nothing is being downloaded or installed.
+    private var progressFill: Double? {
+        switch controller.state {
+        case .downloading(let progress): min(max(progress, 0), 1)
+        case .installing: 1
+        default: nil
+        }
+    }
+
+    /// A 3 pt line across the whole window, where the bottom of the card used to be. The side
+    /// padding is undone so it runs edge to edge; the percentage is said in words in the footer.
+    private func progressBar(_ fill: Double) -> some View {
+        GeometryReader { geometry in
+            Rectangle()
+                .fill(progressTrack)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(ThemePalette.orange)
+                        .frame(width: geometry.size.width * fill)
+                }
+        }
+        .frame(height: Metrics.bar)
+        .padding(.horizontal, -Metrics.side)
+        .accessibilityHidden(true)
+    }
+
+    /// The unfilled part of the bar: a tint of the same orange. The Stash themes paint their
+    /// accents solid, so `palette.segmentThumb` would give the fill's own colour and hide it.
+    private var progressTrack: Color {
+        ThemePalette.orange.opacity(colorScheme == .dark ? 0.28 : 0.18)
+    }
+
     // MARK: Footer
 
     private var footer: some View {
         HStack(alignment: .center, spacing: 16) {
-            meta
+            // The left of the footer is used only while something is happening. "Now 1.26 ·
+            // 4.2 MB" used to stand here and broke into three lines at 400 pt; the head already
+            // names the version, and the weight of the image said nothing anyone acts on
+            // (concept round 2, variant 1.1.1).
+            if let status = statusLine {
+                Text(status)
+                    .font(.system(size: Metrics.textSize))
+                    .foregroundStyle(palette.textSecondary)
+            }
+            Spacer(minLength: 0)
             actions
         }
+        .frame(minHeight: Metrics.buttonHeight)
     }
 
-    private var meta: some View {
-        Text(current)
-            .font(.system(size: Metrics.textSize))
-            .foregroundStyle(palette.textSecondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Only a release has a size and a version to compare against; without one the head already
-    /// names the installed version, and repeating it in the footer says nothing.
-    private var current: String {
-        guard let version = controller.currentVersion, let release = controller.release else { return "" }
-        return l10n.updateCurrent(version.description, bytes: release.size)
+    private var statusLine: String? {
+        switch controller.state {
+        case .downloading(let progress): l10n.updateDownloading(progress)
+        case .installing: l10n.updateInstalling
+        default: nil
+        }
     }
 
     @ViewBuilder
     private var actions: some View {
         switch controller.state {
-        case .downloading(let progress):
-            bar(l10n.updateDownloading(progress), fill: progress)
-        case .installing:
-            bar(l10n.updateInstalling, fill: 1)
+        case .downloading, .installing:
+            // The line above says what is happening; there is nothing to press.
+            EmptyView()
         case .failed:
             primary(l10n.updateOpenReleases) { controller.openReleasesPage() }
         case .available:
             // The style paints its hover tint straight behind the label, so the padding and the
             // height belong to the label. Outside the style they push the button around and leave
             // the tint clinging to the word.
-            Button {
-                controller.close()
-            } label: {
+            Button(action: onClose) {
                 Text(l10n.updateLater)
                     .font(.system(size: Metrics.textSize, weight: .semibold))
                     .padding(.horizontal, 12)
@@ -258,15 +278,9 @@ struct UpdateView: View {
 
             primary(l10n.updateNow) { controller.install() }
         default:
-            // Checking, and nothing new: there is nothing to do but close the screen.
-            primary(l10n.updateClose) { controller.close() }
+            // Checking, and nothing new: there is nothing to do but close the window.
+            primary(l10n.updateClose, action: onClose)
         }
-    }
-
-    /// The unfilled part of the bar: a tint of the same orange. The Stash themes paint their
-    /// accents solid, so `palette.segmentThumb` would give the fill's own colour and hide it.
-    private var progressTrack: Color {
-        ThemePalette.orange.opacity(colorScheme == .dark ? 0.28 : 0.18)
     }
 
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
@@ -277,28 +291,5 @@ struct UpdateView: View {
                 .frame(minWidth: 150, minHeight: Metrics.buttonHeight, maxHeight: Metrics.buttonHeight)
         }
         .buttonStyle(OnboardingPrimaryButtonStyle(colors: colors))
-    }
-
-    /// The label sits in the middle of the bar, so part of it lies on the orange fill and part on
-    /// the track. White would vanish on the track, so it is the ordinary text colour: it reads on
-    /// the pale track and on the orange alike, in both themes.
-    private func bar(_ title: String, fill: Double) -> some View {
-        let shape = Capsule()
-
-        return shape
-            .fill(progressTrack)
-            .overlay(alignment: .leading) {
-                shape
-                    .fill(ThemePalette.orange)
-                    .frame(width: Metrics.progressWidth * min(max(fill, 0), 1))
-            }
-            .clipShape(shape)
-            .overlay {
-                Text(title)
-                    .font(.system(size: Metrics.textSize, weight: .semibold))
-                    .foregroundStyle(palette.textPrimary)
-            }
-            .frame(width: Metrics.progressWidth, height: Metrics.buttonHeight)
-            .accessibilityLabel(title)
     }
 }
