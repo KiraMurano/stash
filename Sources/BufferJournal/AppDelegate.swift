@@ -190,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         // ⌥V is a global hotkey, not a menu shortcut; a status item's menu registers its key
         // equivalents only while it is open, so this line only tells the user what to press.
-        let openItem = menuItem(titles.openStash, action: #selector(openJournal), keyEquivalent: "v")
+        let openItem = menuItem(titles.openStash, action: #selector(openJournal), keyEquivalent: "v", icon: "doc.on.clipboard")
         openItem.keyEquivalentModifierMask = .option
         menu.addItem(openItem)
         menu.addItem(NSMenuItem.separator())
@@ -211,6 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let themeItem = NSMenuItem(title: titles.theme, action: nil, keyEquivalent: "")
+        themeItem.image = icon("circle.lefthalf.fill")
         let themeMenu = NSMenu()
         themeItems = [:]
         for themeMode in ThemeMode.allCases {
@@ -226,6 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(themeItem)
 
         let languageItem = NSMenuItem(title: titles.language, action: nil, keyEquivalent: "")
+        languageItem.image = icon("globe")
         let languageMenu = NSMenu()
         languageItems = [:]
         for language in AppLanguage.allCases {
@@ -242,24 +244,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
         if updates.canSelfUpdate {
-            updateItem = menuItem(titles.checkForUpdates, action: #selector(openUpdates))
+            updateItem = menuItem(titles.checkForUpdates, action: #selector(openUpdates), icon: "arrow.down.circle")
             menu.addItem(updateItem)
         }
 
         // Above "Clear History", which asks nothing before it clears: a miss costs the history.
-        menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial)))
+        menu.addItem(menuItem(titles.tutorial, action: #selector(openTutorial), icon: "questionmark.circle"))
         // Always there, in a source build too: such a build has an author no less.
-        menu.addItem(menuItem(titles.about, action: #selector(openAbout)))
-        menu.addItem(menuItem(titles.clearHistory, action: #selector(clearHistory)))
-        menu.addItem(menuItem(titles.quit, action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(menuItem(titles.about, action: #selector(openAbout), icon: "info.circle"))
+        menu.addItem(menuItem(titles.clearHistory, action: #selector(clearHistory), icon: "trash"))
+        menu.addItem(menuItem(titles.quit, action: #selector(quit), keyEquivalent: "q", icon: "power"))
         statusItem.menu = menu
         updateSettingsMenuState()
     }
 
-    private func menuItem(_ title: String, action: Selector, keyEquivalent: String = "") -> NSMenuItem {
+    private func menuItem(_ title: String, action: Selector, keyEquivalent: String = "", icon name: String? = nil) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
         item.target = self
+        item.image = name.flatMap(icon)
         return item
+    }
+
+    /// A menu item's symbol, at the size the menu's own text is set in. It is a template, so it
+    /// takes the menu's colour — including the white of a highlighted row.
+    ///
+    /// The switches carry no symbol: their mark is the tick, and a symbol beside it would say
+    /// the same thing twice.
+    private func icon(_ name: String) -> NSImage? {
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
+        image?.isTemplate = true
+        return image
     }
 
     @objc private func openJournal() {
