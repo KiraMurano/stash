@@ -181,8 +181,9 @@ final class UpdateController: ObservableObject {
 
         do {
             let dmg = try await downloader.download(release) { [weak self] progress in
+                guard let self = self else { return }
                 Task { @MainActor in
-                    guard let self, case .downloading = self.state else { return }
+                    guard case .downloading = self.state else { return }
                     self.state = .downloading(progress)
                 }
             }

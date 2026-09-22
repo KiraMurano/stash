@@ -74,65 +74,102 @@ struct HeroScene: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.l10n) private var l10n
 
-    var body: some View {
-        let state = Self.state(at: time)
-        let palette = ThemePalette.scene(colorScheme)
-        let colors = OnboardingColors(isDark: colorScheme == .dark)
+    /// Everything the frame is drawn from, worked out once per body. Split off from `body`
+    /// because Swift 5.7 cannot type-check the whole scene as one expression.
+    private struct Frame {
+        let palette: ThemePalette
+        let colors: OnboardingColors
+        let lockup: OnboardingLayout.Lockup
+        let capHeight: CGFloat
+        let left: CGFloat
+        let top: CGFloat
+        let tile: CGFloat
+        let flights: [Flight]
+        let clips: [DemoClip]
+    }
+
+    private var frame: Frame {
         let lockup = OnboardingLayout.heroLockup(in: area, wordWidthAt28: HeavyTextMetrics.width("Stash", size: 28))
         let wordWidth = HeavyTextMetrics.width("Stash", size: lockup.fontSize)
-        let capHeight = HeavyTextMetrics.capHeight(size: lockup.fontSize)
-        let left = (area.width - (lockup.icon + lockup.gap + wordWidth)) / 2
-        let top = (area.height - lockup.icon) / 2
+        let left: CGFloat = (area.width - (lockup.icon + lockup.gap + wordWidth)) / 2
+        let top: CGFloat = (area.height - lockup.icon) / 2
         let icon = CGPoint(x: left + lockup.icon / 2, y: top + lockup.icon / 2)
-        let tile = lockup.icon * 0.66
-        let flights = Self.flights(in: area, to: icon)
         let clips = [
             DemoClips.text("hero-text", Localized(en: "Address", ru: "Адрес"), l10n, at: 14, 20),
             DemoClips.image("hero-photo", .mountains, pixelSize: CGSize(width: 1600, height: 1000), at: 14, 2),
             DemoClips.file("hero-file", Localized(en: "Contract.pdf", ru: "Договор.pdf"), bytes: 1_240_000, l10n, at: 12, 10),
         ]
-        let iconImage = Image(nsImage: NSApplication.shared.applicationIconImage)
+        return Frame(
+            palette: ThemePalette.scene(colorScheme),
+            colors: OnboardingColors(isDark: colorScheme == .dark),
+            lockup: lockup,
+            capHeight: HeavyTextMetrics.capHeight(size: lockup.fontSize),
+            left: left,
+            top: top,
+            tile: lockup.icon * 0.66,
+            flights: Self.flights(in: area, to: icon),
+            clips: clips
+        )
+    }
 
+    var body: some View {
+        let state = Self.state(at: time)
+        let frame = self.frame
         ZStack(alignment: .topLeading) {
-            // Tiles fly under the lockup, so they vanish into the icon instead of covering it.
-            ForEach(Array(clips.enumerated()), id: \.element.id) { index, clip in
-                if let progress = state.tiles[index] {
-                    // A trail of fading copies behind each tile reads as speed.
-                    ForEach(Self.trail, id: \.lag) { ghost in
-                        let p = max(progress - ghost.lag, 0)
-                        EntryThumb(entry: clip.entry, thumbnail: clip.thumbnail, fileIcon: clip.fileIcon, palette: palette)
-                            .scaleEffect(tile / 42 * (1 - 0.62 * SceneCurve.easeIn(p)))
-                            .rotationEffect(.degrees(flights[index].spin * (1 - SceneCurve.easeOut(p))))
-                            .opacity(ghost.opacity * min(p / 0.1, 1))
-                            .position(flights[index].point(at: SceneCurve.easeIn(p)))
-                    }
-                }
-            }
-
-            HStack(spacing: lockup.gap) {
-                iconImage
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: lockup.icon, height: lockup.icon)
-                    .overlay(Color.white.opacity(state.flash).mask(iconImage.resizable()))
-                    .scaleEffect(x: state.iconScaleX, y: state.iconScaleY, anchor: .bottom)
-                    .offset(y: state.iconRise)
-                    .opacity(state.iconOpacity)
-                    .zIndex(1)
-                Text("Stash")
-                    .font(.system(size: lockup.fontSize, weight: .heavy))
-                    .foregroundStyle(colors.wordmark)
-                    .fixedSize()
-                    // Centred on the capitals, as in the journal header.
-                    .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
-                    .offset(x: state.wordShift)
-                    .opacity(state.wordOpacity)
-            }
-            .frame(height: lockup.icon)
-            .offset(x: left + state.shake, y: top)
+            tiles(state: state, frame: frame)
+            lockupView(state: state, frame: frame)
         }
         // Pinned to the area's corner: the offsets above count from it, flying tiles or not.
         .frame(width: area.width, height: area.height, alignment: .topLeading)
+    }
+
+    // Tiles fly under the lockup, so they vanish into the icon instead of covering it.
+    private func tiles(state: State, frame: Frame) -> some View {
+        ForEach(Array(frame.clips.enumerated()), id: \.element.id) { index, clip in
+            if let progress = state.tiles[index] {
+                // A trail of fading copies behind each tile reads as speed.
+                ForEach(Self.trail, id: \.lag) { ghost in
+                    tile(clip, progress: max(progress - ghost.lag, 0), ghost: ghost, flight: frame.flights[index], frame: frame)
+                }
+            }
+        }
+    }
+
+    private func tile(_ clip: DemoClip, progress p: Double, ghost: Ghost, flight: Flight, frame: Frame) -> some View {
+        let scale: CGFloat = frame.tile / 42 * (1 - 0.62 * SceneCurve.easeIn(p))
+        let spin: Double = flight.spin * (1 - SceneCurve.easeOut(p))
+        let opacity: Double = ghost.opacity * min(p / 0.1, 1)
+        return EntryThumb(entry: clip.entry, thumbnail: clip.thumbnail, fileIcon: clip.fileIcon, palette: frame.palette)
+            .scaleEffect(scale)
+            .rotationEffect(.degrees(spin))
+            .opacity(opacity)
+            .position(flight.point(at: SceneCurve.easeIn(p)))
+    }
+
+    private func lockupView(state: State, frame: Frame) -> some View {
+        let iconImage = Image(nsImage: NSApplication.shared.applicationIconImage)
+        let capHeight = frame.capHeight
+        return HStack(spacing: frame.lockup.gap) {
+            iconImage
+                .resizable()
+                .interpolation(.high)
+                .frame(width: frame.lockup.icon, height: frame.lockup.icon)
+                .overlay(Color.white.opacity(state.flash).mask(iconImage.resizable()))
+                .scaleEffect(x: state.iconScaleX, y: state.iconScaleY, anchor: .bottom)
+                .offset(y: state.iconRise)
+                .opacity(state.iconOpacity)
+                .zIndex(1)
+            Text("Stash")
+                .font(.system(size: frame.lockup.fontSize, weight: .heavy))
+                .foregroundStyle(frame.colors.wordmark)
+                .fixedSize()
+                // Centred on the capitals, as in the journal header.
+                .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
+                .offset(x: state.wordShift)
+                .opacity(state.wordOpacity)
+        }
+        .frame(height: frame.lockup.icon)
+        .offset(x: frame.left + state.shake, y: frame.top)
     }
 
     private struct Ghost {

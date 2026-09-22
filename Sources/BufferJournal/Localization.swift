@@ -9,11 +9,11 @@ enum AppLanguage: String, CaseIterable {
     var resolved: ResolvedLanguage {
         switch self {
         case .english:
-            .english
+            return .english
         case .russian:
-            .russian
+            return .russian
         case .system:
-            Locale.preferredLanguages.first?.hasPrefix("ru") == true ? .russian : .english
+            return Locale.preferredLanguages.first?.hasPrefix("ru") == true ? .russian : .english
         }
     }
 }
@@ -33,20 +33,20 @@ struct L10n {
 
     func languageName(_ language: AppLanguage) -> String {
         switch language {
-        case .system: self("System", "Системный")
-        case .english: "English"
-        case .russian: "Русский"
+        case .system: return self("System", "Системный")
+        case .english: return "English"
+        case .russian: return "Русский"
         }
     }
 
     func themeName(_ mode: ThemeMode) -> String {
         switch mode {
-        case .system: self("Auto", "Авто")
-        case .light: self("Light", "Светлая")
-        case .dark: self("Dark", "Тёмная")
-        case .stashAuto: "Stash Auto"
-        case .stashLight: "Stash Light"
-        case .stashDark: "Stash Dark"
+        case .system: return self("Auto", "Авто")
+        case .light: return self("Light", "Светлая")
+        case .dark: return self("Dark", "Тёмная")
+        case .stashAuto: return "Stash Auto"
+        case .stashLight: return "Stash Light"
+        case .stashDark: return "Stash Dark"
         }
     }
 
@@ -108,16 +108,16 @@ struct L10n {
     func updateFailure(_ error: UpdateError) -> String {
         switch error {
         case .network:
-            self("Could not check for updates.", "Не удалось проверить обновления.")
+            return self("Could not check for updates.", "Не удалось проверить обновления.")
         case .signature:
-            self(
+            return self(
                 "The downloaded image failed its signature check. Nothing was installed.",
                 "Не удалось проверить подпись загруженного образа. Ничего не установлено."
             )
         case .install:
-            self("The update could not be installed.", "Не удалось установить обновление.")
+            return self("The update could not be installed.", "Не удалось установить обновление.")
         case .notWritable:
-            self(
+            return self(
                 "Stash sits in a folder it may not write to. Update it by hand.",
                 "Stash лежит в каталоге, недоступном на запись. Обновите его вручную."
             )

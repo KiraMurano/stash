@@ -363,8 +363,8 @@ final class JournalPanelController {
             },
             onSave: { [weak self] editedText in
                 guard let self else { return }
-                if store.updateText(for: entry, to: editedText) {
-                    closeTextEditor(for: entry.id)
+                if self.store.updateText(for: entry, to: editedText) {
+                    self.closeTextEditor(for: entry.id)
                 }
             }
         )

@@ -10,8 +10,26 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 VERSION="${1:-}"
 
 cd "$ROOT_DIR"
-swift build -c release --arch arm64 --arch x86_64
-BIN_DIR="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
+# Normally SwiftPM builds the binary, universal. Without Xcode it cannot: the Command Line
+# Tools ship libPackageDescription.dylib but not the module interface beside it, and SwiftPM
+# has to compile Package.swift to read it — so `swift build` fails on every manifest, not
+# just this one. There the sources are handed straight to swiftc instead, for this Mac's own
+# architecture, which is all such a machine can run anyway.
+ARCHS=(--arch arm64 --arch x86_64)
+# `dump-package` is the probe that tells the truth: it has to parse the manifest, while
+# `--show-bin-path` only works a path out and succeeds even where nothing can be built.
+if swift package dump-package >/dev/null 2>&1; then
+    swift build -c release "${ARCHS[@]}"
+    BIN_DIR="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
+else
+    echo "note: SwiftPM cannot read the manifest (no Xcode); compiling with swiftc." >&2
+    DEPLOYMENT="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$ROOT_DIR/Info.plist")"
+    BIN_DIR="$ROOT_DIR/.build/direct"
+    mkdir -p "$BIN_DIR"
+    find "$ROOT_DIR/Sources/BufferJournal" -name '*.swift' > "$BIN_DIR/sources.txt"
+    swiftc -O -target "$(uname -m)-apple-macos$DEPLOYMENT" -module-name BufferJournal \
+        -parse-as-library @"$BIN_DIR/sources.txt" -o "$BIN_DIR/BufferJournal"
+fi
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$CONTENTS_DIR/Resources"

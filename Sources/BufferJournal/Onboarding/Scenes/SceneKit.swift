@@ -179,9 +179,11 @@ struct SceneCaret: View {
     }
 
     static var color: Color {
+        #if compiler(>=5.9)
         if #available(macOS 14.0, *) {
             return Color(nsColor: .textInsertionPointColor)
         }
+        #endif
         return Color(nsColor: .controlAccentColor)
     }
 
@@ -218,10 +220,10 @@ struct PhotoArt: View {
     private var palette: (skyTop: Color, skyBottom: Color, sun: Color, far: Color, near: Color) {
         switch style {
         case .mountains:
-            (Color(red: 0.49, green: 0.77, blue: 1), Color(red: 0.87, green: 0.94, blue: 1), Color(red: 1, green: 0.82, blue: 0.40),
+            return (Color(red: 0.49, green: 0.77, blue: 1), Color(red: 0.87, green: 0.94, blue: 1), Color(red: 1, green: 0.82, blue: 0.40),
              Color(red: 0.56, green: 0.75, blue: 0.50), Color(red: 0.30, green: 0.50, blue: 0.27))
         case .sunset:
-            (Color(red: 1, green: 0.70, blue: 0.48), Color(red: 1, green: 0.88, blue: 0.76), Color(red: 1, green: 0.95, blue: 0.79),
+            return (Color(red: 1, green: 0.70, blue: 0.48), Color(red: 1, green: 0.88, blue: 0.76), Color(red: 1, green: 0.95, blue: 0.79),
              Color(red: 0.71, green: 0.54, blue: 0.82), Color(red: 0.42, green: 0.31, blue: 0.61))
         }
     }

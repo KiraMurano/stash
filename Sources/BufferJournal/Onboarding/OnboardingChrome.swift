@@ -87,9 +87,9 @@ struct OnboardingProgressBar: View {
 
     private var fill: CGFloat {
         switch phase {
-        case .done: 1
-        case .upcoming: 0
-        case .current: filled ? 1 : 0
+        case .done: return 1
+        case .upcoming: return 0
+        case .current: return filled ? 1 : 0
         }
     }
 }

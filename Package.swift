@@ -1,11 +1,11 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.7
 
 import PackageDescription
 
 let package = Package(
     name: "BufferJournal",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v12)
     ],
     products: [
         .executable(name: "BufferJournal", targets: ["BufferJournal"])

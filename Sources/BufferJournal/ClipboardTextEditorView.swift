@@ -55,7 +55,7 @@ struct ClipboardTextEditorView: View {
             TextEditor(text: $text)
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(palette.textPrimary)
-                .scrollContentBackground(.hidden)
+                .hiddenScrollContentBackground()
                 .focused($isEditorFocused)
                 .padding(10)
                 .background(palette.placeholderBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

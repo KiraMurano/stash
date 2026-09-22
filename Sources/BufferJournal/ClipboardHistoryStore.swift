@@ -160,14 +160,16 @@ final class ClipboardHistoryStore: ObservableObject {
 
         Task.detached(priority: .userInitiated) { [weak self] in
             let cgImage = Self.makeThumbnail(at: url, maxPixel: maxPixel)
-            await MainActor.run {
-                guard let self else { return }
-                self.thumbnailsInFlight.remove(id)
-                guard let cgImage, self.entries.contains(where: { $0.id == id }) else { return }
-                self.thumbnailCache[id] = NSImage(cgImage: cgImage, size: .zero)
-                self.objectWillChange.send()
-            }
+            guard let store = self else { return }
+            await store.thumbnailDidFinish(id: id, cgImage: cgImage)
         }
+    }
+
+    private func thumbnailDidFinish(id: UUID, cgImage: CGImage?) {
+        thumbnailsInFlight.remove(id)
+        guard let cgImage, entries.contains(where: { $0.id == id }) else { return }
+        thumbnailCache[id] = NSImage(cgImage: cgImage, size: .zero)
+        objectWillChange.send()
     }
 
     nonisolated private static func makeThumbnail(at url: URL, maxPixel: Int) -> CGImage? {
@@ -449,8 +451,8 @@ final class ClipboardHistoryStore: ObservableObject {
         }
 
         pruneTimer = Timer.scheduledTimer(withTimeInterval: nextExpiration.timeIntervalSince(now), repeats: false) { [weak self] _ in
+            guard let self = self else { return }
             Task { @MainActor in
-                guard let self else { return }
                 self.pruneEntries()
                 self.save()
                 self.scheduleNextPrune()

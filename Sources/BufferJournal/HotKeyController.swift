@@ -46,7 +46,7 @@ final class HotKeyController {
 
                 let id = hotKeyID.id
                 let isPress = GetEventKind(event) == UInt32(kEventHotKeyPressed)
-                nonisolated(unsafe) let pointer = userData
+                let pointer = userData
                 // Carbon delivers hotkey events on the main thread.
                 return MainActor.assumeIsolated {
                     let controller = Unmanaged<HotKeyController>.fromOpaque(pointer).takeUnretainedValue()

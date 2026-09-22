@@ -30,10 +30,10 @@ struct JournalView: View {
 
         func title(_ l10n: L10n) -> String {
             switch self {
-            case .all: l10n("All", "Все")
-            case .text: l10n("Text", "Текст")
-            case .media: l10n("Images", "Картинки")
-            case .files: l10n("Files", "Файлы")
+            case .all: return l10n("All", "Все")
+            case .text: return l10n("Text", "Текст")
+            case .media: return l10n("Images", "Картинки")
+            case .files: return l10n("Files", "Файлы")
             }
         }
     }
@@ -81,10 +81,10 @@ struct JournalView: View {
 
     private var filteredEntries: [ClipboardEntry] {
         switch selectedFilter {
-        case .all: store.entries
-        case .text: store.entries.filter(\.isText)
-        case .media: store.entries.filter(\.isImage)
-        case .files: store.entries.filter(\.isFile)
+        case .all: return store.entries
+        case .text: return store.entries.filter(\.isText)
+        case .media: return store.entries.filter(\.isImage)
+        case .files: return store.entries.filter(\.isFile)
         }
     }
 
@@ -901,11 +901,13 @@ private struct WindowResizeArea: NSViewRepresentable {
         override var mouseDownCanMoveWindow: Bool { false }
 
         override func resetCursorRects() {
+            #if compiler(>=6.0)
             if #available(macOS 15.0, *) {
                 addCursorRect(bounds, cursor: .frameResize(position: .bottomRight, directions: .all))
-            } else {
-                addCursorRect(bounds, cursor: .crosshair)
+                return
             }
+            #endif
+            addCursorRect(bounds, cursor: .crosshair)
         }
 
         override func mouseDown(with event: NSEvent) {

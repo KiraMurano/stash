@@ -125,8 +125,8 @@ struct AboutView: View {
         } label: {
             Text(Self.repositoryLabel)
                 .font(.system(size: Metrics.textSize))
-                .foregroundStyle(palette.textSecondary)
                 .underline(true, color: palette.textTertiary)
+                .foregroundStyle(palette.textSecondary)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
