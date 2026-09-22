@@ -184,7 +184,7 @@ struct OnboardingView: View {
 
             // The first slide has no card, so nothing clips its flying tiles.
             OnboardingSceneView(slide: controller.slide, still: isStill)
-                .clipShape(hasSurface ? AnyShape(shape) : AnyShape(Rectangle().inset(by: -200)))
+                .clipShape(hasSurface ? AnyShapeCompat(shape) : AnyShapeCompat(Rectangle().inset(by: -200)))
                 .id(controller.run)
                 .transition(.opacity)
 

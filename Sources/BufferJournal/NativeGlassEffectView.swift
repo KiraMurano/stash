@@ -11,6 +11,7 @@ struct NativeGlassEffectView: NSViewRepresentable {
     let cornerRadius: CGFloat
 
     func makeNSView(context: Context) -> NSView {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             let view = NSGlassEffectView()
             view.style = nsGlassStyle
@@ -18,6 +19,7 @@ struct NativeGlassEffectView: NSViewRepresentable {
             view.tintColor = .clear
             return view
         }
+        #endif
 
         let view = NSVisualEffectView()
         view.material = .underWindowBackground
@@ -27,12 +29,14 @@ struct NativeGlassEffectView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *), let glassView = view as? NSGlassEffectView {
             glassView.style = nsGlassStyle
             glassView.cornerRadius = cornerRadius
             glassView.tintColor = .clear
             return
         }
+        #endif
 
         if let visualEffectView = view as? NSVisualEffectView {
             visualEffectView.material = .underWindowBackground
@@ -41,13 +45,15 @@ struct NativeGlassEffectView: NSViewRepresentable {
         }
     }
 
+    #if compiler(>=6.2)
     @available(macOS 26.0, *)
     private var nsGlassStyle: NSGlassEffectView.Style {
         switch style {
         case .regular:
-            .regular
+            return .regular
         case .clear:
-            .clear
+            return .clear
         }
     }
+    #endif
 }

@@ -18,7 +18,6 @@ struct DemoClip: Identifiable {
 }
 
 /// Builds demo clips. They never reach the history or the disk.
-@MainActor
 enum DemoClips {
     static func text(_ id: String, _ text: Localized, _ l10n: L10n, at hour: Int, _ minute: Int) -> DemoClip {
         DemoClip(id: id, entry: entry(id, .text(text(l10n)), hour, minute))
@@ -46,7 +45,6 @@ enum DemoClips {
 }
 
 /// Pictures for demo clips, drawn once.
-@MainActor
 enum DemoImages {
     static let pdfIcon = NSWorkspace.shared.icon(for: .pdf)
     private static var thumbnails: [PhotoArt.Style: NSImage] = [:]
@@ -56,9 +54,8 @@ enum DemoImages {
             return image
         }
         let size = style == .mountains ? CGSize(width: 160, height: 100) : CGSize(width: 90, height: 120)
-        let renderer = ImageRenderer(content: PhotoArt(style: style).frame(width: size.width, height: size.height))
-        renderer.scale = 2
-        let image = renderer.nsImage ?? NSImage(size: size)
+        let art = PhotoArt(style: style).frame(width: size.width, height: size.height)
+        let image = ViewImageRenderer.nsImage(of: art, size: size, scale: 2) ?? NSImage(size: size)
         thumbnails[style] = image
         return image
     }

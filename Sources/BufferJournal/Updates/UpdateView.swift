@@ -148,9 +148,9 @@ struct UpdateView: View {
 
     private var message: String {
         switch controller.state {
-        case .checking: l10n.updateChecking
-        case .failed(let error): l10n.updateFailure(error)
-        default: l10n.updateUpToDate
+        case .checking: return l10n.updateChecking
+        case .failed(let error): return l10n.updateFailure(error)
+        default: return l10n.updateUpToDate
         }
     }
 
@@ -164,7 +164,7 @@ struct UpdateView: View {
     /// it and the scrolling one takes over.
     @ViewBuilder
     private var notes: some View {
-        if scrolls {
+        if scrolls, #available(macOS 13.0, *) {
             ViewThatFits(in: .vertical) {
                 // Nothing scrolls here, so no lane is kept for a scroller and no edge carries a
                 // shadow: there is never anything behind an edge.
@@ -172,6 +172,9 @@ struct UpdateView: View {
 
                 scrollingList
             }
+        } else if scrolls {
+            // macOS 12 has no ViewThatFits: the list always scrolls once the window is capped.
+            scrollingList
         } else {
             list(trailing: Metrics.side)
         }
@@ -244,9 +247,9 @@ struct UpdateView: View {
     /// How far the bar is filled, or nil when nothing is being downloaded or installed.
     private var progressFill: Double? {
         switch controller.state {
-        case .downloading(let progress): min(max(progress, 0), 1)
-        case .installing: 1
-        default: nil
+        case .downloading(let progress): return min(max(progress, 0), 1)
+        case .installing: return 1
+        default: return nil
         }
     }
 
@@ -296,9 +299,9 @@ struct UpdateView: View {
 
     private var statusLine: String? {
         switch controller.state {
-        case .downloading(let progress): l10n.updateDownloading(progress)
-        case .installing: l10n.updateInstalling
-        default: nil
+        case .downloading(let progress): return l10n.updateDownloading(progress)
+        case .installing: return l10n.updateInstalling
+        default: return nil
         }
     }
 

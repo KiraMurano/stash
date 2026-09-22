@@ -21,12 +21,12 @@ struct OnboardingSceneView: View {
     /// size until its own task gives it the one from the spec.
     static func size(of kind: OnboardingSceneKind) -> CGSize? {
         switch kind {
-        case .hero: nil
-        case .hotKey: HotKeyScene.size
-        case .paste: PasteScene.size
-        case .pin: PinScene.size
-        case .keys: KeysScene.size
-        case .access: AccessScene.size
+        case .hero: return nil
+        case .hotKey: return HotKeyScene.size
+        case .paste: return PasteScene.size
+        case .pin: return PinScene.size
+        case .keys: return KeysScene.size
+        case .access: return AccessScene.size
         }
     }
 

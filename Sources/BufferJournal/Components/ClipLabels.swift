@@ -6,9 +6,9 @@ import Foundation
 enum ClipLabels {
     static func kindTitle(_ entry: ClipboardEntry, _ l10n: L10n) -> String {
         switch entry.payload {
-        case .text: l10n("Text", "Текст")
-        case .image: l10n("Image", "Изображение")
-        case .file: l10n("File", "Файл")
+        case .text: return l10n("Text", "Текст")
+        case .image: return l10n("Image", "Изображение")
+        case .file: return l10n("File", "Файл")
         }
     }
 

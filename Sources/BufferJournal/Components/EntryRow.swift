@@ -44,7 +44,7 @@ struct EntryRow: View {
             thumb
 
             Group {
-                if entry.isText {
+                if entry.isText, #available(macOS 13.0, *) {
                     // Short text keeps its date line; text that needs two lines uses both for content.
                     ViewThatFits(in: .horizontal) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -52,6 +52,12 @@ struct EntryRow: View {
                             subtitleText
                         }
                         titleText.lineLimit(2)
+                    }
+                } else if entry.isText {
+                    // macOS 12 has no ViewThatFits: text keeps its date line and one line of content.
+                    VStack(alignment: .leading, spacing: 2) {
+                        titleText.lineLimit(1)
+                        subtitleText
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 2) {

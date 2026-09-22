@@ -16,8 +16,9 @@ final class ClipboardMonitor {
     func start() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
             Task { @MainActor in
-                self?.captureIfNeeded()
+                self.captureIfNeeded()
             }
         }
     }

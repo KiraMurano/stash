@@ -53,7 +53,6 @@ enum OnboardingLayout {
 }
 
 /// Widths of text in the heavy system font: the "Stash" wordmark and the first slide's title.
-@MainActor
 enum HeavyTextMetrics {
     static func width(_ text: String, size: CGFloat, tracking: CGFloat = 0) -> CGFloat {
         let font = NSFont.systemFont(ofSize: size, weight: .heavy)

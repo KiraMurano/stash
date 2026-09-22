@@ -11,11 +11,11 @@ enum ThemeMode: String, CaseIterable {
     var colorScheme: ColorScheme? {
         switch self {
         case .system, .stashAuto:
-            nil
+            return nil
         case .light, .stashLight:
-            .light
+            return .light
         case .dark, .stashDark:
-            .dark
+            return .dark
         }
     }
 
