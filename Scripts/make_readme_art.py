@@ -61,6 +61,11 @@ def keycap(name, theme, x, y, ident):
             + image(f'{name}-pressed-{theme}', x - 20, y - 20, f'{ident}Down'))
 
 
+def wave(x, y):
+    """The tour's click ripple, white and a little bolder: a disc that swells from the click."""
+    return f'<circle id="ripple" cx="{x}" cy="{y}" r="14" fill="#fff" opacity="0" filter="url(#waveShadow)"/>\n'
+
+
 def cursor(ident):
     return (f'<g id="{ident}"><path d="{CURSOR}" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></g>\n')
 
@@ -77,6 +82,7 @@ def defs(p, w, h, blob):
   <radialGradient id="blobCool"><stop offset="0" stop-color="#fff" stop-opacity="{p['blobCool']}"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
   <filter id="frost" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="14"/></filter>
   <filter id="panelShadow" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity=".30"/></filter>
+  <filter id="waveShadow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity=".35"/></filter>
   <filter id="winShadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".26"/></filter>
   <g id="deskBg">
     <rect x="0" y="0" width="{w}" height="{h}" rx="18" fill="url(#wall)"/>
@@ -242,7 +248,8 @@ def strip_rows(theme, rows, top='list-top-3'):
 
 def strip(theme, label, inner, art, css):
     p = PALETTE[theme]
-    body = defs(p, CW, CH, (CW - 90, CH - 20)) + '<use href="#deskBg"/>\n' + art + panel(p, CX, CY, CWID, PANE_H, CWID, inner, 'card')
+    # the keys, the pointer and its click wave are drawn after the journal so they stay on top of it
+    body = defs(p, CW, CH, (CW - 90, CH - 20)) + '<use href="#deskBg"/>\n' + panel(p, CX, CY, CWID, PANE_H, CWID, inner, 'card') + art
     return svg(CW, CH, label, body, css)
 
 
@@ -284,7 +291,7 @@ def paste_strip(theme):
     y += ROW
     inner += image('row-release' + t, CX, y)
     inner += toast(theme)
-    art = f'<circle id="ripple" cx="{tip[0]}" cy="{tip[1]}" r="14" fill="#f46a25" opacity="0"/>\n' + cursor('cur')
+    art = wave(tip[0], tip[1]) + cursor('cur')
     css = f'''
 #cur,#ripple,#toast{{transform-box:fill-box}} #ripple{{transform-origin:50% 50%}}
 #cur{{animation:curMove 5s infinite}}
@@ -294,7 +301,7 @@ def paste_strip(theme):
   22%,70%{{opacity:1;transform:translate({tip[0]}px,{tip[1]}px)}}
   78%,100%{{opacity:0;transform:translate({tip[0]}px,{tip[1]}px)}}
 }}
-@keyframes rip{{0%,23%{{opacity:0;transform:scale(.5)}}24%{{opacity:.45;transform:scale(.5)}}28%{{opacity:0;transform:scale(1.9)}}29%{{opacity:.45;transform:scale(.5)}}33%,100%{{opacity:0;transform:scale(1.9)}}}}
+@keyframes rip{{0%,23%{{opacity:0;transform:scale(.3)}}24%{{opacity:.85;transform:scale(.3)}}29%{{opacity:0;transform:scale(2.6)}}29.5%{{opacity:.85;transform:scale(.3)}}34.5%,100%{{opacity:0;transform:scale(2.6)}}}}
 #ripple{{animation:rip 5s infinite}}
 #photoSel{{animation:wasPhoto 5s infinite}} #urlSel{{animation:isUrl 5s infinite}}
 @keyframes wasPhoto{{0%,28.9%{{opacity:1}}29%,100%{{opacity:0}}}}
@@ -347,7 +354,7 @@ def pin_strip(theme):
               + image('row-url-pinned' + t, CX, y_url, 'urlPinned') + '</g>\n')
     # the pin button of a hovered row: 8 pt in from the row's end, 26 pt wide, 4 pt before the trash
     pin = (CX + CWID - 10 - 8 - 26 - 4 - 13, y_url + 29)
-    art = f'<circle id="ripple" cx="{pin[0]}" cy="{pin[1]}" r="14" fill="#f46a25" opacity="0"/>\n' + cursor('cur')
+    art = wave(pin[0], pin[1]) + cursor('cur')
     css = f'''
 #rowPhoto,#rowRelease,#rowUrl,#lblToday,#cur,#ripple{{transform-box:fill-box}} #ripple{{transform-origin:50% 50%}}
 #cur{{animation:curMove 5.5s infinite}}
@@ -357,7 +364,7 @@ def pin_strip(theme):
   22%,30%{{opacity:1;transform:translate({pin[0] - 3}px,{pin[1] - 2}px)}}
   37%,100%{{opacity:0;transform:translate({pin[0] - 3}px,{pin[1] - 2}px)}}
 }}
-@keyframes rip{{0%,24%{{opacity:0;transform:scale(.5)}}25%{{opacity:.45;transform:scale(.5)}}31%,100%{{opacity:0;transform:scale(1.9)}}}}
+@keyframes rip{{0%,24%{{opacity:0;transform:scale(.3)}}25%{{opacity:.85;transform:scale(.3)}}32%,100%{{opacity:0;transform:scale(2.6)}}}}
 #ripple{{animation:rip 5.5s infinite}}
 /* the row lights up when the pointer reaches it, and turns pinned on the click */
 #urlHover{{animation:hover 5.5s infinite}} #urlPinned{{animation:pinned 5.5s infinite}}

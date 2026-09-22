@@ -43,9 +43,9 @@ struct EntryThumb: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(palette.textSecondary)
             } else {
-                // A serif T, the way type is marked, so text and links read apart at a glance.
-                Text("T")
-                    .font(.system(size: 19, weight: .semibold, design: .serif))
+                // The system's "Aa" text mark, so text and links read apart at a glance.
+                Image(systemName: "textformat")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(palette.textSecondary)
             }
         }
