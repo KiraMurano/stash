@@ -80,15 +80,15 @@ Stash keeps the last 20 clips for a day. Pin the ones that matter and they stay 
 
 | | |
 |---|---|
-| `Open at the Cursor` | Opens the journal at the caret instead of where you last left it. On by default. |
-| `Close After Selection` | Closes the journal once a clip has been pasted or copied. |
-| `Intercept Keys` | Lets the journal have `↑ ↓ Return Esc`. Switch it off to leave those keys to your app and work the journal with the mouse. On by default. |
-| `Theme` | System, Light, Dark, and Stash Auto / Light / Dark, which trade the translucent accents for solid ones. |
-| `Language` | System, English, Русский. |
-| `How to Use Stash?` | Plays the tour again. |
-| `About Stash` | A window under the menu bar icon with the version, the studio's wordmark set in Booker Display — its letters change their form on their own — and a link here. |
-| `Check for Updates…` | Becomes `Update to 1.27` when there is something to install. `Check for Updates Automatically` turns the daily check off; the item still works by hand. |
-| `Clear History` | Removes the unpinned clips. The pinned ones stay. |
+| <code>Open&nbsp;at&nbsp;the&nbsp;Cursor</code> | Opens the journal at the caret instead of where you last left it. On by default. |
+| <code>Close&nbsp;After&nbsp;Selection</code> | Closes the journal once a clip has been pasted or copied. |
+| <code>Intercept&nbsp;Keys</code> | Lets the journal have `↑ ↓ Return Esc`. Switch it off to leave those keys to your app and work the journal with the mouse. On by default. |
+| <code>Theme</code> | System, Light, Dark, and Stash Auto / Light / Dark, which trade the translucent accents for solid ones. |
+| <code>Language</code> | System, English, Русский. |
+| <code>How&nbsp;to&nbsp;Use&nbsp;Stash?</code> | Plays the tour again. |
+| <code>About&nbsp;Stash</code> | A window under the menu bar icon with the version, the studio's wordmark set in Booker Display — its letters change their form on their own — and a link here. |
+| <code>Check&nbsp;for&nbsp;Updates…</code> | Becomes `Update to 1.27` when there is something to install. `Check for Updates Automatically` turns the daily check off; the item still works by hand. |
+| <code>Clear&nbsp;History</code> | Removes the unpinned clips. The pinned ones stay. |
 
 </details>
 

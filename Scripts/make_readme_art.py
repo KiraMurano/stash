@@ -123,6 +123,8 @@ svg{{font-family:{FONT}}}
 # ── the hero ───────────────────────────────────────────────────────────────────
 
 def hero(theme):
+    """The journal opens under the caret; the pointer picks the link, the arrow key picks the
+    photo, Return pastes it into the note."""
     p = PALETTE[theme]
     t = '-' + theme
     W, H = 1000, 640
@@ -137,6 +139,7 @@ def hero(theme):
     ys['url'] = y; y += ROW
     ys['release'] = y; y += ROW
     ys['invoice'] = y
+    tip = (PX + 150, ys['url'] + 22)        # where the pointer clicks the link's row
 
     inner = (image('list-top-5' + t, PX, ys['top'])
              + image('section-pinned' + t, PX, ys['pinned'])
@@ -153,7 +156,7 @@ def hero(theme):
 
     body = defs(p, W, H, (880, 600)) + '<use href="#deskBg"/>\n'
     # the menu bar and the window, drawn like the tour's SceneWindow
-    body += f'''<path d="M18,0 H982 A18,18 0 0 1 1000,18 V30 H0 V18 A18,18 0 0 1 18,0 Z" fill="{p['mbar']}"/>
+    body += f"""<path d="M18,0 H982 A18,18 0 0 1 1000,18 V30 H0 V18 A18,18 0 0 1 18,0 Z" fill="{p['mbar']}"/>
 <text x="24" y="19" font-size="11" font-weight="600" fill="{p['ink1']}">Notes</text>
 <text x="70" y="19" font-size="11" fill="{p['ink2']}">File</text>
 <text x="104" y="19" font-size="11" fill="{p['ink2']}">Edit</text>
@@ -167,60 +170,70 @@ def hero(theme):
 <rect x="72" y="124" width="696" height="1" fill="{p['sep']}"/>
 <clipPath id="winClip"><rect x="40" y="58" width="760" height="482" rx="10"/></clipPath>
 <g clip-path="url(#winClip)">
-  <rect id="urlFlash" x="204" y="136" width="196" height="26" rx="5" fill="{p['flash']}"/>
-  <text x="72" y="156" font-size="14" fill="{p['ink1']}">Hey Kira, the repo is github.com/KiraMurano/stash</text>
+  <text x="72" y="156" font-size="14" fill="{p['ink1']}">Hey Kira, look:</text>
   <g id="reveal">
     <rect x="73" y="133" width="740" height="30" fill="{p['win']}"/>
     <rect id="caret" x="70.5" y="139" width="1.5" height="19" fill="{p['ink1']}"/>
   </g>
-</g>
-'''
+"""
+    body += '  ' + image('photo-pasted' + t, 72, 172, 'pasted') + '</g>\n'
     body += '<g id="keys">\n' + keycap('key-option', theme, 62, 356, 'kOpt') + keycap('key-v', theme, 130, 356, 'kV') + '</g>\n'
-    body += '<g id="kDown">\n' + keycap('key-down', theme, 96, 356, 'kDown') + '</g>\n'
+    body += '<g id="kUp">\n' + keycap('key-up', theme, 96, 356, 'kUp') + '</g>\n'
     body += '<g id="kRet">\n' + keycap('key-return', theme, 96, 356, 'kRet') + '</g>\n'
     body += panel(p, PX, PY, 640, 440, 290, inner)
+    body += wave(*tip) + cursor('cur')
 
-    css = '''
-#panel{transform-box:fill-box;transform-origin:8% 5%;animation:panelIn 12s infinite}
-@keyframes panelIn{
-  0%,19.5%{opacity:0;transform:translateY(12px) scale(.94);animation-timing-function:cubic-bezier(.2,.9,.25,1)}
-  22.5%,56.7%{opacity:1;transform:none}
-  59.6%,100%{opacity:0;transform:translateY(8px) scale(.97)}
-}
+    css = f"""
+#panel{{transform-box:fill-box;transform-origin:8% 5%;animation:panelIn 12s infinite}}
+@keyframes panelIn{{
+  0%,19.5%{{opacity:0;transform:translateY(12px) scale(.94);animation-timing-function:cubic-bezier(.2,.9,.25,1)}}
+  22.5%,56.7%{{opacity:1;transform:none}}
+  59.6%,100%{{opacity:0;transform:translateY(8px) scale(.97)}}
+}}
 /* One run of text under a cover the colour of the window; the cover's left edge carries the caret. */
-#reveal{animation:reveal 12s infinite}
-@keyframes reveal{
-  0%,2.4%{transform:translateX(0)} 2.5%,4.9%{transform:translateX(25.4px)}
-  5%,7.4%{transform:translateX(58.3px)} 7.5%,9.9%{transform:translateX(83px)}
-  10%,12.4%{transform:translateX(116.1px)} 12.5%,57.4%{transform:translateX(130.4px)}
-  57.5%,89.9%{transform:translateX(324px)} 90%,100%{transform:translateX(0)}
-}
-#caret{animation:blink 1s steps(1,end) infinite}
-@keyframes blink{0%,60%{opacity:1}60.01%,100%{opacity:0}}
-#urlFlash{animation:flash 12s infinite}
-@keyframes flash{0%,57.4%{opacity:0}57.6%{opacity:1}61%,100%{opacity:0}}
-#keys,#kDown,#kRet{transform-box:fill-box}
-#keys{animation:keysIn 12s infinite}
-@keyframes keysIn{0%,14.4%{opacity:0;transform:translateY(8px)}15.8%,23%{opacity:1;transform:none}25%,100%{opacity:0;transform:translateY(-6px)}}
-#kOptDown{animation:optPress 12s infinite} #kVDown{animation:vPress 12s infinite}
-@keyframes optPress{0%,17%{opacity:0}17.1%,18.6%{opacity:1}18.7%,100%{opacity:0}}
-@keyframes vPress{0%,18.2%{opacity:0}18.3%,19.8%{opacity:1}19.9%,100%{opacity:0}}
-#kDown{animation:downIn 12s infinite}
-@keyframes downIn{0%,36.2%{opacity:0;transform:translateY(8px)}37%,41.5%{opacity:1;transform:none}43%,100%{opacity:0;transform:translateY(-6px)}}
-#kDownDown{animation:downPress 12s infinite}
-@keyframes downPress{0%,38.7%{opacity:0}38.75%,40.2%{opacity:1}40.3%,100%{opacity:0}}
-#kRet{animation:retIn 12s infinite}
-@keyframes retIn{0%,52%{opacity:0;transform:translateY(8px)}52.8%,57.2%{opacity:1;transform:none}58.6%,100%{opacity:0;transform:translateY(-6px)}}
-#kRetDown{animation:retPress 12s infinite}
-@keyframes retPress{0%,54.5%{opacity:0}54.6%,56%{opacity:1}56.1%,100%{opacity:0}}
-/* the app switches the selection outright, so the rows do too */
-#photoSel,#detPhoto{animation:wasPhoto 12s infinite} #urlSel,#detUrl{animation:isUrl 12s infinite}
-@keyframes wasPhoto{0%,39.2%{opacity:1}39.3%,100%{opacity:0}}
-@keyframes isUrl{0%,39.2%{opacity:0}39.3%,100%{opacity:1}}
+#reveal{{animation:reveal 12s infinite}}
+@keyframes reveal{{
+  0%,2.4%{{transform:translateX(0)}} 2.5%,4.9%{{transform:translateX(25.4px)}}
+  5%,7.4%{{transform:translateX(58.3px)}} 7.5%,89.9%{{transform:translateX(93.2px)}}
+  90%,100%{{transform:translateX(0)}}
+}}
+#caret{{animation:blink 1s steps(1,end) infinite}}
+@keyframes blink{{0%,60%{{opacity:1}}60.01%,100%{{opacity:0}}}}
+#pasted{{animation:pasted 12s infinite}}
+@keyframes pasted{{0%,57.4%{{opacity:0}}57.6%,85%{{opacity:1}}90%,100%{{opacity:0}}}}
+#keys,#kUp,#kRet,#cur,#ripple{{transform-box:fill-box}} #ripple{{transform-origin:50% 50%}}
+#keys{{animation:keysIn 12s infinite}}
+@keyframes keysIn{{0%,14.4%{{opacity:0;transform:translateY(8px)}}15.8%,23%{{opacity:1;transform:none}}25%,100%{{opacity:0;transform:translateY(-6px)}}}}
+#kOptDown{{animation:optPress 12s infinite}} #kVDown{{animation:vPress 12s infinite}}
+@keyframes optPress{{0%,17%{{opacity:0}}17.1%,18.6%{{opacity:1}}18.7%,100%{{opacity:0}}}}
+@keyframes vPress{{0%,18.2%{{opacity:0}}18.3%,19.8%{{opacity:1}}19.9%,100%{{opacity:0}}}}
+/* the pointer comes in from the note, clicks the link's row and leaves */
+#cur{{animation:curMove 12s infinite}}
+@keyframes curMove{{
+  0%,25%{{opacity:0;transform:translate(120px,470px)}}
+  26.5%{{opacity:1;transform:translate(120px,470px);animation-timing-function:cubic-bezier(.35,0,.2,1)}}
+  32.5%,38%{{opacity:1;transform:translate({tip[0]}px,{tip[1]}px)}}
+  39.5%,100%{{opacity:0;transform:translate({tip[0]}px,{tip[1]}px)}}
+}}
+#ripple{{animation:rip 12s infinite}}
+@keyframes rip{{0%,33.2%{{opacity:0;transform:scale(.3)}}33.3%{{opacity:.85;transform:scale(.3)}}38%,100%{{opacity:0;transform:scale(2.6)}}}}
+/* the up arrow takes the selection back to the photo */
+#kUp{{animation:upIn 12s infinite}}
+@keyframes upIn{{0%,40.9%{{opacity:0;transform:translateY(8px)}}41.7%,47.5%{{opacity:1;transform:none}}49.2%,100%{{opacity:0;transform:translateY(-6px)}}}}
+#kUpDown{{animation:upPress 12s infinite}}
+@keyframes upPress{{0%,44.1%{{opacity:0}}44.2%,45.7%{{opacity:1}}45.8%,100%{{opacity:0}}}}
+#kRet{{animation:retIn 12s infinite}}
+@keyframes retIn{{0%,52%{{opacity:0;transform:translateY(8px)}}52.8%,57.2%{{opacity:1;transform:none}}58.6%,100%{{opacity:0;transform:translateY(-6px)}}}}
+#kRetDown{{animation:retPress 12s infinite}}
+@keyframes retPress{{0%,54.5%{{opacity:0}}54.6%,56%{{opacity:1}}56.1%,100%{{opacity:0}}}}
+/* the app switches the selection outright, so the rows do too: photo, then the link, then the photo */
+#photoSel,#detPhoto{{animation:photoOn 12s infinite}} #urlSel,#detUrl{{animation:urlOn 12s infinite}}
+@keyframes photoOn{{0%,33.2%{{opacity:1}}33.3%,44.1%{{opacity:0}}44.2%,100%{{opacity:1}}}}
+@keyframes urlOn{{0%,33.2%{{opacity:0}}33.3%,44.1%{{opacity:1}}44.2%,100%{{opacity:0}}}}
 /* the page starts every loop at zero, so it begins where the panel flies in */
-* { animation-delay: -2.1s !important }
-'''
-    return svg(W, H, 'A line is being typed; ⌥V opens the Stash journal under the caret; the arrow keys pick a clip and Return pastes it into the line.', body, css)
+* {{ animation-delay: -2.1s !important }}
+"""
+    return svg(W, H, 'A line is typed; ⌥V opens the Stash journal under the caret; the pointer picks the link, the up arrow picks the photo and Return pastes it into the note.', body, css)
 
 
 # ── the feature strips: the list pane on a desktop ────────────────────────────

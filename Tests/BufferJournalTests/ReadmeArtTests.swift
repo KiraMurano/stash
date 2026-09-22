@@ -145,10 +145,13 @@ struct ReadmeArtTests {
                 try write(keycap("⌥", caption: "option", pressed: pressed), "key-option\(state)", scheme: scheme, suffix: suffix)
                 try write(keycap("V", pressed: pressed), "key-v\(state)", scheme: scheme, suffix: suffix)
                 try write(keycap("↓", pressed: pressed), "key-down\(state)", scheme: scheme, suffix: suffix)
+                try write(keycap("↑", pressed: pressed), "key-up\(state)", scheme: scheme, suffix: suffix)
                 try write(keycap("⏎", pressed: pressed), "key-return\(state)", scheme: scheme, suffix: suffix)
             }
 
             try write(ToastOverlay(message: "Pasted").padding(30), "toast-pasted", scheme: scheme, suffix: suffix)
+            // the photo as it lands in a note once pasted
+            try write(PhotoArt(style: .mountains).frame(width: 256, height: 160).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous)), "photo-pasted", scheme: scheme, suffix: suffix)
             try write(wordmark(palette: palette), "wordmark", scheme: scheme, suffix: suffix)
         }
 
