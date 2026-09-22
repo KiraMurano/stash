@@ -173,16 +173,15 @@ def hero(theme):
 
     body = defs(p, W, H, (880, 600)) + '<use href="#deskBg"/>\n'
     body += f"""<path d="M18,0 H982 A18,18 0 0 1 1000,18 V30 H0 V18 A18,18 0 0 1 18,0 Z" fill="{p['mbar']}"/>
-<text x="24" y="19" font-size="11" font-weight="600" fill="{p['ink1']}">Messages</text>
-<text x="92" y="19" font-size="11" fill="{p['ink2']}">File</text>
+<text x="24" y="19" font-size="11" font-weight="600" fill="{p['ink1']}">Messenger</text>
+<text x="94" y="19" font-size="11" fill="{p['ink2']}">File</text>
 <text x="126" y="19" font-size="11" fill="{p['ink2']}">Edit</text>
 <text x="162" y="19" font-size="11" fill="{p['ink2']}">View</text>
 <text x="972" y="19" font-size="11" fill="{p['ink2']}" text-anchor="end">Mon 14:02</text>
 <g filter="url(#winShadow)"><rect x="{WX}" y="58" width="{WW}" height="482" rx="10" fill="{p['win']}"/></g>
 <rect x="{WX + .5}" y="58.5" width="{WW - 1}" height="481" rx="9.5" fill="none" stroke="{p['border']}"/>
 <circle cx="{WX + 18}" cy="70" r="6" fill="#ff5f57"/><circle cx="{WX + 38}" cy="70" r="6" fill="#febc2e"/><circle cx="{WX + 58}" cy="70" r="6" fill="#28c840"/>
-<circle cx="{WX + WW / 2 - 16}" cy="70" r="7" fill="#f46a25"/><text x="{WX + WW / 2 - 16}" y="73.5" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">K</text>
-<text x="{WX + WW / 2 - 4}" y="74" font-size="11" font-weight="600" fill="{p['ink2']}">Kira</text>
+<text x="{WX + WW / 2}" y="74" font-size="11" font-weight="600" fill="{p['ink2']}" text-anchor="middle">Messenger</text>
 <rect x="{WX}" y="82" width="{WW}" height="1" fill="{p['sep']}"/>
 <clipPath id="winClip"><rect x="{WX}" y="58" width="{WW}" height="482" rx="10"/></clipPath>
 <g clip-path="url(#winClip)">
