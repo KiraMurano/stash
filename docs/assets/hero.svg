@@ -1,0 +1,355 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 640" width="1000" height="640" role="img"
+     aria-label="A line is being typed; ⌥V opens the Stash journal under the caret; the arrow keys pick a clip and Return pastes it into the line.">
+<title>Stash — press ⌥V, pick a clip, press Return</title>
+
+<defs>
+  <linearGradient id="wallL" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#8fb6e8"/><stop offset=".45" stop-color="#c9a7d9"/><stop offset="1" stop-color="#f2c6a0"/>
+  </linearGradient>
+  <linearGradient id="wallD" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#1d2a44"/><stop offset=".5" stop-color="#3a2346"/><stop offset="1" stop-color="#4a2f25"/>
+  </linearGradient>
+  <radialGradient id="blobWarm"><stop offset="0" stop-color="#f46a25" stop-opacity=".55"/><stop offset="1" stop-color="#f46a25" stop-opacity="0"/></radialGradient>
+  <radialGradient id="blobCool"><stop offset="0" stop-color="#fff" stop-opacity=".40"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="shot" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#31b7c8"/><stop offset=".52" stop-color="#4f5cd8"/><stop offset="1" stop-color="#df5aa6"/>
+  </linearGradient>
+  <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity=".20"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>
+
+  <clipPath id="winClip"><rect x="40" y="58" width="760" height="482" rx="13"/></clipPath>
+  <clipPath id="panelClip"><rect x="250" y="190" width="640" height="440" rx="24"/></clipPath>
+
+  <filter id="winShadow" x="-20%" y="-20%" width="140%" height="150%">
+    <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".26"/>
+  </filter>
+  <filter id="panelShadow" x="-25%" y="-25%" width="150%" height="160%">
+    <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity=".30"/>
+  </filter>
+  <filter id="tileShadow" x="-40%" y="-40%" width="180%" height="180%">
+    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".28"/>
+  </filter>
+  <filter id="keyShadow" x="-40%" y="-40%" width="180%" height="190%">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity=".22"/>
+  </filter>
+  <!-- what the journal's glass shows of the desktop behind it -->
+  <filter id="frost" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+    <feGaussianBlur stdDeviation="14"/>
+  </filter>
+
+  <!-- the desktop is drawn twice: once as itself, once blurred under the journal -->
+  <g id="deskBg">
+    <rect class="lt" x="0" y="0" width="1000" height="640" rx="18" fill="url(#wallL)"/>
+    <rect class="dk" x="0" y="0" width="1000" height="640" rx="18" fill="url(#wallD)"/>
+    <ellipse cx="880" cy="600" rx="240" ry="200" fill="url(#blobWarm)"/>
+    <ellipse cx="150" cy="70" rx="220" ry="160" fill="url(#blobCool)"/>
+
+    <path d="M18,0 H982 A18,18 0 0 1 1000,18 V30 H0 V18 A18,18 0 0 1 18,0 Z" fill="var(--mbar)"/>
+    <text class="t1 sm b" x="24" y="19">Notes</text>
+    <text class="t2 sm" x="70" y="19">File</text>
+    <text class="t2 sm" x="104" y="19">Edit</text>
+    <text class="t2 sm" x="140" y="19">View</text>
+    <g transform="translate(884,8)">
+      <rect x="0" y="3" width="13" height="3.4" rx="1.7" fill="var(--ink2)"/>
+      <rect x="0" y="8.6" width="8.4" height="3.4" rx="1.7" fill="var(--ink2)"/>
+    </g>
+    <text class="t2 sm" x="972" y="19" text-anchor="end">Mon 14:02</text>
+
+    <g filter="url(#winShadow)"><rect class="win" x="40" y="58" width="760" height="482" rx="13"/></g>
+    <g clip-path="url(#winClip)">
+      <rect x="40" y="58" width="760" height="34" fill="var(--winbar)"/>
+      <rect x="40" y="91" width="760" height="1" class="sep"/>
+      <circle cx="63" cy="75" r="5.5" fill="#ff5f57"/><circle cx="81" cy="75" r="5.5" fill="#febc2e"/><circle cx="99" cy="75" r="5.5" fill="#28c840"/>
+      <text class="t2 sm b" x="420" y="79" text-anchor="middle">Note — Stash</text>
+      <text class="t3 sm" x="72" y="122">To: kira</text>
+      <rect x="72" y="134" width="696" height="1" class="sep"/>
+    </g>
+  </g>
+</defs>
+
+<style>
+svg {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --win:#f6f6f7; --winbar:rgba(255,255,255,.72); --mbar:rgba(255,255,255,.70);
+  --ink1:rgba(0,0,0,.86); --ink2:rgba(0,0,0,.58); --ink3:rgba(0,0,0,.38);
+  --sep:rgba(0,0,0,.08); --border:rgba(0,0,0,.10); --ph:rgba(0,0,0,.05);
+  --side:rgba(255,255,255,.74); --detail:rgba(255,255,255,.36);
+  --glass:rgba(255,255,255,.42); --glassEdge:rgba(255,255,255,.55);
+  --accent:#f46a25; --accentText:#d9561a; --accentSoft:rgba(244,106,37,.15);
+  --key:#fff; --keyEdge:rgba(0,0,0,.16);
+}
+@media (prefers-color-scheme: dark) {
+  svg {
+    --win:#181818; --winbar:rgba(48,48,50,.80); --mbar:rgba(28,28,30,.85);
+    --ink1:rgba(255,255,255,.90); --ink2:rgba(255,255,255,.58); --ink3:rgba(255,255,255,.38);
+    --sep:rgba(255,255,255,.08); --border:rgba(255,255,255,.11); --ph:rgba(255,255,255,.06);
+    --side:rgba(28,28,30,.80); --detail:rgba(18,18,20,.50);
+    --glass:rgba(255,255,255,.07); --glassEdge:rgba(255,255,255,.14);
+    --accentText:#ff8a4c; --accentSoft:rgba(244,106,37,.24);
+    --key:#48484c; --keyEdge:rgba(0,0,0,.55);
+  }
+  .lt { opacity: 0 }
+  .dk { opacity: 1 }
+}
+.dk { opacity: 0 }
+.t1{fill:var(--ink1)} .t2{fill:var(--ink2)} .t3{fill:var(--ink3)} .at{fill:var(--accentText)}
+.ph{fill:var(--ph)} .sep{fill:var(--sep)} .win{fill:var(--win)}
+.gl{fill:var(--glass);stroke:var(--glassEdge);stroke-width:1}
+.ic{fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke:var(--ink2)}
+.ic3{fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke:var(--ink3)}
+.ica{fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke:var(--accentText)}
+.key{fill:var(--key);stroke:var(--keyEdge);stroke-width:1}
+.sm{font-size:11px} .md{font-size:13px} .lg{font-size:14px}
+.b{font-weight:600} .hv{font-weight:800}
+
+#panel,#sel,#keys,#kOpt,#kV,#kDown,#kRet,#pasteBtn{transform-box:fill-box}
+#panel{transform-origin:8% 5%}
+#kOpt,#kV,#kDown,#kRet,#pasteBtn{transform-origin:50% 50%}
+
+/* The line is one run of text under a cover the colour of the window. The cover's left
+   edge carries the caret, so the two can never drift apart, whatever the font. */
+#reveal{animation:reveal 12s infinite}
+@keyframes reveal{
+  0%,2.4%{transform:translateX(0)}
+  2.5%,4.9%{transform:translateX(25.4px)}
+  5%,7.4%{transform:translateX(58.3px)}
+  7.5%,9.9%{transform:translateX(83px)}
+  10%,12.4%{transform:translateX(116.1px)}
+  12.5%,57.4%{transform:translateX(130.4px)}
+  57.5%,89.9%{transform:translateX(324px)}
+  90%,100%{transform:translateX(0)}
+}
+#caret{animation:blink 1.06s steps(1,end) infinite}
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:.05}}
+#urlFlash{animation:flash 12s infinite}
+@keyframes flash{0%,57.4%{opacity:0}57.6%{opacity:1}61%,100%{opacity:0}}
+
+#keys{animation:keysIn 12s infinite}
+@keyframes keysIn{
+  0%,14.4%{opacity:0;transform:translateY(8px)}
+  15.8%,23%{opacity:1;transform:translateY(0)}
+  25%,100%{opacity:0;transform:translateY(-6px)}
+}
+#kOpt{animation:pressA 12s infinite} #kV{animation:pressB 12s infinite}
+@keyframes pressA{0%,16.6%{transform:none}17.1%,18.4%{transform:translateY(3px) scale(.95)}19%,100%{transform:none}}
+@keyframes pressB{0%,17.8%{transform:none}18.3%,19.6%{transform:translateY(3px) scale(.95)}20.2%,100%{transform:none}}
+#kOptGlow{animation:glowA 12s infinite} #kVGlow{animation:glowB 12s infinite}
+@keyframes glowA{0%,16.8%{opacity:0}17.1%,18.4%{opacity:1}19.2%,100%{opacity:0}}
+@keyframes glowB{0%,18%{opacity:0}18.3%,19.6%{opacity:1}20.4%,100%{opacity:0}}
+
+#kDown{animation:downIn 12s infinite}
+@keyframes downIn{
+  0%,36.2%{opacity:0;transform:translateY(8px)}
+  37%,38.4%{opacity:1;transform:translateY(0)}
+  38.75%,39.8%{opacity:1;transform:translateY(3px) scale(.95)}
+  40.4%,41.5%{opacity:1;transform:translateY(0)}
+  43%,100%{opacity:0;transform:translateY(-6px)}
+}
+#kRet{animation:retIn 12s infinite}
+@keyframes retIn{
+  0%,52%{opacity:0;transform:translateY(8px)}
+  52.8%,54.2%{opacity:1;transform:translateY(0)}
+  54.6%,55.6%{opacity:1;transform:translateY(3px) scale(.95)}
+  56.2%,57.2%{opacity:1;transform:translateY(0)}
+  58.6%,100%{opacity:0;transform:translateY(-6px)}
+}
+
+#panel{animation:panelIn 12s infinite}
+@keyframes panelIn{
+  0%,19.5%{opacity:0;transform:translateY(12px) scale(.94);animation-timing-function:cubic-bezier(.2,.9,.25,1)}
+  22.5%,56.7%{opacity:1;transform:none}
+  59.6%,100%{opacity:0;transform:translateY(8px) scale(.97)}
+}
+
+#sel{animation:selMove 12s infinite}
+@keyframes selMove{
+  0%,39.1%{transform:translateY(0);animation-timing-function:cubic-bezier(.2,.9,.25,1)}
+  41.3%,100%{transform:translateY(58px)}
+}
+#detImg{animation:detA 12s infinite} #detUrl{animation:detB 12s infinite}
+@keyframes detA{0%,39.1%{opacity:1}41.2%,100%{opacity:0}}
+@keyframes detB{0%,39.1%{opacity:0}41.2%,100%{opacity:1}}
+
+#pasteBtn{animation:pastePulse 12s infinite}
+@keyframes pastePulse{0%,54.4%{transform:none}55.2%,56%{transform:scale(.95)}56.8%,100%{transform:none}}
+
+/* the page starts every loop at zero, so it begins where the panel flies in */
+* { animation-delay: -2.1s !important }
+
+@media (prefers-reduced-motion: reduce){
+  #reveal,#caret,#urlFlash,#keys,#kOpt,#kV,#kOptGlow,#kVGlow,
+  #kDown,#kRet,#panel,#sel,#detImg,#detUrl,#pasteBtn{animation:none}
+  #reveal{transform:translateX(324px)} #detImg{opacity:0}
+}
+</style>
+
+<use href="#deskBg"/>
+
+<g clip-path="url(#winClip)">
+  <rect id="urlFlash" x="204" y="146" width="196" height="26" rx="5" fill="var(--accentSoft)"/>
+  <text class="t1 lg" x="72" y="166">Hey Kira, the repo is github.com/KiraMurano/stash</text>
+  <g id="reveal">
+    <rect x="73" y="143" width="740" height="30" fill="var(--win)"/>
+    <rect id="caret" x="70.5" y="149" width="2" height="19" rx="1" fill="var(--ink1)"/>
+  </g>
+</g>
+
+<!-- keycap stage -->
+<g id="keys">
+  <g id="kOpt" filter="url(#keyShadow)">
+    <rect class="key" x="62" y="356" width="60" height="60" rx="14"/>
+    <rect id="kOptGlow" x="62" y="356" width="60" height="60" rx="14" fill="var(--accentSoft)"/>
+    <g stroke="var(--ink1)" stroke-width="2.4" fill="none" stroke-linecap="round">
+      <path d="M76,373 H85 L99,399 H108"/>
+      <path d="M98,373 H108"/>
+    </g>
+  </g>
+  <g id="kV" filter="url(#keyShadow)">
+    <rect class="key" x="130" y="356" width="60" height="60" rx="14"/>
+    <rect id="kVGlow" x="130" y="356" width="60" height="60" rx="14" fill="var(--accentSoft)"/>
+    <text class="t1" x="160" y="395" text-anchor="middle" font-size="24" font-weight="600">V</text>
+  </g>
+</g>
+<g id="kDown" filter="url(#keyShadow)">
+  <rect class="key" x="96" y="356" width="60" height="60" rx="14"/>
+  <path d="M126,373 V399 M114,389 L126,401 L138,389" stroke="var(--ink1)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g id="kRet" filter="url(#keyShadow)">
+  <rect class="key" x="96" y="356" width="60" height="60" rx="14"/>
+  <path d="M140,372 V389 A6,6 0 0 1 134,395 H113 M121,387 L112,395 L121,403"
+        stroke="var(--ink1)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+
+<!-- Stash journal -->
+<g transform="translate(0,-20)">
+<g id="panel" filter="url(#panelShadow)">
+  <g clip-path="url(#panelClip)">
+    <!-- the desktop behind the glass, blurred; the inner shift undoes the group's -20 -->
+    <g transform="translate(0,20)" filter="url(#frost)"><use href="#deskBg"/></g>
+
+    <rect x="250" y="190" width="290" height="440" fill="var(--side)"/>
+    <rect x="540" y="190" width="350" height="440" fill="var(--detail)"/>
+    <rect x="250" y="190" width="640" height="440" fill="url(#gloss)"/>
+    <rect x="539" y="190" width="1" height="440" class="sep"/>
+
+    <!-- sidebar header -->
+    <g>
+      <rect x="264" y="202" width="22" height="22" rx="5.5" fill="var(--accent)"/>
+      <rect x="269" y="208" width="12" height="3.4" rx="1.7" fill="#fff" opacity=".95"/>
+      <rect x="269" y="214.6" width="7.8" height="3.4" rx="1.7" fill="#fff" opacity=".72"/>
+      <text class="t1 hv" x="291" y="219" font-size="15.5">Stash</text>
+      <text class="t3 sm" x="496" y="219" text-anchor="end" font-weight="500">12/20</text>
+      <rect class="gl" x="504" y="201" width="26" height="26" rx="8"/>
+      <g class="ic3" transform="translate(510,207)"><path d="M2.5,3.5 h9 M5,3.5 v-1.2 h4 v1.2 M4.1,3.5 l.6,8 h4.6 l.6,-8"/></g>
+    </g>
+
+    <!-- type filter -->
+    <rect class="ph" x="260" y="232" width="270" height="26" rx="8"/>
+    <rect x="262" y="234" width="63.5" height="22" rx="6" fill="var(--accentSoft)"/>
+    <text class="at b" x="293" y="249" text-anchor="middle" font-size="11.5">All</text>
+    <text class="t2 b" x="361" y="249" text-anchor="middle" font-size="11.5">Text</text>
+    <text class="t2 b" x="429" y="249" text-anchor="middle" font-size="11.5">Images</text>
+    <text class="t2 b" x="496" y="249" text-anchor="middle" font-size="11.5">Files</text>
+
+    <!-- pinned -->
+    <text class="t3 sm b" x="266" y="278">Pinned</text>
+    <g>
+      <rect class="ph" x="264" y="292" width="40" height="40" rx="8" filter="url(#tileShadow)"/>
+      <g class="ic3" transform="translate(276,304)"><path d="M1,2 h14 M1,7 h14 M1,12 h9" stroke-width="1.6"/></g>
+      <text class="t1 md" x="314" y="312">hello@ozero.digital</text>
+      <text class="t3 sm" x="314" y="328">Text · yesterday</text>
+      <g class="ica" transform="translate(508,300)"><path d="M3.6,2.4 h6.8 M5.2,2.4 l.9,4 h1.8 l.9,-4 M7,6.4 V12.2"/></g>
+    </g>
+
+    <!-- today -->
+    <text class="t3 sm b" x="266" y="360">Today</text>
+
+    <g id="sel">
+      <rect x="256" y="366" width="278" height="56" rx="8" fill="var(--accentSoft)"/>
+      <rect x="250" y="376" width="3" height="36" rx="1.5" fill="var(--accent)"/>
+    </g>
+
+    <g>
+      <rect x="264" y="374" width="40" height="40" rx="8" fill="url(#shot)" filter="url(#tileShadow)"/>
+      <text class="t1 md" x="314" y="390">Screenshot 14.02</text>
+      <text class="t3 sm" x="314" y="406">Image · 1440 × 900</text>
+      <g class="ica" transform="translate(508,382)">
+        <rect x="2.2" y="2.2" width="7.4" height="9" rx="1.6"/><rect x="4.8" y="4.4" width="7.4" height="9" rx="1.6"/>
+      </g>
+    </g>
+    <g>
+      <rect class="ph" x="264" y="432" width="40" height="40" rx="8" filter="url(#tileShadow)"/>
+      <g class="ic3" transform="translate(276,444)"><path d="M6.4,9.6 a3.4,3.4 0 0 0 4.8,0 l2.4,-2.4 a3.4,3.4 0 0 0 -4.8,-4.8 l-1,1"/><path d="M9.6,6.4 a3.4,3.4 0 0 0 -4.8,0 l-2.4,2.4 a3.4,3.4 0 0 0 4.8,4.8 l1,-1"/></g>
+      <text class="t1 md" x="314" y="448">github.com/KiraMurano</text>
+      <text class="t3 sm" x="314" y="464">Text · 14:01</text>
+    </g>
+    <g>
+      <rect class="ph" x="264" y="490" width="40" height="40" rx="8" filter="url(#tileShadow)"/>
+      <g class="ic3" transform="translate(276,502)"><path d="M1,2 h14 M1,7 h14 M1,12 h9" stroke-width="1.6"/></g>
+      <text class="t1 md" x="314" y="506">Stash 1.10 — release</text>
+      <text class="t3 sm" x="314" y="522">Text · 13:48</text>
+    </g>
+    <g>
+      <rect class="ph" x="264" y="548" width="40" height="40" rx="8" filter="url(#tileShadow)"/>
+      <g class="ic3" transform="translate(276,560)"><path d="M3,1.4 h6 l4,4 v9.2 h-10 z M9,1.4 v4 h4"/></g>
+      <text class="t1 md" x="314" y="564">Invoice 0417.pdf</text>
+      <text class="t3 sm" x="314" y="580">File · 13:20</text>
+    </g>
+
+    <!-- detail: close button -->
+    <rect class="gl" x="854" y="200" width="26" height="26" rx="8"/>
+    <g class="ic" transform="translate(860,206)"><path d="M3.6,3.6 L10.4,10.4 M10.4,3.6 L3.6,10.4"/></g>
+
+    <!-- detail: image clip -->
+    <g id="detImg">
+      <text class="t1 md b" x="556" y="216">Image · 14:02</text>
+      <rect x="650" y="204" width="74" height="16" rx="4" fill="var(--accentSoft)"/>
+      <text class="at" x="687" y="215.5" text-anchor="middle" font-size="10" font-weight="600">in clipboard</text>
+      <rect x="566" y="280" width="298" height="210" rx="8" fill="url(#shot)"/>
+      <text class="t3 sm b" x="556" y="570">Size</text>
+      <text class="t2 sm b" x="596" y="570">1 440 × 900 · 1.6 MB</text>
+      <g transform="translate(552,592)">
+        <rect class="gl" x="0" y="0" width="28" height="28" rx="8"/>
+        <g class="ic" transform="translate(7,7)"><path d="M2.5,5.4 V2.5 H5.4 M2.5,2.5 L6.4,6.4 M11.5,8.6 V11.5 H8.6 M11.5,11.5 L7.6,7.6"/></g>
+      </g>
+    </g>
+
+    <!-- detail: text clip -->
+    <g id="detUrl">
+      <text class="t1 md b" x="556" y="216">Text · 14:01</text>
+      <text class="t1 md" x="556" y="280">github.com/</text>
+      <text class="t1 md" x="556" y="302">KiraMurano/stash</text>
+      <text class="t3 sm b" x="556" y="570">Size</text>
+      <text class="t2 sm b" x="596" y="570">34 characters</text>
+      <g transform="translate(552,592)">
+        <rect class="gl" x="0" y="0" width="28" height="28" rx="8"/>
+        <g class="ic" transform="translate(7,7)"><path d="M3,11 l1,-3 6,-6 2,2 -6,6 z M9,3 l2,2"/></g>
+      </g>
+    </g>
+
+    <!-- detail: action bar -->
+    <rect x="540" y="582" width="350" height="1" class="sep"/>
+    <g transform="translate(586,592)">
+      <rect class="gl" x="0" y="0" width="28" height="28" rx="8"/>
+      <g class="ic" transform="translate(7,7)"><path d="M3.6,2.4 h6.8 M5.2,2.4 l.9,4 h1.8 l.9,-4 M7,6.4 V12.2"/></g>
+    </g>
+    <g transform="translate(620,592)">
+      <rect class="gl" x="0" y="0" width="28" height="28" rx="8"/>
+      <g class="ic" transform="translate(7,7)"><path d="M2.5,3.5 h9 M5,3.5 v-1.2 h4 v1.2 M4.1,3.5 l.6,8 h4.6 l.6,-8"/></g>
+    </g>
+    <g transform="translate(769,592)">
+      <rect class="gl" x="0" y="0" width="28" height="28" rx="8"/>
+      <g class="ic" transform="translate(7,7)"><rect x="2.2" y="2.2" width="7.4" height="9" rx="1.6"/><rect x="4.8" y="4.4" width="7.4" height="9" rx="1.6"/></g>
+    </g>
+    <g id="pasteBtn">
+      <rect x="803" y="592" width="75" height="28" rx="8" fill="var(--accentSoft)"/>
+      <text class="at" x="816" y="611" font-size="12" font-weight="600">Paste</text>
+      <g class="ica" transform="translate(853,599)" stroke-width="1.6">
+        <path d="M11,1.6 V7 A2,2 0 0 1 9,9 H2 M4.6,6.4 L1.6,9 L4.6,11.6"/>
+      </g>
+    </g>
+  </g>
+</g>
+</g>
+</svg>
