@@ -17,7 +17,8 @@ struct ReadmeArtTests {
     private static let icon = NSImage(contentsOf: root.appendingPathComponent("Resources/AppIcon.icns"))!
     private static let l10n = L10n(language: .english)
 
-    private func write<V: View>(_ view: V, _ name: String, scheme: ColorScheme, suffix: String, scale: CGFloat = 2) throws {
+    /// 3×: the strips show the pieces larger than life, and a Retina screen doubles that again.
+    private func write<V: View>(_ view: V, _ name: String, scheme: ColorScheme, suffix: String, scale: CGFloat = 3) throws {
         let renderer = ImageRenderer(
             content: view
                 .environment(\.colorScheme, scheme)

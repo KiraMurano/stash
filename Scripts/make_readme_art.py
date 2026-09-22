@@ -36,12 +36,15 @@ ROW = 58
 SECTION = 26
 
 
+SCALE = 3   # the pieces are rendered at 3×, see ReadmeArtTests
+
+
 def png(name):
-    """The PNG as a data URI with its size in points (the pieces are rendered at 2×)."""
+    """The PNG as a data URI with its size in points."""
     with open(os.path.join(ART, name + '.png'), 'rb') as f:
         data = f.read()
     w, h = struct.unpack('>II', data[16:24])
-    return 'data:image/png;base64,' + base64.b64encode(data).decode(), w / 2, h / 2
+    return 'data:image/png;base64,' + base64.b64encode(data).decode(), w / SCALE, h / SCALE
 
 
 def image(name, x, y, ident='', size=None):
@@ -84,7 +87,10 @@ def defs(p, w, h, blob):
   <radialGradient id="blobWarm"><stop offset="0" stop-color="#f46a25" stop-opacity=".55"/><stop offset="1" stop-color="#f46a25" stop-opacity="0"/></radialGradient>
   <radialGradient id="blobCool"><stop offset="0" stop-color="#fff" stop-opacity="{p['blobCool']}"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
   <filter id="frost" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="14"/></filter>
-  <filter id="panelShadow" x="-25%" y="-25%" width="150%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity=".30"/></filter>
+  <filter id="panelShadow" x="-25%" y="-25%" width="150%" height="160%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="14"/><feOffset dy="8" result="o"/>
+    <feFlood flood-color="#000" flood-opacity=".30"/><feComposite in2="o" operator="in"/>
+  </filter>
   <filter id="waveShadow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity=".35"/></filter>
   <filter id="winShadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity=".26"/></filter>
   <g id="deskBg">
@@ -97,9 +103,11 @@ def defs(p, w, h, blob):
 
 
 def panel(p, x, y, w, h, side_w, inner, ident='panel'):
-    """The journal's glass: the desktop blurred, the two panes' tints, a hairline, and the pieces."""
+    """The journal's glass: its shadow on a layer of its own (a filter over the pieces would have
+    them rasterised soft), the desktop blurred, the two panes' tints, a hairline, and the pieces."""
     r = 24
-    return f'''<g id="{ident}" filter="url(#panelShadow)">
+    return f'''<g id="{ident}">
+  <rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" filter="url(#panelShadow)"/>
   <clipPath id="{ident}Clip"><rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}"/></clipPath>
   <g clip-path="url(#{ident}Clip)">
     <g filter="url(#frost)"><use href="#deskBg"/></g>
