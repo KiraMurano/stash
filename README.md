@@ -17,7 +17,7 @@ A clipboard journal for macOS. Text, images and files stay for a day, and come b
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-  <img src="docs/assets/hero-light.svg" width="880" alt="A line is being typed; ⌥V opens the Stash journal under the caret; the arrow keys pick a clip and Return pastes it into the line.">
+  <img src="docs/assets/hero-light.svg" width="880" alt="In a messenger, a line is typed; ⌥V opens the Stash journal above the caret; the pointer double-clicks the link and the message is sent; ⌥V again, the arrow key picks the screenshot, Return pastes and sends it.">
 </picture>
 
 </div>

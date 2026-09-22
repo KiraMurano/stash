@@ -44,10 +44,13 @@ def png(name):
     return 'data:image/png;base64,' + base64.b64encode(data).decode(), w / 2, h / 2
 
 
-def image(name, x, y, ident='', extra=''):
+def image(name, x, y, ident='', size=None):
+    """The piece at its rendered size, or scaled to `size` (width, height) in points."""
     uri, w, h = png(name)
+    if size:
+        w, h = size
     i = f' id="{ident}"' if ident else ''
-    return f'<image{i} href="{uri}" x="{x}" y="{y}" width="{w}" height="{h}"{extra}/>\n'
+    return f'<image{i} href="{uri}" x="{x}" y="{y}" width="{w}" height="{h}"/>\n'
 
 
 def height(name):
@@ -123,12 +126,13 @@ svg{{font-family:{FONT}}}
 # ── the hero ───────────────────────────────────────────────────────────────────
 
 def hero(theme):
-    """The journal opens under the caret; the pointer picks the link, the arrow key picks the
-    photo, Return pastes it into the note."""
+    """A messenger. A line is typed, ⌥V opens the journal above the caret, the pointer
+    double-clicks the link and the message goes out; ⌥V again, the arrow key picks the
+    screenshot, Return pastes it and a second message goes out. 14 s."""
     p = PALETTE[theme]
     t = '-' + theme
     W, H = 1000, 640
-    PX, PY = 250, 170                       # the journal, right under the caret
+    PX, PY = 250, 44                        # the journal, above the caret: there is no room below
     ys = {}
     y = PY
     ys['top'] = y; y += height('list-top-5' + t)
@@ -139,7 +143,10 @@ def hero(theme):
     ys['url'] = y; y += ROW
     ys['release'] = y; y += ROW
     ys['invoice'] = y
-    tip = (PX + 150, ys['url'] + 22)        # where the pointer clicks the link's row
+    tip = (PX + 150, ys['url'] + 22)        # where the pointer double-clicks the link's row
+    bubble_w = 347.4 + 24                   # the sent line at 13 pt, measured, plus its padding
+    blue, blue_ink = '#2b7cf6', '#fff'
+    grey, grey_ink = ('#e9e9eb', 'rgba(0,0,0,.86)') if theme == 'light' else ('#3a3a3c', 'rgba(255,255,255,.9)')
 
     inner = (image('list-top-5' + t, PX, ys['top'])
              + image('section-pinned' + t, PX, ys['pinned'])
@@ -155,85 +162,112 @@ def hero(theme):
              + image('detail-url' + t, PX + 290, PY, 'detUrl'))
 
     body = defs(p, W, H, (880, 600)) + '<use href="#deskBg"/>\n'
-    # the menu bar and the window, drawn like the tour's SceneWindow
     body += f"""<path d="M18,0 H982 A18,18 0 0 1 1000,18 V30 H0 V18 A18,18 0 0 1 18,0 Z" fill="{p['mbar']}"/>
-<text x="24" y="19" font-size="11" font-weight="600" fill="{p['ink1']}">Notes</text>
-<text x="70" y="19" font-size="11" fill="{p['ink2']}">File</text>
-<text x="104" y="19" font-size="11" fill="{p['ink2']}">Edit</text>
-<text x="140" y="19" font-size="11" fill="{p['ink2']}">View</text>
+<text x="24" y="19" font-size="11" font-weight="600" fill="{p['ink1']}">Messages</text>
+<text x="92" y="19" font-size="11" fill="{p['ink2']}">File</text>
+<text x="126" y="19" font-size="11" fill="{p['ink2']}">Edit</text>
+<text x="162" y="19" font-size="11" fill="{p['ink2']}">View</text>
 <text x="972" y="19" font-size="11" fill="{p['ink2']}" text-anchor="end">Mon 14:02</text>
 <g filter="url(#winShadow)"><rect x="40" y="58" width="760" height="482" rx="10" fill="{p['win']}"/></g>
 <rect x="40.5" y="58.5" width="759" height="481" rx="9.5" fill="none" stroke="{p['border']}"/>
 <circle cx="58" cy="70" r="6" fill="#ff5f57"/><circle cx="78" cy="70" r="6" fill="#febc2e"/><circle cx="98" cy="70" r="6" fill="#28c840"/>
-<text x="420" y="74" font-size="11" font-weight="600" fill="{p['ink2']}" text-anchor="middle">Note — Stash</text>
-<text x="72" y="112" font-size="11" fill="{p['ink3']}">To: kira</text>
-<rect x="72" y="124" width="696" height="1" fill="{p['sep']}"/>
+<circle cx="404" cy="70" r="7" fill="#f46a25"/><text x="404" y="73.5" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">K</text>
+<text x="416" y="74" font-size="11" font-weight="600" fill="{p['ink2']}">Kira</text>
+<rect x="40" y="82" width="760" height="1" fill="{p['sep']}"/>
 <clipPath id="winClip"><rect x="40" y="58" width="760" height="482" rx="10"/></clipPath>
 <g clip-path="url(#winClip)">
-  <text x="72" y="156" font-size="14" fill="{p['ink1']}">Hey Kira, look:</text>
-  <g id="reveal">
-    <rect x="73" y="133" width="740" height="30" fill="{p['win']}"/>
-    <rect id="caret" x="70.5" y="139" width="1.5" height="19" fill="{p['ink1']}"/>
+  <rect x="56" y="98" width="150" height="30" rx="15" fill="{grey}"/>
+  <text x="70" y="117" font-size="13" fill="{grey_ink}">Did you ship 1.10?</text>
+  <rect x="628" y="138" width="156" height="30" rx="15" fill="{blue}"/>
+  <text x="642" y="157" font-size="13" fill="{blue_ink}">Yes — one more thing</text>
+  <g id="sent1">
+    <rect x="{784 - bubble_w}" y="178" width="{bubble_w}" height="30" rx="15" fill="{blue}"/>
+    <text x="{784 - bubble_w + 12}" y="197" font-size="13" fill="{blue_ink}">Hey Kira, look what I found: github.com/KiraMurano/stash</text>
   </g>
 """
-    body += '  ' + image('photo-pasted' + t, 72, 172, 'pasted') + '</g>\n'
-    body += '<g id="keys">\n' + keycap('key-option', theme, 62, 356, 'kOpt') + keycap('key-v', theme, 130, 356, 'kV') + '</g>\n'
-    body += '<g id="kUp">\n' + keycap('key-up', theme, 96, 356, 'kUp') + '</g>\n'
-    body += '<g id="kRet">\n' + keycap('key-return', theme, 96, 356, 'kRet') + '</g>\n'
+    body += '  ' + image('photo-pasted' + t, 528, 218, 'sent2')
+    body += f"""  <rect x="56" y="490" width="728" height="34" rx="17" fill="{p['win']}" stroke="{p['border']}"/>
+  <text x="72" y="512" font-size="14" fill="{p['ink1']}">Hey Kira, look what I found: github.com/KiraMurano/stash</text>
+  <g id="reveal">
+    <rect x="73" y="492" width="700" height="30" fill="{p['win']}"/>
+    <rect id="caret" x="70.5" y="498" width="1.5" height="18" fill="{p['ink1']}"/>
+  </g>
+"""
+    body += '  ' + image('photo-pasted' + t, 74, 494, 'attach', size=(41.6, 26))
+    body += '</g>\n'
+    body += '<g id="keys">\n' + keycap('key-option', theme, 62, 310, 'kOpt') + keycap('key-v', theme, 130, 310, 'kV') + '</g>\n'
+    body += '<g id="kUp">\n' + keycap('key-up', theme, 96, 310, 'kUp') + '</g>\n'
+    body += '<g id="kRet">\n' + keycap('key-return', theme, 96, 310, 'kRet') + '</g>\n'
     body += panel(p, PX, PY, 640, 440, 290, inner)
     body += wave(*tip) + cursor('cur')
 
     css = f"""
-#panel{{transform-box:fill-box;transform-origin:8% 5%;animation:panelIn 12s infinite}}
+#panel{{transform-box:fill-box;transform-origin:8% 95%;animation:panelIn 14s infinite}}
 @keyframes panelIn{{
-  0%,19.5%{{opacity:0;transform:translateY(12px) scale(.94);animation-timing-function:cubic-bezier(.2,.9,.25,1)}}
-  22.5%,56.7%{{opacity:1;transform:none}}
-  59.6%,100%{{opacity:0;transform:translateY(8px) scale(.97)}}
+  0%,18.6%{{opacity:0;transform:translateY(-12px) scale(.94);animation-timing-function:cubic-bezier(.2,.9,.25,1)}}
+  21.1%,30.7%{{opacity:1;transform:none}}
+  32.9%,46.4%{{opacity:0;transform:translateY(-8px) scale(.97);animation-timing-function:cubic-bezier(.2,.9,.25,1)}}
+  48.9%,61.4%{{opacity:1;transform:none}}
+  63.6%,100%{{opacity:0;transform:translateY(-8px) scale(.97)}}
 }}
-/* One run of text under a cover the colour of the window; the cover's left edge carries the caret. */
-#reveal{{animation:reveal 12s infinite}}
+/* The line is one run of text under a cover the colour of the field; the cover's left edge carries
+   the caret. Pasting jumps it past the link; sending puts it back to the start. */
+#reveal{{animation:reveal 14s infinite}}
 @keyframes reveal{{
-  0%,2.4%{{transform:translateX(0)}} 2.5%,4.9%{{transform:translateX(25.4px)}}
-  5%,7.4%{{transform:translateX(58.3px)}} 7.5%,89.9%{{transform:translateX(93.2px)}}
-  90%,100%{{transform:translateX(0)}}
+  0%,2.1%{{transform:translateX(0)}} 2.2%,4.2%{{transform:translateX(25.4px)}}
+  4.3%,6.3%{{transform:translateX(58.3px)}} 6.4%,8.5%{{transform:translateX(89.2px)}}
+  8.6%,10.6%{{transform:translateX(124.3px)}} 10.7%,12.8%{{transform:translateX(131.7px)}}
+  12.9%,30.6%{{transform:translateX(176.7px)}} 30.7%,37%{{transform:translateX(370.3px)}}
+  37.1%,100%{{transform:translateX(0)}}
 }}
 #caret{{animation:blink 1s steps(1,end) infinite}}
 @keyframes blink{{0%,60%{{opacity:1}}60.01%,100%{{opacity:0}}}}
-#pasted{{animation:pasted 12s infinite}}
-@keyframes pasted{{0%,57.4%{{opacity:0}}57.6%,85%{{opacity:1}}90%,100%{{opacity:0}}}}
+#attach{{animation:attach 14s infinite}}
+@keyframes attach{{0%,62%{{opacity:0}}62.1%,67%{{opacity:1}}67.1%,100%{{opacity:0}}}}
+#sent1{{animation:sent1 14s infinite}} #sent2{{animation:sent2 14s infinite}}
+@keyframes sent1{{0%,37%{{opacity:0}}37.1%,90%{{opacity:1}}94%,100%{{opacity:0}}}}
+@keyframes sent2{{0%,67%{{opacity:0}}67.1%,90%{{opacity:1}}94%,100%{{opacity:0}}}}
 #keys,#kUp,#kRet,#cur,#ripple{{transform-box:fill-box}} #ripple{{transform-origin:50% 50%}}
-#keys{{animation:keysIn 12s infinite}}
-@keyframes keysIn{{0%,14.4%{{opacity:0;transform:translateY(8px)}}15.8%,23%{{opacity:1;transform:none}}25%,100%{{opacity:0;transform:translateY(-6px)}}}}
-#kOptDown{{animation:optPress 12s infinite}} #kVDown{{animation:vPress 12s infinite}}
-@keyframes optPress{{0%,17%{{opacity:0}}17.1%,18.6%{{opacity:1}}18.7%,100%{{opacity:0}}}}
-@keyframes vPress{{0%,18.2%{{opacity:0}}18.3%,19.8%{{opacity:1}}19.9%,100%{{opacity:0}}}}
-/* the pointer comes in from the note, clicks the link's row and leaves */
-#cur{{animation:curMove 12s infinite}}
-@keyframes curMove{{
-  0%,25%{{opacity:0;transform:translate(120px,470px)}}
-  26.5%{{opacity:1;transform:translate(120px,470px);animation-timing-function:cubic-bezier(.35,0,.2,1)}}
-  32.5%,38%{{opacity:1;transform:translate({tip[0]}px,{tip[1]}px)}}
-  39.5%,100%{{opacity:0;transform:translate({tip[0]}px,{tip[1]}px)}}
+/* ⌥V twice */
+#keys{{animation:keysIn 14s infinite}}
+@keyframes keysIn{{
+  0%,14%{{opacity:0;transform:translateY(8px)}} 15%,20.5%{{opacity:1;transform:none}} 22.1%,41.9%{{opacity:0;transform:translateY(-6px)}}
+  42.9%,48.5%{{opacity:1;transform:none}} 50%,100%{{opacity:0;transform:translateY(-6px)}}
 }}
-#ripple{{animation:rip 12s infinite}}
-@keyframes rip{{0%,33.2%{{opacity:0;transform:scale(.3)}}33.3%{{opacity:.85;transform:scale(.3)}}38%,100%{{opacity:0;transform:scale(2.6)}}}}
-/* the up arrow takes the selection back to the photo */
-#kUp{{animation:upIn 12s infinite}}
-@keyframes upIn{{0%,40.9%{{opacity:0;transform:translateY(8px)}}41.7%,47.5%{{opacity:1;transform:none}}49.2%,100%{{opacity:0;transform:translateY(-6px)}}}}
-#kUpDown{{animation:upPress 12s infinite}}
-@keyframes upPress{{0%,44.1%{{opacity:0}}44.2%,45.7%{{opacity:1}}45.8%,100%{{opacity:0}}}}
-#kRet{{animation:retIn 12s infinite}}
-@keyframes retIn{{0%,52%{{opacity:0;transform:translateY(8px)}}52.8%,57.2%{{opacity:1;transform:none}}58.6%,100%{{opacity:0;transform:translateY(-6px)}}}}
-#kRetDown{{animation:retPress 12s infinite}}
-@keyframes retPress{{0%,54.5%{{opacity:0}}54.6%,56%{{opacity:1}}56.1%,100%{{opacity:0}}}}
-/* the app switches the selection outright, so the rows do too: photo, then the link, then the photo */
-#photoSel,#detPhoto{{animation:photoOn 12s infinite}} #urlSel,#detUrl{{animation:urlOn 12s infinite}}
-@keyframes photoOn{{0%,33.2%{{opacity:1}}33.3%,44.1%{{opacity:0}}44.2%,100%{{opacity:1}}}}
-@keyframes urlOn{{0%,33.2%{{opacity:0}}33.3%,44.1%{{opacity:1}}44.2%,100%{{opacity:0}}}}
-/* the page starts every loop at zero, so it begins where the panel flies in */
-* {{ animation-delay: -2.1s !important }}
+#kOptDown{{animation:optPress 14s infinite}} #kVDown{{animation:vPress 14s infinite}}
+@keyframes optPress{{0%,16.3%{{opacity:0}}16.4%,17.5%{{opacity:1}}17.6%,44.2%{{opacity:0}}44.3%,45.4%{{opacity:1}}45.5%,100%{{opacity:0}}}}
+@keyframes vPress{{0%,17.4%{{opacity:0}}17.5%,18.6%{{opacity:1}}18.7%,45.3%{{opacity:0}}45.4%,46.4%{{opacity:1}}46.5%,100%{{opacity:0}}}}
+/* the pointer comes up from the field and double-clicks the link's row */
+#cur{{animation:curMove 14s infinite}}
+@keyframes curMove{{
+  0%,22%{{opacity:0;transform:translate(140px,420px)}}
+  22.9%{{opacity:1;transform:translate(140px,420px);animation-timing-function:cubic-bezier(.35,0,.2,1)}}
+  28.6%,31.5%{{opacity:1;transform:translate({tip[0]}px,{tip[1]}px)}}
+  32.9%,100%{{opacity:0;transform:translate({tip[0]}px,{tip[1]}px)}}
+}}
+#ripple{{animation:rip 14s infinite}}
+@keyframes rip{{0%,29.2%{{opacity:0;transform:scale(.3)}}29.3%{{opacity:.85;transform:scale(.3)}}30.3%{{opacity:0;transform:scale(2.6)}}30.4%{{opacity:.85;transform:scale(.3)}}33%,100%{{opacity:0;transform:scale(2.6)}}}}
+/* the up arrow takes the selection to the screenshot */
+#kUp{{animation:upIn 14s infinite}}
+@keyframes upIn{{0%,51.4%{{opacity:0;transform:translateY(8px)}}52.1%,57%{{opacity:1;transform:none}}57.9%,100%{{opacity:0;transform:translateY(-6px)}}}}
+#kUpDown{{animation:upPress 14s infinite}}
+@keyframes upPress{{0%,54.2%{{opacity:0}}54.3%,55.4%{{opacity:1}}55.5%,100%{{opacity:0}}}}
+/* Return sends the first message, then pastes the screenshot, then sends it */
+#kRet{{animation:retIn 14s infinite}}
+@keyframes retIn{{
+  0%,33.6%{{opacity:0;transform:translateY(8px)}} 34.3%,39%{{opacity:1;transform:none}} 40%,57.9%{{opacity:0;transform:translateY(-6px)}}
+  58.6%,69%{{opacity:1;transform:none}} 70%,100%{{opacity:0;transform:translateY(-6px)}}
+}}
+#kRetDown{{animation:retPress 14s infinite}}
+@keyframes retPress{{0%,35.6%{{opacity:0}}35.7%,36.8%{{opacity:1}}36.9%,60.3%{{opacity:0}}60.4%,61.4%{{opacity:1}}61.5%,65.6%{{opacity:0}}65.7%,66.8%{{opacity:1}}66.9%,100%{{opacity:0}}}}
+/* the app switches the selection outright, so the rows do too */
+#photoSel,#detPhoto{{animation:photoOn 14s infinite}} #urlSel,#detUrl{{animation:urlOn 14s infinite}}
+@keyframes photoOn{{0%,29.2%{{opacity:1}}29.3%,54.2%{{opacity:0}}54.3%,100%{{opacity:1}}}}
+@keyframes urlOn{{0%,29.2%{{opacity:0}}29.3%,54.2%{{opacity:1}}54.3%,100%{{opacity:0}}}}
+/* the page starts every loop at zero, so it begins where the journal flies in */
+* {{ animation-delay: -2.4s !important }}
 """
-    return svg(W, H, 'A line is typed; ⌥V opens the Stash journal under the caret; the pointer picks the link, the up arrow picks the photo and Return pastes it into the note.', body, css)
+    return svg(W, H, 'In a messenger, a line is typed; ⌥V opens the Stash journal above the caret; the pointer double-clicks the link and the message is sent; ⌥V again, the arrow key picks the screenshot, Return pastes and sends it.', body, css)
 
 
 # ── the feature strips: the list pane on a desktop ────────────────────────────
