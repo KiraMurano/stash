@@ -1,20 +1,24 @@
 <div align="center">
 
-<img src="docs/assets/icon.png" width="104" alt="">
-
-# Stash
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/wordmark-dark.png">
+  <img src="docs/assets/wordmark-light.png" width="358" alt="Stash">
+</picture>
 
 ### Everything you copy, one `⌥V` away.
 
 A clipboard journal for macOS. Text, images and files stay for a day, and come back right where your cursor is.
 
-<a href="https://github.com/KiraMurano/stash/releases/latest"><img src="docs/assets/download.svg" width="220" alt="Download for macOS"></a>
+<a href="https://github.com/KiraMurano/stash/releases/latest"><img src="docs/assets/download.svg" width="264" alt="Download for macOS"></a>
 
 <a href="https://github.com/KiraMurano/stash/releases/latest"><img src="https://img.shields.io/github/v/release/KiraMurano/stash?style=flat-square&label=&color=F46A25&labelColor=F46A25" alt=""></a> <img src="https://img.shields.io/badge/macOS-13%2B-8a8a8e?style=flat-square" alt="macOS 13 or newer"> <img src="https://img.shields.io/github/downloads/KiraMurano/stash/total?style=flat-square&label=downloads&color=8a8a8e" alt="">
 
 <br>
 
-<img src="docs/assets/hero.svg" width="880" alt="A line is being typed; ⌥V opens the Stash journal under the caret; the arrow keys pick a clip and Return pastes it into the line.">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+  <img src="docs/assets/hero-light.svg" width="880" alt="A line is being typed; ⌥V opens the Stash journal under the caret; the arrow keys pick a clip and Return pastes it into the line.">
+</picture>
 
 </div>
 
@@ -22,25 +26,37 @@ A clipboard journal for macOS. Text, images and files stay for a day, and come b
 
 Press `⌥V`. The journal opens under the text cursor of the app you are typing in — below the caret, or above it when there is no room. Where an app keeps its caret to itself, it opens next to the focused field instead.
 
-<p align="center"><img src="docs/assets/open.svg" width="560" alt="Two keycaps, ⌥ and V, are pressed and the Stash journal springs open."></p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/open-dark.svg">
+  <img src="docs/assets/open-light.svg" width="564" alt="Two keycaps, ⌥ and V, are pressed and the Stash journal springs open.">
+</picture></p>
 
 ## Paste
 
 Double-click a clip and it lands where your cursor is. The orange button does the same; the one beside it only puts the clip back on the pasteboard.
 
-<p align="center"><img src="docs/assets/paste.svg" width="560" alt="A pointer double-clicks a clip in the list and a Pasted badge appears."></p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/paste-dark.svg">
+  <img src="docs/assets/paste-light.svg" width="564" alt="A pointer double-clicks a clip in the list and a Pasted badge appears.">
+</picture></p>
 
 ## Keys
 
 `↑` and `↓` choose, `Return` pastes, `Esc` closes. The journal never takes the keyboard — everything else you type keeps going to the app underneath, and a click anywhere outside closes it.
 
-<p align="center"><img src="docs/assets/keys.svg" width="560" alt="The down arrow key walks the selection through the list and Return pastes the clip."></p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/keys-dark.svg">
+  <img src="docs/assets/keys-light.svg" width="564" alt="The down arrow key walks the selection through the list and Return pastes the clip.">
+</picture></p>
 
 ## Pin
 
 Stash keeps the last 20 clips for a day. Pin the ones that matter and they stay at the top of the list until you unpin them.
 
-<p align="center"><img src="docs/assets/pin.svg" width="560" alt="A clip's pin button is clicked and the clip moves to the top of the list, under Pinned."></p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pin-dark.svg">
+  <img src="docs/assets/pin-light.svg" width="564" alt="A clip's pin button is clicked and the clip moves to the top of the list, under Pinned.">
+</picture></p>
 
 ## The rest of it
 

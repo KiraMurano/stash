@@ -68,4 +68,11 @@ The app was previously called Buffer Journal. The bundle identifier (`local.buff
 
 ## README artwork
 
-The animations on the front page are hand-written SVG in `docs/assets/`: `hero.svg`, `open.svg`, `paste.svg`, `keys.svg`, `pin.svg` and the `download.svg` button. They animate with CSS inside the file, carry a light and a dark palette through `prefers-color-scheme`, and stop for `prefers-reduced-motion`. Their metrics follow `JournalView.Layout` and `ThemePalette`, so when the journal's look changes they should be edited to match.
+The animations on the front page are assembled from the journal's own views, so they look exactly like the app. `Tests/BufferJournalTests/ReadmeArtTests.swift` renders the pieces — rows, the list's top, the preview pane, the tour's keycaps, the toast and the lockup — with `ImageRenderer` in both looks, and `Scripts/make_readme_art.py` places them on a desktop, wraps them in the journal's glass and moves them with CSS. After a change to the journal's look, redraw them:
+
+```bash
+README_ART_DIR=/tmp/stash-art swift test --filter ReadmeArtTests
+Scripts/make_readme_art.py /tmp/stash-art
+```
+
+That rewrites `docs/assets/*-light.svg`, `*-dark.svg` and the `wordmark-*.png` pair; the README picks a look with `<picture>`. The desktop, the note window and the pointer are drawn by the script itself; `download.svg` is drawn by hand.
