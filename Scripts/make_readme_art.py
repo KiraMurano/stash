@@ -133,9 +133,9 @@ def hero(theme):
     p = PALETTE[theme]
     t = '-' + theme
     W, H = 1000, 640
-    WX, WW = 40, 340                        # the chat window
+    WX, WW = 125, 340                       # the chat window; with the journal it sits centred
     FX, FW = WX + 16, WW - 32               # its message field
-    PX, PY = 150, 44                        # the journal, above the caret: there is no room below
+    PX, PY = WX + 110, 44                   # the journal, above the caret: there is no room below
     ys = {}
     y = PY
     ys['top'] = y; y += height('list-top-5' + t)
@@ -180,7 +180,7 @@ def hero(theme):
 <text x="972" y="19" font-size="11" fill="{p['ink2']}" text-anchor="end">Mon 14:02</text>
 <g filter="url(#winShadow)"><rect x="{WX}" y="58" width="{WW}" height="482" rx="10" fill="{p['win']}"/></g>
 <rect x="{WX + .5}" y="58.5" width="{WW - 1}" height="481" rx="9.5" fill="none" stroke="{p['border']}"/>
-<circle cx="58" cy="70" r="6" fill="#ff5f57"/><circle cx="78" cy="70" r="6" fill="#febc2e"/><circle cx="98" cy="70" r="6" fill="#28c840"/>
+<circle cx="{WX + 18}" cy="70" r="6" fill="#ff5f57"/><circle cx="{WX + 38}" cy="70" r="6" fill="#febc2e"/><circle cx="{WX + 58}" cy="70" r="6" fill="#28c840"/>
 <circle cx="{WX + WW / 2 - 16}" cy="70" r="7" fill="#f46a25"/><text x="{WX + WW / 2 - 16}" y="73.5" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">K</text>
 <text x="{WX + WW / 2 - 4}" y="74" font-size="11" font-weight="600" fill="{p['ink2']}">Kira</text>
 <rect x="{WX}" y="82" width="{WW}" height="1" fill="{p['sep']}"/>
@@ -205,9 +205,10 @@ def hero(theme):
   </g>
 </g>
 """
-    body += '<g id="keys">\n' + keycap('key-option', theme, 820, 300, 'kOpt') + keycap('key-v', theme, 888, 300, 'kV') + '</g>\n'
-    body += '<g id="kUp">\n' + keycap('key-up', theme, 854, 300, 'kUp') + '</g>\n'
-    body += '<g id="kRet">\n' + keycap('key-return', theme, 854, 300, 'kRet') + '</g>\n'
+    kx, ky = WX + WW / 2 - 64, 560          # under the window, side by side and centred on it, as in the tour
+    body += '<g id="keys">\n' + keycap('key-option', theme, kx, ky, 'kOpt') + keycap('key-v', theme, kx + 68, ky, 'kV') + '</g>\n'
+    body += '<g id="kUp">\n' + keycap('key-up', theme, kx + 34, ky, 'kUp') + '</g>\n'
+    body += '<g id="kRet">\n' + keycap('key-return', theme, kx + 34, ky, 'kRet') + '</g>\n'
     body += panel(p, PX, PY, 640, 440, 290, inner)
     body += wave(*tip) + cursor('cur')
 
@@ -256,8 +257,8 @@ def hero(theme):
 /* the pointer comes up from the field and double-clicks the link's row */
 #cur{{animation:curMove 15s infinite}}
 @keyframes curMove{{
-  0%,13.9%{{opacity:0;transform:translate(230px,500px)}}
-  14.7%{{opacity:1;transform:translate(230px,500px);animation-timing-function:cubic-bezier(.35,0,.2,1)}}
+  0%,13.9%{{opacity:0;transform:translate({WX + 190}px,500px)}}
+  14.7%{{opacity:1;transform:translate({WX + 190}px,500px);animation-timing-function:cubic-bezier(.35,0,.2,1)}}
   20%,22.5%{{opacity:1;transform:translate({tip[0]}px,{tip[1]}px)}}
   24%,100%{{opacity:0;transform:translate({tip[0]}px,{tip[1]}px)}}
 }}
@@ -268,14 +269,11 @@ def hero(theme):
 @keyframes upIn{{0%,52.6%{{opacity:0;transform:translateY(8px)}}53.3%,58.3%{{opacity:1;transform:none}}59.3%,100%{{opacity:0;transform:translateY(-6px)}}}}
 #kUpDown{{animation:upPress 15s infinite}}
 @keyframes upPress{{0%,55.2%{{opacity:0}}55.3%,56.3%{{opacity:1}}56.4%,100%{{opacity:0}}}}
-/* Return sends the link, then pastes the screenshot, then sends it */
+/* Return pastes the screenshot; the messages are sent without showing a key */
 #kRet{{animation:retIn 15s infinite}}
-@keyframes retIn{{
-  0%,23.3%{{opacity:0;transform:translateY(8px)}} 24%,29%{{opacity:1;transform:none}} 30%,58.6%{{opacity:0;transform:translateY(-6px)}}
-  59.3%,69%{{opacity:1;transform:none}} 70%,100%{{opacity:0;transform:translateY(-6px)}}
-}}
+@keyframes retIn{{0%,58.6%{{opacity:0;transform:translateY(8px)}}59.3%,63.5%{{opacity:1;transform:none}}64.5%,100%{{opacity:0;transform:translateY(-6px)}}}}
 #kRetDown{{animation:retPress 15s infinite}}
-@keyframes retPress{{0%,25.9%{{opacity:0}}26%,27%{{opacity:1}}27.1%,60.9%{{opacity:0}}61%,62%{{opacity:1}}62.1%,65.9%{{opacity:0}}66%,67%{{opacity:1}}67.1%,100%{{opacity:0}}}}
+@keyframes retPress{{0%,60.9%{{opacity:0}}61%,62%{{opacity:1}}62.1%,100%{{opacity:0}}}}
 /* the app switches the selection outright, so the rows do too */
 #photoSel,#detPhoto{{animation:photoOn 15s infinite}} #urlSel,#detUrl{{animation:urlOn 15s infinite}}
 @keyframes photoOn{{0%,20.6%{{opacity:1}}20.7%,55.2%{{opacity:0}}55.3%,100%{{opacity:1}}}}
