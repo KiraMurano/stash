@@ -5,6 +5,8 @@ import SwiftUI
 /// shrink. Opaque: there is no glass inside a scene to show through.
 struct JournalMiniature: View {
     let palette: ThemePalette
+    /// The clip the list has picked, and the one the pane on the right shows.
+    var selected: Int = 0
 
     @Environment(\.l10n) private var l10n
 
@@ -51,7 +53,7 @@ struct JournalMiniature: View {
                 VStack(spacing: 0) {
                     SectionHeader(title: l10n("Today", "Сегодня"), palette: palette)
                     ForEach(Array(clips.enumerated()), id: \.element.id) { index, clip in
-                        DemoRow(clip: clip, isSelected: index == 0, palette: palette)
+                        DemoRow(clip: clip, isSelected: index == selected, palette: palette)
                     }
                 }
                 .padding(.horizontal, 10)
@@ -63,7 +65,7 @@ struct JournalMiniature: View {
                 palette.separator.frame(width: 1)
             }
 
-            DemoDetailPane(clip: clips[0], palette: palette)
+            DemoDetailPane(clip: clips[selected], palette: palette)
                 .background(palette.detailSurface)
         }
         .frame(width: JournalView.Layout.width, height: JournalView.Layout.height)

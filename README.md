@@ -121,6 +121,11 @@ Scripts/build_app.sh
 
 The bundle lands in `.build/Stash.app`, universal for Apple silicon and Intel. Signing, versioning and the release flow live in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
+## License
+
+MIT, except the Booker Display font in `Resources/Fonts`, which keeps
+[its own licence](Resources/Fonts/BookerDisplay-LICENSE.txt) beside it. See [LICENSE](LICENSE).
+
 <div align="center">
 <br>
 Made in <a href="https://ozero.digital">ozero.digital</a>
