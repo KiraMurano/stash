@@ -139,6 +139,23 @@ struct ClipboardEntry: Codable, Identifiable, Equatable {
         if case .file = payload { return true }
         return false
     }
+
+    /// A text clip that is nothing but one web address, with or without its scheme. Mail
+    /// addresses are text: they are pasted as words, not opened.
+    var isLink: Bool {
+        guard case let .text(text) = payload else { return false }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil else { return false }
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+        guard
+            let match = Self.linkDetector?.firstMatch(in: trimmed, range: range),
+            match.range == range,
+            let scheme = match.url?.scheme?.lowercased()
+        else { return false }
+        return scheme == "http" || scheme == "https"
+    }
+
+    private static let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 }
 
 extension ClipboardEntry {

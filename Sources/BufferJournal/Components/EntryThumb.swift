@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The 42 pt tile at the start of a row: an image thumbnail, a file icon or the text's first letter.
+/// The 42 pt tile at the start of a row: an image thumbnail, a file icon, or a mark for text and links.
 struct EntryThumb: View {
     let entry: ClipboardEntry
     let thumbnail: NSImage?
@@ -37,9 +37,9 @@ struct EntryThumb: View {
                     .font(.system(size: 16))
                     .foregroundStyle(palette.textSecondary)
             }
-        case let .text(text):
-            Text(String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)))
-                .font(.system(size: 15, weight: .semibold))
+        case .text:
+            Image(systemName: entry.isLink ? "link" : "text.alignleft")
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(palette.textSecondary)
         }
     }
