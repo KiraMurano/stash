@@ -38,9 +38,16 @@ struct EntryThumb: View {
                     .foregroundStyle(palette.textSecondary)
             }
         case .text:
-            Image(systemName: entry.isLink ? "link" : "text.alignleft")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(palette.textSecondary)
+            if entry.isLink {
+                Image(systemName: "link")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(palette.textSecondary)
+            } else {
+                // A serif T, the way type is marked, so text and links read apart at a glance.
+                Text("T")
+                    .font(.system(size: 19, weight: .semibold, design: .serif))
+                    .foregroundStyle(palette.textSecondary)
+            }
         }
     }
 }
