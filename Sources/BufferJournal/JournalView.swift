@@ -16,7 +16,8 @@ struct JournalView: View {
         static let sidebarMaxWidth: CGFloat = 440
         static let detailMinWidth: CGFloat = 300
         static let rowHeight: CGFloat = 58
-        /// Transparent strip on the right and bottom of the window for the resize grip.
+        /// Transparent strip on the right and bottom of the window, so the corner resize area
+        /// reaches a little past the panel's edge.
         static let gripMargin: CGFloat = 4
     }
 
@@ -165,10 +166,9 @@ struct JournalView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
-        // The grip hugs the rounded corner from outside: anchored to the panel's corner square
-        // and nudged out so its strokes sit just past the curve, in a thin transparent margin.
+        // The corner resize area reaches past the rounded edge into a thin transparent margin.
         .overlay(alignment: .bottomTrailing) {
-            WindowResizeGrip(palette: palette, cornerRadius: Layout.cornerRadius, margin: Layout.gripMargin)
+            WindowResizeCorner()
                 .offset(x: Layout.gripMargin, y: Layout.gripMargin)
         }
         .padding(.trailing, Layout.gripMargin)
@@ -197,7 +197,6 @@ struct JournalView: View {
                     }
                     .overlay(alignment: .trailing) {
                         SidebarResizeHandle(
-                            palette: palette,
                             onChanged: { translation in
                                 let start = sidebarDragStartWidth ?? width
                                 sidebarDragStartWidth = start
@@ -205,9 +204,8 @@ struct JournalView: View {
                             },
                             onEnded: { sidebarDragStartWidth = nil }
                         )
-                        // Hit area spans 4 pt left of the divider to 10 pt right of it, so the
-                        // border and the grab mark light up and drag as one.
-                        .offset(x: 10)
+                        // Centred on the divider: 4 pt either side of it.
+                        .offset(x: 4)
                     }
                     .zIndex(1)
 
@@ -810,83 +808,67 @@ struct JournalView: View {
 
 /// Invisible 8 pt strip over the divider: resize cursor on hover, drag changes the list width.
 private struct SidebarResizeHandle: View {
-    let palette: ThemePalette
     let onChanged: (CGFloat) -> Void
     let onEnded: () -> Void
 
-    @State private var isHovered = false
-    @State private var isDragging = false
-
     var body: some View {
         Color.clear
-            .frame(width: 14)
+            .frame(width: 8)
             .frame(maxHeight: .infinity)
-            .overlay {
-                // Grab mark on the divider; turns orange while hovered or dragged.
-                Capsule()
-                    .fill(isHovered || isDragging ? ThemePalette.orange : palette.iconOpacity(0.22))
-                    .frame(width: 4, height: 32)
-                    // Just right of the 1 pt divider line, with a small gap; floats over the preview.
-                    .offset(x: 2)
-                    .animation(.easeOut(duration: 0.12), value: isHovered || isDragging)
-            }
             .contentShape(Rectangle())
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                isHovered = hovering
-                if hovering {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
+            .hoverCursor(.resizeLeftRight)
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                    .onChanged {
-                        isDragging = true
-                        onChanged($0.translation.width)
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                        onEnded()
-                    }
+                    .onChanged { onChanged($0.translation.width) }
+                    .onEnded { _ in onEnded() }
             )
     }
 }
 
-/// Bottom-right grip: two diagonal strokes over an AppKit view that resizes the borderless panel,
+/// Invisible bottom-right square over an AppKit view that resizes the borderless panel,
 /// keeping its top-left corner in place.
-private struct WindowResizeGrip: View {
-    let palette: ThemePalette
-    let cornerRadius: CGFloat
-    let margin: CGFloat
-
-    @State private var isHovered = false
-
-    private static let size: CGFloat = 30
-    /// Dot centre sits 4.5 pt outside the edge: half the 6 pt dot plus a 1.5 pt gap.
-    private static let gap: CGFloat = 4.5
+private struct WindowResizeCorner: View {
+    private static let size: CGFloat = 20
 
     var body: some View {
-        Canvas { context, size in
-            // A dot on the corner's diagonal, just outside the rounded edge.
-            // The panel corner sits `margin` in from the canvas's bottom-right.
-            let corner = CGPoint(x: size.width - margin, y: size.height - margin)
-            let center = CGPoint(x: corner.x - cornerRadius, y: corner.y - cornerRadius)
-            let distance = (cornerRadius + Self.gap) / 2.squareRoot()
-            let dot = CGPoint(x: center.x + distance, y: center.y + distance)
-            let diameter: CGFloat = 6
-            context.fill(
-                Path(ellipseIn: CGRect(x: dot.x - diameter / 2, y: dot.y - diameter / 2, width: diameter, height: diameter)),
-                with: .color(isHovered ? ThemePalette.orange : palette.iconOpacity(0.22))
-            )
-        }
-        .frame(width: Self.size, height: Self.size)
         // Near-transparent fill so the whole square takes clicks in the transparent margin.
-        .background(Color.black.opacity(0.001))
-        .background(WindowResizeArea())
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
+        Color.black.opacity(0.001)
+            .frame(width: Self.size, height: Self.size)
+            .background(WindowResizeArea())
+            .hoverCursor(Self.cursor)
+    }
+
+    private static var cursor: NSCursor {
+        if #available(macOS 15.0, *) {
+            .frameResize(position: .bottomRight, directions: .all)
+        } else {
+            .crosshair
+        }
+    }
+}
+
+/// Hover, not cursor rects: those only work in the key window, and the journal is never key.
+private struct HoverCursor: ViewModifier {
+    let cursor: NSCursor
+
+    @State private var isShown = false
+
+    func body(content: Content) -> some View {
+        content.onHover { hovering in
+            guard hovering != isShown else { return }
+            isShown = hovering
+            if hovering {
+                cursor.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+}
+
+private extension View {
+    func hoverCursor(_ cursor: NSCursor) -> some View {
+        modifier(HoverCursor(cursor: cursor))
     }
 }
 
@@ -899,14 +881,6 @@ private struct WindowResizeArea: NSViewRepresentable {
 
     private final class GripView: NSView {
         override var mouseDownCanMoveWindow: Bool { false }
-
-        override func resetCursorRects() {
-            if #available(macOS 15.0, *) {
-                addCursorRect(bounds, cursor: .frameResize(position: .bottomRight, directions: .all))
-            } else {
-                addCursorRect(bounds, cursor: .crosshair)
-            }
-        }
 
         override func mouseDown(with event: NSEvent) {
             guard let window else { return }

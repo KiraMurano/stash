@@ -10,7 +10,7 @@ enum PanelPlacement {
 
     /// Returns nil when the panel fits neither below nor above the anchor: the caller then falls
     /// back to the panel's saved place. `bottomInset` is the transparent strip under the panel
-    /// (the resize grip lives there), so the gap looks the same above the caret and below it.
+    /// (the corner resize area reaches into it), so the gap looks the same above the caret and below it.
     static func origin(
         anchor: CGRect,
         panelSize: NSSize,

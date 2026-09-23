@@ -290,7 +290,7 @@ final class JournalPanelController {
 
         let hostingView = FirstMouseHostingView(rootView: contentView)
         hostingView.wantsLayer = true
-        // The view clips itself to the rounded panel; the transparent margin must stay unclipped for the grip.
+        // The view clips itself to the rounded panel; the transparent margin must stay unclipped for the corner resize area.
         hostingView.layer?.masksToBounds = false
         hostingView.layer?.borderColor = nil
         hostingView.layer?.borderWidth = 0

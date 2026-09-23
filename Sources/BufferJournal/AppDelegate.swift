@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        BackgroundCursor.enable()
 
         store = ClipboardHistoryStore()
         monitor = ClipboardMonitor(store: store)
